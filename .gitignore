@@ -205,3 +205,31 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# MaestroGPT specific
+outputs/
+generated_music/
+corrected_scores/
+data/processed/
+data/raw/*.ly
+models/
+wandb/
+.wandb/
+evaluation_results/
+
+# Trained models and checkpoints
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Generated LilyPond files
+*.ly
+*.midi
+*.wav
+*.mp3
+
+# Temporary files
+tmp/
+temp/
+scratch/
