@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maestrogpt"
+version = "0.1.0"
+description = "Fine-tune GPT models on LilyPond music notation with LoRA adapters"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "MaestroGPT Team", email = "team@maestrogpt.ai"},
+]
+maintainers = [
+    {name = "MaestroGPT Team", email = "team@maestrogpt.ai"},
+]
+keywords = ["music", "ai", "gpt", "lilypond", "lora", "fine-tuning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "peft>=0.5.0",
+    "accelerate>=0.20.0",
+    "datasets>=2.12.0",
+    "music21>=8.1.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "scipy>=1.10.0",
+    "tqdm>=4.65.0",
+    "wandb>=0.15.0",
+    "tensorboard>=2.13.0",
+    "pyyaml>=6.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.0",
+    "black>=23.3.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/matteospanio/MaestroGPT"
+"Bug Tracker" = "https://github.com/matteospanio/MaestroGPT/issues"
+"Repository" = "https://github.com/matteospanio/MaestroGPT"
+
+[project.scripts]
+maestrogpt-train = "maestrogpt.training.trainer:main"
+maestrogpt-generate = "maestrogpt.inference.generator:main"
+maestrogpt-correct = "maestrogpt.inference.corrector:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["maestrogpt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
