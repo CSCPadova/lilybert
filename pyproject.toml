@@ -9,10 +9,7 @@ description = "Fine-tune GPT models on LilyPond music notation with LoRA adapter
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "MaestroGPT Team", email = "team@maestrogpt.ai"},
-]
-maintainers = [
-    {name = "MaestroGPT Team", email = "team@maestrogpt.ai"},
+    {name = "Matteo Spanio", email = "spanio@dei.unipd.it"},
 ]
 keywords = ["music", "ai", "gpt", "lilypond", "lora", "fine-tuning"]
 classifiers = [
@@ -22,16 +19,13 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
-    "torch>=2.0.0",
+    "torch>=2.7.0",
     "transformers>=4.30.0",
     "peft>=0.5.0",
     "accelerate>=0.20.0",
@@ -41,7 +35,7 @@ dependencies = [
     "pandas>=2.0.0",
     "scipy>=1.10.0",
     "tqdm>=4.65.0",
-    "wandb>=0.15.0",
+    "wandb>=0.21.0",
     "tensorboard>=2.13.0",
     "pyyaml>=6.0.0",
     "python-dotenv>=1.0.0",
