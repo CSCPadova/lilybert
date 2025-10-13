@@ -78,7 +78,7 @@ def check_dependencies():
     missing = [name for name, available in status.items() if not available]
     if missing:
         print(f"Missing dependencies for: {', '.join(missing)}")
-        print("Install with: pip install -e .")
+        print("Install with: uv pip install -e . (or pip install -e .)")
     else:
         print("All dependencies available!")
     
