@@ -1,12 +1,13 @@
 # @package _global_
 
 defaults:
-  - /training: quick_test
-  - /lora: small
+  - override /training: quick_test
+  - override /lora: small
   - override /generation: default
   - override /correction: default
 
 # Quick test experiment
-model_name_or_path: microsoft/DialoGPT-medium
-output_dir: outputs/quick-test
-run_name: quick-test-experiment
+training:
+  model_name_or_path: microsoft/DialoGPT-medium
+  output_dir: outputs/quick-test
+  run_name: quick-test-experiment

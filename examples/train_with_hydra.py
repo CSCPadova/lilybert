@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
 """
-Example script for training MaestroGPT on LilyPond music notation.
+Hydra-based training script for MaestroGPT.
 
-This script demonstrates how to set up and run a complete training pipeline
-for fine-tuning a GPT model on LilyPond music data using LoRA adapters.
+This script uses Hydra for configuration management, making it easy to run
+experiments with different configurations.
 
 Usage:
     # Use default configuration
-    python train_model.py
+    python train_with_hydra.py
     
     # Use quick test configuration
-    python train_model.py training=quick_test
+    python train_with_hydra.py training=quick_test
     
     # Use production configuration
-    python train_model.py training=production
+    python train_with_hydra.py training=production
     
     # Use experiment configuration
-    python train_model.py +experiment=quick_test
+    python train_with_hydra.py +experiment=quick_test
     
     # Override specific parameters
-    python train_model.py training.num_train_epochs=10 training.learning_rate=1e-4
+    python train_with_hydra.py training.num_train_epochs=10 training.learning_rate=1e-4
+    
+    # Use different LoRA configuration
+    python train_with_hydra.py lora=large
 """
 
-import os
 import logging
 from pathlib import Path
 import hydra
@@ -30,7 +32,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from maestrogpt.training import TrainingConfig, MaestroTrainer
 from maestrogpt.data import LilyPondPreprocessor
-from maestrogpt.models import LoRAConfig
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -39,20 +40,24 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig):
-    """Main training function.
+    """Main training function with Hydra configuration.
     
     Args:
-        cfg: Hydra configuration object
+        cfg: Hydra configuration object containing all settings
     """
-    logger.info("Starting MaestroGPT training example")
-    logger.info(f"Configuration:\n{OmegaConf.to_yaml(cfg)}")
+    logger.info("=" * 50)
+    logger.info("MaestroGPT Training with Hydra")
+    logger.info("=" * 50)
+    logger.info(f"\nConfiguration:\n{OmegaConf.to_yaml(cfg)}")
     
     # Configuration
-    data_dir = Path("data/raw")  # Directory containing .ly files
+    data_dir = Path("data/raw")
     output_dir = Path(cfg.training.output_dir)
     
-    # Step 1: Preprocess the data (if not already done)
+    # Step 1: Preprocess the data
+    logger.info("\n" + "=" * 50)
     logger.info("Step 1: Preprocessing LilyPond data")
+    logger.info("=" * 50)
     
     if not data_dir.exists():
         logger.warning(f"Data directory {data_dir} not found. Creating example data...")
@@ -78,7 +83,9 @@ def main(cfg: DictConfig):
     logger.info(f"Processed {len(processed_files)} files")
     
     # Step 2: Create train/validation splits
+    logger.info("\n" + "=" * 50)
     logger.info("Step 2: Creating data splits")
+    logger.info("=" * 50)
     
     splits = preprocessor.create_training_data(
         processed_files,
@@ -99,13 +106,14 @@ def main(cfg: DictConfig):
                f"val={len(splits['validation'])}, test={len(splits['test'])}")
     
     # Step 3: Configure training
+    logger.info("\n" + "=" * 50)
     logger.info("Step 3: Configuring training")
+    logger.info("=" * 50)
     
     # Create training configuration from Hydra config
-    # Convert OmegaConf to dict and instantiate TrainingConfig
     training_dict = OmegaConf.to_container(cfg.training, resolve=True)
     
-    # Override data paths
+    # Override data paths with processed data
     training_dict['train_data_path'] = str(data_dir.parent / "processed" / "train.json")
     training_dict['validation_data_path'] = str(data_dir.parent / "processed" / "validation.json")
     
@@ -115,33 +123,50 @@ def main(cfg: DictConfig):
     config.save_pretrained(str(output_dir / "config"))
     
     # Step 4: Initialize trainer
+    logger.info("\n" + "=" * 50)
     logger.info("Step 4: Initializing trainer")
+    logger.info("=" * 50)
     
     trainer = MaestroTrainer(config)
     
     # Step 5: Load datasets
+    logger.info("\n" + "=" * 50)
     logger.info("Step 5: Loading datasets")
+    logger.info("=" * 50)
+    
     trainer.load_datasets()
     
     # Step 6: Train the model
+    logger.info("\n" + "=" * 50)
     logger.info("Step 6: Starting training")
+    logger.info("=" * 50)
     
     try:
         metrics = trainer.train()
+        logger.info("\n" + "=" * 50)
         logger.info("Training completed successfully!")
+        logger.info("=" * 50)
         logger.info(f"Final training loss: {metrics.get('train_loss', 'N/A')}")
         
         # Step 7: Evaluate the model
+        logger.info("\n" + "=" * 50)
         logger.info("Step 7: Evaluating model")
+        logger.info("=" * 50)
+        
         eval_metrics = trainer.evaluate()
         logger.info(f"Evaluation loss: {eval_metrics.get('eval_loss', 'N/A')}")
         
         # Step 8: Save the final model
+        logger.info("\n" + "=" * 50)
         logger.info("Step 8: Saving model")
+        logger.info("=" * 50)
+        
         trainer.save_model()
         
         logger.info(f"Model saved to {output_dir}")
+        logger.info("\n" + "=" * 50)
         logger.info("Training example completed successfully!")
+        logger.info("=" * 50)
         
     except Exception as e:
         logger.error(f"Training failed: {e}")
