@@ -95,8 +95,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=7.3.0",
     "pytest-cov>=4.1.0",
     "black>=23.3.0",
