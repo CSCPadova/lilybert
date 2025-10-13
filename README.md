@@ -20,24 +20,25 @@ MaestroGPT is a comprehensive Python project for fine-tuning open-weights GPT mo
 
 #### Using uv (recommended)
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver. See [UV_GUIDE.md](UV_GUIDE.md) for detailed instructions.
 
 ```bash
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: pip install uv
 
 # Clone the repository
 git clone https://github.com/matteospanio/MaestroGPT.git
 cd MaestroGPT
 
-# Install the package
+# Install with uv sync (easiest)
+uv sync
+
+# Or install manually
 uv pip install -e .
 
 # Or install with development dependencies
 uv pip install -e ".[dev]"
-
-# Alternatively, use uv sync for a full environment setup
-uv sync
 ```
 
 #### Using pip
