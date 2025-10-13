@@ -1,0 +1,9 @@
+# Default LoRA configuration
+r: 16
+lora_alpha: 32
+lora_dropout: 0.1
+target_modules: null  # Will use defaults from code
+bias: none  # "none", "all", "lora_only"
+task_type: CAUSAL_LM
+use_rslora: false
+use_dora: false

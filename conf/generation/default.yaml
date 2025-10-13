@@ -1,0 +1,18 @@
+# Default generation configuration
+max_length: 512
+min_length: 50
+temperature: 1.0
+top_k: 50
+top_p: 0.9
+repetition_penalty: 1.1
+do_sample: true
+num_return_sequences: 1
+bad_words_ids: null
+force_words_ids: null
+pad_token_id: null
+eos_token_id: null
+
+# Music-specific settings
+ensure_musical_structure: true
+filter_invalid_syntax: true
+max_generation_attempts: 3

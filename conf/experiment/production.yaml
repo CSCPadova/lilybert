@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+  - /training: production
+  - /lora: large
+  - override /generation: default
+  - override /correction: default
+
+# Production experiment
+model_name_or_path: microsoft/DialoGPT-large
+output_dir: outputs/production-run
+run_name: production-experiment

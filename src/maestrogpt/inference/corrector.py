@@ -9,6 +9,7 @@ from collections import Counter
 from ..models import GPTWithLoRA
 from ..evaluation import MusicMetrics
 from ..data import LilyPondParser
+from hydra.core.config_store import ConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ class CorrectionConfig:
     preserve_original_intent: bool = True
     max_correction_attempts: int = 3
     correction_aggressiveness: float = 0.5  # 0.0 = conservative, 1.0 = aggressive
+
+
+# Register with Hydra ConfigStore
+def register_configs():
+    """Register configs with Hydra ConfigStore."""
+    cs = ConfigStore.instance()
+    cs.store(name="correction_config", node=CorrectionConfig)
 
 
 @dataclass

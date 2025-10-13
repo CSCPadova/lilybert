@@ -1,0 +1,84 @@
+# Default training configuration
+model_name_or_path: microsoft/DialoGPT-large
+tokenizer_name_or_path: null
+
+# Data settings
+train_data_path: data/processed/train
+validation_data_path: data/processed/validation
+test_data_path: data/processed/test
+max_sequence_length: 1024
+
+# Training hyperparameters
+learning_rate: 5e-5
+num_train_epochs: 3
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 4
+warmup_steps: 100
+max_steps: -1  # -1 means use num_train_epochs
+
+# Optimization settings
+optimizer: adamw_torch
+lr_scheduler_type: cosine
+weight_decay: 0.01
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1e-8
+max_grad_norm: 1.0
+
+# LoRA settings
+use_lora: true
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.1
+lora_target_modules: null
+
+# Evaluation settings
+eval_steps: 500
+eval_strategy: steps  # "steps" or "epoch"
+save_steps: 500
+save_strategy: steps  # "steps" or "epoch"
+logging_steps: 100
+
+# Output settings
+output_dir: outputs/maestrogpt-finetuned
+logging_dir: outputs/logs
+run_name: null
+
+# Hardware settings
+fp16: true
+bf16: false
+dataloader_num_workers: 4
+remove_unused_columns: false
+
+# Checkpointing
+save_total_limit: 3
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+greater_is_better: false
+
+# Early stopping
+early_stopping_patience: 3
+early_stopping_threshold: 0.0
+
+# Wandb/logging settings
+report_to:
+  - wandb
+  - tensorboard
+wandb_project: maestrogpt
+wandb_entity: null
+
+# Resume training
+resume_from_checkpoint: null
+
+# Generation settings for evaluation
+eval_generation: true
+eval_generation_max_length: 256
+eval_generation_temperature: 1.0
+eval_generation_top_p: 0.9
+eval_generation_num_samples: 5
+
+# Advanced settings
+deepspeed: null
+fsdp: ""
+local_rank: -1

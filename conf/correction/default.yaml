@@ -1,0 +1,9 @@
+# Default correction configuration
+syntax_correction: true
+musical_correction: true
+style_consistency: true
+fix_repetitions: true
+fix_structure: true
+preserve_original_intent: true
+max_correction_attempts: 3
+correction_aggressiveness: 0.5  # 0.0 = conservative, 1.0 = aggressive

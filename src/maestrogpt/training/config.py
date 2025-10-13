@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 import os
+from hydra.core.config_store import ConfigStore
 
 
 @dataclass
@@ -272,3 +273,10 @@ class TrainingConfig:
             lora_alpha=64,
             early_stopping_patience=5,
         )
+
+
+# Register with Hydra ConfigStore
+def register_configs():
+    """Register configs with Hydra ConfigStore."""
+    cs = ConfigStore.instance()
+    cs.store(name="training_config", node=TrainingConfig)

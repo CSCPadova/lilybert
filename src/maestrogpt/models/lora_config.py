@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from peft import LoraConfig, TaskType
+from hydra.core.config_store import ConfigStore
 
 
 @dataclass
@@ -134,3 +135,10 @@ class LoRAConfig:
         percentage = (total_lora_params / base_model_params) * 100
         
         return total_lora_params, percentage
+
+
+# Register with Hydra ConfigStore
+def register_configs():
+    """Register configs with Hydra ConfigStore."""
+    cs = ConfigStore.instance()
+    cs.store(name="lora_config", node=LoRAConfig)

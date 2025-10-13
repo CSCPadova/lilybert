@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from ..models import GPTWithLoRA
 from ..evaluation import MusicMetrics
+from hydra.core.config_store import ConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,13 @@ class GenerationConfig:
     ensure_musical_structure: bool = True
     filter_invalid_syntax: bool = True
     max_generation_attempts: int = 3
+
+
+# Register with Hydra ConfigStore
+def register_configs():
+    """Register configs with Hydra ConfigStore."""
+    cs = ConfigStore.instance()
+    cs.store(name="generation_config", node=GenerationConfig)
 
 
 class MusicGenerator:

@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - default
+
+# Large model configuration
+r: 32
+lora_alpha: 64
+lora_dropout: 0.15

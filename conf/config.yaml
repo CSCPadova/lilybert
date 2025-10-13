@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - training: default
+  - lora: default
+  - generation: default
+  - correction: default
+  - _self_
+
+# Override defaults here if needed
