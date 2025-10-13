@@ -8,6 +8,7 @@ MaestroGPT is a comprehensive Python project for fine-tuning open-weights GPT mo
 
 - **🎼 LilyPond Processing**: Complete pipeline for parsing, preprocessing, and tokenizing LilyPond music notation
 - **🔧 LoRA Fine-tuning**: Efficient fine-tuning using LoRA adapters with HuggingFace Transformers and PEFT
+- **⚙️ Hydra Configuration**: Flexible experiment management with Hydra for reproducible research
 - **🎹 Music Generation**: Advanced generation capabilities with style control, constraints, and variation generation
 - **✅ Score Correction**: Intelligent correction of syntax errors, musical inconsistencies, and style issues
 - **📊 Evaluation Metrics**: Comprehensive evaluation metrics for music generation quality
@@ -33,6 +34,27 @@ pip install -e ".[dev]"
 ### Basic Usage
 
 #### 1. Training a Model
+
+**Using Hydra (Recommended):**
+
+```bash
+# Train with default configuration
+python examples/train_with_hydra.py
+
+# Train with quick test configuration
+python examples/train_with_hydra.py +experiment=quick_test
+
+# Train with production configuration
+python examples/train_with_hydra.py +experiment=production
+
+# Override specific parameters
+python examples/train_with_hydra.py training.num_train_epochs=10 training.learning_rate=1e-4
+
+# Use different LoRA settings
+python examples/train_with_hydra.py lora=large
+```
+
+**Programmatic API:**
 
 ```python
 from maestrogpt.training import TrainingConfig, MaestroTrainer
@@ -87,6 +109,59 @@ print(f"Corrected: {result.corrected_score}")
 print(f"Errors fixed: {len(result.corrections_made)}")
 ```
 
+## ⚙️ Configuration with Hydra
+
+MaestroGPT uses [Hydra](https://hydra.cc/) for flexible experiment configuration management. This allows you to:
+
+- **Compose configurations** from reusable components
+- **Override parameters** from the command line
+- **Run experiments** with different settings easily
+- **Track configurations** automatically for reproducibility
+
+### Configuration Structure
+
+```
+conf/
+├── config.yaml              # Main configuration file
+├── training/                # Training configurations
+│   ├── default.yaml         # Default training settings
+│   ├── quick_test.yaml      # Quick test configuration
+│   └── production.yaml      # Production training configuration
+├── lora/                    # LoRA configurations
+│   ├── default.yaml         # Default LoRA settings
+│   ├── small.yaml           # Small model LoRA settings
+│   └── large.yaml           # Large model LoRA settings
+├── generation/              # Generation configurations
+├── correction/              # Correction configurations
+└── experiment/              # Complete experiment configurations
+    ├── quick_test.yaml      # Quick test experiment
+    └── production.yaml      # Production experiment
+```
+
+### Usage Examples
+
+```bash
+# Use default configuration
+python examples/train_with_hydra.py
+
+# Use experiment configuration
+python examples/train_with_hydra.py +experiment=quick_test
+
+# Override specific parameters
+python examples/train_with_hydra.py training.num_train_epochs=10 training.learning_rate=3e-5
+
+# Combine configurations
+python examples/train_with_hydra.py training=production lora=large
+
+# Show configuration
+python examples/train_with_hydra.py --cfg job
+
+# Get help
+python examples/train_with_hydra.py --help
+```
+
+For more details, see the [Configuration Documentation](conf/README.md).
+
 ## 📁 Project Structure
 
 ```
@@ -97,14 +172,23 @@ MaestroGPT/
 │   ├── training/             # Training utilities and configs
 │   ├── evaluation/           # Evaluation metrics and tools
 │   └── inference/            # Generation and correction
+├── conf/                     # Hydra configuration files
+│   ├── training/             # Training configurations
+│   ├── lora/                 # LoRA configurations
+│   ├── generation/           # Generation configurations
+│   ├── correction/           # Correction configurations
+│   └── experiment/           # Complete experiment configurations
 ├── data/                     # Data storage
 │   ├── raw/                  # Original LilyPond files
 │   └── processed/            # Preprocessed data
 ├── examples/                 # Example scripts
-│   ├── train_model.py        # Training example
+│   ├── train_with_hydra.py   # Hydra-based training example (recommended)
+│   ├── train_model.py        # Basic training example
 │   ├── generate_music.py     # Generation example
 │   └── correct_score.py      # Correction example
 ├── tests/                    # Test suite
+│   ├── test_basic.py         # Basic functionality tests
+│   └── test_hydra_config.py  # Hydra configuration tests
 └── docs/                     # Documentation
 ```
 
