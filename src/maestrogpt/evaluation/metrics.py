@@ -382,7 +382,7 @@ class MusicMetrics:
     def _extract_measures(self, text: str) -> List[str]:
         """Extract measures from text."""
         # Simple heuristic: split by bar lines
-        measures = re.split(r'\|', text)
+        measures = re.split(r"\|", text)
         return [m.strip() for m in measures if m.strip()]
     
     def _extract_phrases(self, text: str) -> List[str]:
