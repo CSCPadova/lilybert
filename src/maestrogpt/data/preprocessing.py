@@ -52,6 +52,7 @@ class LilyPondPreprocessor:
             "key_sig": "<KEY:",
             "time_sig": "<TIME:",
             "tempo": "<TEMPO:",
+            "clef": "<CLEF:",
             "close_tag": ">",
         }
         
@@ -184,7 +185,7 @@ class LilyPondPreprocessor:
         #     text = text.replace(sharp, flat)
         
         # Normalize relative mode indicators
-        text = re.sub(r"\\relative\s+[a-g]'*\s*", "\\relative c' ", text)
+        text = re.sub(r"\\relative\s+[a-g]'*\s*", r"\\relative c' ", text)
         
         # Normalize time signatures
         text = re.sub(r"\\time\s+(\d+/\d+)", r"\\time \1", text)
@@ -223,13 +224,20 @@ class LilyPondPreprocessor:
         
         # Add tempo tokens
         text = re.sub(
-            r"\\tempo\s+([^\\]+)",
+            r"\\tempo\s+((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))",
             lambda m: f"{self.special_tokens['tempo']}{m.group(1).strip()}{self.special_tokens['close_tag']}",
+            text
+        )
+
+        # Add clef tokens
+        text = re.sub(
+            r"\\clef\s+([a-zA-Z]+)",
+            lambda m: f"{self.special_tokens['clef']}{m.group(1).strip()}{self.special_tokens['close_tag']}",
             text
         )
         
         # Add measure separators (simple heuristic based on bar lines)
-        text = re.sub(r'\|', f" {self.special_tokens['measure_sep']} ", text)
+        text = re.sub(r"\|", f" {self.special_tokens['measure_sep']} ", text)
         
         return text
     
