@@ -29,6 +29,9 @@ class TestLilyPondParser:
             c4 d e f | g2 a2 | b4 c d e | c1 r a b2\\rest
             {"non musical content"}
             <f c' e g>1 r
+            mi4\staccatissimo
+            do'8^\\tu\\f sol'4 sol8~\\tuplet 3/2 {sol fa mi re[do sib] }
+            <<{sib'\\repeat unfold 46{sib}}\\{re,\\repeat unfold 46{re}}>>
         }
         """
         
