@@ -54,7 +54,7 @@ class LilyPondParser:
         r'(?:\d+\.*)?'                  # optional duration
         r')(?![a-zA-Z])'                # no letter after
     )
-    NOTE_PATTERN = re.compile(fr'({ITALIAN_NOTE_PATTERN.pattern}|{ENGLISH_NOTE_PATTERN.pattern})(?:\s|$)')
+    NOTE_PATTERN = re.compile(fr'({ITALIAN_NOTE_PATTERN.pattern}|{ENGLISH_NOTE_PATTERN.pattern})')
 
     CHORD_PATTERN = re.compile(r'<([^>]+)>(\d+\.?)?')
     SIMULTANEOUS_PATTERN = re.compile(r'<<(.*)>>(\d+\.?)?')
@@ -67,6 +67,7 @@ class LilyPondParser:
     CLEF_PATTERN = re.compile(r'\\clef\s+([a-zA-Z]+)')
     RELATIVE_PATTERN = re.compile(rf"\\relative\s+{NOTE_PATTERN.pattern}'*\s*{{")
     TEMPO_PATTERN = re.compile(r'\\tempo\s+((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))')
+    REPEAT_PATTERN = re.compile(r'\\repeat\s+unfold\s+(\d+)\s*\{')
     
     def __init__(self):
         """Initialize the LilyPond parser."""
@@ -314,6 +315,18 @@ class LilyPondParser:
                     tokens.append(m.group(0))
                     i += len(m.group(0))
                     continue
+            elif block.startswith('\\repeat', i):
+                if current_token.strip():
+                    tokens.append(current_token.strip())
+                    current_token = ""
+                m = self.REPEAT_PATTERN.match(block[i:])
+                if m:
+                    after_first_cbracket =  i + m.end() - 1
+                    end_pos = after_first_cbracket + len(self.parse_enclosure(block[after_first_cbracket:],"{","}"))
+                    if end_pos != -1:
+                        tokens.append(block[i:end_pos])
+                        i = end_pos
+                        continue
 
             # Handle other directives (\something)
             elif block[i] == '\\':
@@ -353,6 +366,13 @@ class LilyPondParser:
                     current_token = ""
                 i += 1
                 continue
+            if block[i] == '{' or block[i] == '[' or block[i]=='(' or block[i]==')' or block[i]==']' or block[i] == "}":
+                if current_token.strip():
+                    tokens.append(current_token.strip())
+                    current_token = ""
+                tokens.append(block[i])
+                i += 1
+                continue
             # Fallback
             current_token += block[i]
             i += 1
@@ -385,15 +405,26 @@ class LilyPondParser:
                 content=token,
                 duration=duration
             )
-        
+
         # Check for directives
         if token.startswith('\\'):
             directive_match = self.DIRECTIVE_PATTERN.match(token)
-            if directive_match:
+            repeat_match = self.REPEAT_PATTERN.search(token)
+            if directive_match and not repeat_match:
                 return LilyPondElement(
                     type="directive",
                     content=token,
                     attributes={"directive": directive_match.group(1)}
+                )
+            elif directive_match and repeat_match:
+                start_cbracket =  repeat_match.end() - 1
+                note_content = self.parse_enclosure(token[start_cbracket:], "{","}")
+                notes = re.findall(self.NOTE_PATTERN,note_content)
+                multiple = int(repeat_match.group(1))
+                return LilyPondElement(
+                    type="directive",
+                    content=token,
+                    attributes={"directive": directive_match.group(1), "note_count": (len(notes)*multiple)}
                 )
         
         # Check for notes
@@ -468,6 +499,8 @@ class LilyPondParser:
                 stats["rest_count"] += 1
                 if element.duration:
                     stats["durations"].add(element.duration)
+            elif element.type == "directive" and ("note_count" in element.attributes):
+                stats["note_count"] += element.attributes["note_count"]
         
         # Convert sets to lists for JSON serialization
         stats["unique_pitches"] = list(stats["unique_pitches"])
