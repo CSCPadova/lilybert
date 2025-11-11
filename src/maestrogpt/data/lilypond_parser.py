@@ -42,7 +42,7 @@ class LilyPondParser:
         r'(?:is|es|isis|eses)?'      # optional accidentals (is/es/isis/eses)
         r"(?:'+|,+)?"                # optional octave markers
         r'(?:\d+\.*)?'               # optional duration (e.g. 4 or 8.)
-        r')(?![a-zA-Z])'             # no letter after (prevents 'cat' etc.)
+        r')'             # no letter after (prevents 'cat' etc.)
     )
 
     # --- Italian Note Pattern ---
@@ -51,21 +51,25 @@ class LilyPondParser:
         r'((?:do|re|mi|fa|sol|la|si)'   # base note names
         r'(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?'  # optional accidentals
         r"(?:'+|,+)?"                   # optional octave markers
+        r"[!?]?"                        # optional cautionary accidentals
         r'(?:\d+\.*)?'                  # optional duration
-        r')(?![a-zA-Z])'                # no letter after
+        r')'                # no letter after
+        
     )
-    NOTE_PATTERN = re.compile(fr'({ITALIAN_NOTE_PATTERN.pattern}|{ENGLISH_NOTE_PATTERN.pattern})')
-
+    """
+    (?<![a-zA-Z])(~?(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?(?:'+|,+)?[!?]?(?:\d+\.*)?)
+    """
+    NOTE_PATTERN = re.compile(fr'({ITALIAN_NOTE_PATTERN.pattern})')
     CHORD_PATTERN = re.compile(r'<([^>]+)>(\d+\.?)?')
     SIMULTANEOUS_PATTERN = re.compile(r'<<(.*)>>(\d+\.?)?')
     DURATION_PATTERN = re.compile(r'(\d+\.?)') 
-    REST_PATTERN = re.compile(r'(?:(?<![a-zA-Z])r\d*\.?|\\rest)(?![a-zA-Z])')
+    REST_PATTERN = re.compile(r'(?:(?<![a-zA-Z])r\d*\.?|\\rest)')
     DIRECTIVE_PATTERN = re.compile(r'\\([a-zA-Z]+)(?:\s+([^\\{}\n]*))?')
 
     KEY_PATTERN = re.compile(rf"\\key\s+((?:(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?|[a-g](?:is|es|isis|eses)?)(?:,+|\'*)?(?:\d+\.*)?)\s*\\(major|minor)")
     TIME_PATTERN = re.compile(r'\\time\s+(\d+/\d+)')
     CLEF_PATTERN = re.compile(r'\\clef\s+([a-zA-Z]+)')
-    RELATIVE_PATTERN = re.compile(rf"\\relative\s+{NOTE_PATTERN.pattern}'*\s*{{")
+    RELATIVE_PATTERN = re.compile(rf"\\relative\s+{NOTE_PATTERN.pattern}*\s*{{")
     TEMPO_PATTERN = re.compile(r'\\tempo\s+((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))')
     REPEAT_PATTERN = re.compile(r'\\repeat\s+unfold\s+(\d+)\s*\{')
     
@@ -120,7 +124,7 @@ class LilyPondParser:
           music_content = content[:start_idx] + content[end_idx + len(header_content):]
         else:
           music_content = content
-        music_blocks = self._extract_music_blocks(music_content)
+        music_blocks = self._extract_music_blocks(music_content, self.RELATIVE_PATTERN)
         
         # Parse each music block
         for block in music_blocks:
@@ -166,7 +170,7 @@ class LilyPondParser:
         print(f"Metadata is: {metadata}")
         return metadata
     
-    def _extract_music_blocks(self, content: str) -> List[str]:
+    def _extract_music_blocks(self, content: str, blockPattern: re.Pattern) -> List[str]:
         """Extract LilyPond music notation blocks inside \relative commands."""
         blocks = []
         i = 0
@@ -176,7 +180,7 @@ class LilyPondParser:
 
         while i < len(content):
             # Try to match a \relative pattern at current position
-            match = self.RELATIVE_PATTERN.match(content, i)
+            match = blockPattern.match(content, i)
             if match:
                 in_music = True
                 brace_level = 1  # The opening brace belongs to this block
@@ -202,7 +206,6 @@ class LilyPondParser:
                 else:
                     current_block += char
             i += 1
-
         return blocks
     
     def _parse_music_block(self, block: str) -> List[LilyPondElement]:
@@ -253,7 +256,7 @@ class LilyPondParser:
                 continue
 
             # Handle chords < ... >
-            if block[i] == '<':
+            elif block[i] == '<':
                 if current_token.strip():
                     tokens.append(current_token.strip())
                     current_token = ""
@@ -268,6 +271,14 @@ class LilyPondParser:
                     tokens.append(chord)
                     i = j
                     continue
+            # Handle crescendos
+            elif block.startswith(r'\<', i) or block.startswith(r'\>',i) or block.startswith(r'\!',i):
+                if current_token.strip():
+                    tokens.append(current_token.strip())
+                    current_token = ""
+                tokens.append(block[i:i+2])
+                i += 2
+                continue
 
             # Handle directives with arguments
             elif block.startswith("\\key", i):
@@ -327,7 +338,14 @@ class LilyPondParser:
                         tokens.append(block[i:end_pos])
                         i = end_pos
                         continue
-
+            # Handle multiple voice marker
+            elif block.startswith(r'\\', i):
+                if current_token.strip():
+                    tokens.append(current_token.strip())
+                    current_token = ""
+                tokens.append(r'\\')
+                i += 2
+                continue
             # Handle other directives (\something)
             elif block[i] == '\\':
                 if current_token.strip():
@@ -341,10 +359,13 @@ class LilyPondParser:
 
             # Notes, rests, bars
             m = re.match(rf'(?:{self.NOTE_PATTERN.pattern}|[|]|{self.REST_PATTERN.pattern})', block[i:])
-            if m and not current_token.strip():
+            if m and not re.search('[a-zA-Z]',current_token.strip()):
+                if (current_token.strip()):
+                    tokens.append(current_token)
                 tokens.append(m.group(0))
                 i += len(m.group(0))
                 continue
+
             # Get raws nested in quotes
             if block[i] == '"':
                 if current_token.strip():
@@ -358,6 +379,7 @@ class LilyPondParser:
                         tokens.append(quote)
                         i = end_pos+1
                         continue
+            
 
             # Skip whitespace
             if block[i].isspace():
@@ -366,13 +388,30 @@ class LilyPondParser:
                     current_token = ""
                 i += 1
                 continue
-            if block[i] == '{' or block[i] == '[' or block[i]=='(' or block[i]==')' or block[i]==']' or block[i] == "}":
+
+            # Skip container characters or ties (ties not important for now. To revisit at a later date)
+            if block[i] == '{' or block[i] == '[' or block[i]=='(' or block[i]==')' or block[i]==']' or block[i]=="}" or block[i]=="~" or block[i]=="-" or block[i]=="+" or block[i]=="_":
                 if current_token.strip():
                     tokens.append(current_token.strip())
                     current_token = ""
                 tokens.append(block[i])
                 i += 1
                 continue
+            
+            # Note typos. Character is non alphanumerical Ex: si 2la4 is the same as si2 la4. And both compile
+            if not block[i].isalpha() and len(tokens) > 0 and not current_token.strip():
+                if block[i] not in ('.', ',', '\'', '!', '?', ) and not block[i].isdigit():
+                    # skip merging for characters that could not follow a note
+                    pass
+                else:
+                    prev_token = tokens[-1]
+                    combined = prev_token + block[i]
+                    if self.NOTE_PATTERN.fullmatch(combined):
+                        tokens[-1] = combined
+                        i += 1
+                        continue
+        
+
             # Fallback
             current_token += block[i]
             i += 1
@@ -386,24 +425,22 @@ class LilyPondParser:
         # Check for chords
         chord_match = self.CHORD_PATTERN.match(token)
         if chord_match:
-            notes = chord_match.group(1)
+            '''
+            pnotes = self._tokenize_music(chord_match.group(1))
+            ptokens = (self._parse_token(item) for item in pnotes)
+            notes = []
+            for token in ptokens:
+                if token.type == "notes":
+                    notes.append(token)
+            '''
+            note_content = chord_match.group(1)
+            notes = re.findall(self.NOTE_PATTERN,note_content)
             duration = chord_match.group(2)
             return LilyPondElement(
                 type="chord",
                 content=token,
                 duration=duration,
-                attributes={"notes": notes.split()}
-            )
-        
-        # Check for rests
-        rest_match = self.REST_PATTERN.match(token)
-        if rest_match:
-            duration_match = self.DURATION_PATTERN.search(token)
-            duration = duration_match.group(1) if duration_match else None
-            return LilyPondElement(
-                type="rest",
-                content=token,
-                duration=duration
+                attributes={"note_count": len(notes), "notes": notes}
             )
 
         # Check for directives
@@ -424,7 +461,7 @@ class LilyPondParser:
                 return LilyPondElement(
                     type="directive",
                     content=token,
-                    attributes={"directive": directive_match.group(1), "note_count": (len(notes)*multiple)}
+                    attributes={"directive": directive_match.group(1), "note_count": (len(notes)*multiple), "notes": notes}
                 )
         
         # Check for notes
@@ -437,6 +474,17 @@ class LilyPondParser:
                 content=token,
                 pitch=pitch,
                 octave=octave,
+                duration=duration
+            )
+        
+        # Check for rests
+        rest_match = self.REST_PATTERN.match(token)
+        if rest_match:
+            duration_match = self.DURATION_PATTERN.search(token)
+            duration = duration_match.group(1) if duration_match else None
+            return LilyPondElement(
+                type="rest",
+                content=token,
                 duration=duration
             )
         
@@ -492,7 +540,7 @@ class LilyPondParser:
                     stats["durations"].add(element.duration)
             elif element.type == "chord":
                 stats["chord_count"] += 1
-                stats["note_count"] += len(element.attributes["notes"])
+                stats["note_count"] += element.attributes["note_count"]
                 if element.duration:
                     stats["durations"].add(element.duration)
             elif element.type == "rest":

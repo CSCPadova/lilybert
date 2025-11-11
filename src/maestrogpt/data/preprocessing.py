@@ -54,6 +54,7 @@ class LilyPondPreprocessor:
             "tempo": "<TEMPO:",
             "clef": "<CLEF:",
             "close_tag": ">",
+            "repeat_unfold": "<REPEAT_UNFOLD:",
         }
         
         # Music theory mappings for normalization
@@ -66,6 +67,16 @@ class LilyPondPreprocessor:
             "1": "whole", "2": "half", "4": "quarter",
             "8": "eighth", "16": "sixteenth", "32": "thirty-second"
         }
+        self.ITALIAN_NOTE_PATTERN = re.compile(
+            r'(?<![a-zA-Z])'                # no letter before
+            r'((?:do|re|mi|fa|sol|la|si)'   # base note names
+            r'(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?'  # optional accidentals
+            r"(?:'+|,+)?"                   # optional octave markers
+            r"[!?]?"                        # optional cautionary accidentals
+            r'(?:\d+\.*)?'                  # optional duration
+            r')'                # no letter after    
+        )
+        self.NOTE_PATTERN = re.compile(fr'({self.ITALIAN_NOTE_PATTERN.pattern})')
     
     def preprocess_file(self, file_path: str) -> Dict[str, Any]:
         """Preprocess a single LilyPond file.
@@ -185,13 +196,13 @@ class LilyPondPreprocessor:
         #     text = text.replace(sharp, flat)
         
         # Normalize relative mode indicators
-        text = re.sub(r"\\relative\s+[a-g]'*\s*", r"\\relative c' ", text)
+        text = re.sub(rf"\\relative\s+{self.NOTE_PATTERN.pattern}'*\s", r"\\relative do'' ", text)
         
         # Normalize time signatures
         text = re.sub(r"\\time\s+(\d+/\d+)", r"\\time \1", text)
         
         # Normalize key signatures
-        text = re.sub(r"\\key\s+([a-g](?:is|es)?)\s+\\(major|minor)", 
+        text = re.sub(rf"\\key\s+((?:(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?|[a-g](?:is|es|isis|eses)?)(?:,+|\'*)?(?:\d+\.*)?)\s*\\(major|minor)", 
                      r"\\key \1 \\\2", text)
         
         # Normalize clef declarations
@@ -210,7 +221,7 @@ class LilyPondPreprocessor:
         """
         # Add key signature tokens
         text = re.sub(
-            r"\\key\s+([a-g](?:is|es)?)\s+\\(major|minor)",
+            rf"\\key\s+((?:(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?|[a-g](?:is|es|isis|eses)?)(?:,+|\'*)?(?:\d+\.*)?)\s*\\(major|minor)",
             lambda m: f"{self.special_tokens['key_sig']}{m.group(1)}_{m.group(2)}{self.special_tokens['close_tag']}",
             text
         )
@@ -234,6 +245,14 @@ class LilyPondPreprocessor:
             r"\\clef\s+([a-zA-Z]+)",
             lambda m: f"{self.special_tokens['clef']}{m.group(1).strip()}{self.special_tokens['close_tag']}",
             text
+        )
+
+        # Add repeat tokens
+        text = re.sub(
+            r'\\repeat\s+unfold\s+(\d+)\s*(\{.+?\})',
+            lambda m: f"{self.special_tokens['repeat_unfold']}{m.group(1).strip()}{m.group(2).strip()}{self.special_tokens['close_tag']}",
+            text,
+            
         )
         
         # Add measure separators (simple heuristic based on bar lines)
