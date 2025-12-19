@@ -6,12 +6,12 @@ import pickle
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Union
 import re
+import os
 
 from transformers import PreTrainedTokenizer
-from .lilypond_parser import LilyPondParser
+from maestrogpt.data import LilyPondParser
 
 logger = logging.getLogger(__name__)
-
 
 class LilyPondPreprocessor:
     """Preprocessor for LilyPond music notation data.
@@ -40,7 +40,8 @@ class LilyPondPreprocessor:
         self.add_special_tokens = add_special_tokens
         self.normalize_notation = normalize_notation
         self.parser = LilyPondParser()
-        
+        self.labels_path = './labels/labels_v1.json'
+
         # Special tokens for music structure
         self.special_tokens = {
             "section_start": "<SECTION>",
@@ -85,7 +86,7 @@ class LilyPondPreprocessor:
             file_path: Path to the LilyPond file
             
         Returns:
-            Dictionary containing processed data and metadata
+            Dictionary containing processed data, parser metadata, and label metadata
         """
         logger.info(f"Preprocessing file: {file_path}")
         
@@ -96,8 +97,12 @@ class LilyPondPreprocessor:
             logger.warning(f"No elements found in {file_path}")
             return {"text": "", "metadata": {}, "statistics": {}}
         
-        # Convert to text sequence
-        raw_text = self.parser.to_sequence(include_metadata=True)
+        # Convert to text sequence: A list of <key:value> tokens where key is the kind of LilyPond Element, and value is it's raw text. 
+            # Gives you content inside relative block, not the context behind the variables/structure containing the relative block
+        #parser_tokenized_text = self.parser.to_sequence(include_metadata=True)
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw_text = f.read()
         
         # Apply preprocessing steps
         processed_text = self._preprocess_text(raw_text)
@@ -109,6 +114,19 @@ class LilyPondPreprocessor:
         
         # Get statistics
         statistics = self.parser.get_statistics()
+
+        # Get labels. If labels unavailable, assign dic with all labels under 'unknown' category
+        try:
+            with open(self.labels_path, 'r', encoding='utf-8') as f:
+                labels_dic = json.load(f)
+                try:
+                    file_name = os.path.basename(file_path)
+                    labels = labels_dic[file_name]
+                except KeyError:
+                    print(f"{file_name} is not labeled in {self.labels_path}. Key not found")
+                    labels = {"unknown": ["composer", "musical_form", "midi_instruments", "meta", "period"]}
+        except FileNotFoundError:
+            print(f"{self.labels_path} file not found. No labels to be added")
         
         return {
             "text": processed_text,
@@ -117,6 +135,7 @@ class LilyPondPreprocessor:
             "metadata": self.parser.metadata,
             "statistics": statistics,
             "file_path": file_path,
+            "labels": labels
         }
     
     def preprocess_directory(
@@ -133,7 +152,10 @@ class LilyPondPreprocessor:
             file_pattern: File pattern to match
             
         Returns:
-            List of processed file data
+            List of processed file data including:
+            Processed text with structural tokens,
+            Raw text,
+            Parser statistics
         """
         input_path = Path(input_dir)
         processed_files = []
@@ -177,8 +199,11 @@ class LilyPondPreprocessor:
         if self.normalize_notation:
             text = self._normalize_notation(text)
         
+
         if self.add_special_tokens:
             text = self._add_structural_tokens(text)
+            
+
         
         return text
     
@@ -196,10 +221,10 @@ class LilyPondPreprocessor:
         #     text = text.replace(sharp, flat)
         
         # Normalize relative mode indicators
-        text = re.sub(rf"\\relative\s+{self.NOTE_PATTERN.pattern}'*\s", r"\\relative do'' ", text)
+        text = re.sub(rf"\\relative\s+{self.NOTE_PATTERN.pattern}'*\s", r"\\relative do' ", text)
         
         # Normalize time signatures
-        text = re.sub(r"\\time\s+(\d+/\d+)", r"\\time \1", text)
+        text = re.sub(r"\\time\s*(\d+/\d+)", r"\\time \1", text)
         
         # Normalize key signatures
         text = re.sub(rf"\\key\s+((?:(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?|[a-g](?:is|es|isis|eses)?)(?:,+|\'*)?(?:\d+\.*)?)\s*\\(major|minor)", 
@@ -207,6 +232,12 @@ class LilyPondPreprocessor:
         
         # Normalize clef declarations
         text = re.sub(r"\\clef\s+([a-zA-Z]+)", r"\\clef \1", text)
+
+        # Normalize tempo signatures
+        text = re.sub(r'\\tempo\s*((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))', r'\\tempo \1', text)
+
+        # Normalize repeat declarations
+        text = re.sub(r'\\repeat\s+unfold\s*(\d+)\s*(\{.+?\})', r'\\repeat unfold \1 \2',text)
         
         return text
     
@@ -228,15 +259,15 @@ class LilyPondPreprocessor:
         
         # Add time signature tokens
         text = re.sub(
-            r"\\time\s+(\d+/\d+)",
+            r"\\time\s*(\d+/\d+)",
             lambda m: f"{self.special_tokens['time_sig']}{m.group(1)}{self.special_tokens['close_tag']}",
             text
         )
         
         # Add tempo tokens
         text = re.sub(
-            r"\\tempo\s+((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))",
-            lambda m: f"{self.special_tokens['tempo']}{m.group(1).strip()}{self.special_tokens['close_tag']}",
+            r"\\tempo\s*((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))",
+            lambda m: f"{self.special_tokens['tempo']}{m.group(1).strip().replace(' ','')}{self.special_tokens['close_tag']}",
             text
         )
 
@@ -249,7 +280,7 @@ class LilyPondPreprocessor:
 
         # Add repeat tokens
         text = re.sub(
-            r'\\repeat\s+unfold\s+(\d+)\s*(\{.+?\})',
+            r'\\repeat\s+unfold\s*(\d+)\s*(\{.+?\})',
             lambda m: f"{self.special_tokens['repeat_unfold']}{m.group(1).strip()}{m.group(2).strip()}{self.special_tokens['close_tag']}",
             text,
             
@@ -396,3 +427,6 @@ class LilyPondPreprocessor:
             "most_common_tokens": sorted_tokens[:50],
             "token_frequency_distribution": token_counts
         }
+if __name__ == "__main__":
+    p = LilyPondPreprocessor()
+    p.preprocess_directory('./data/raw/', './data/preprocessing_out')

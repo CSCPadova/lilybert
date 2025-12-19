@@ -8,7 +8,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class LilyPondElement:
     """Represents a parsed LilyPond element."""
@@ -45,7 +44,6 @@ class LilyPondParser:
         r')'             # no letter after (prevents 'cat' etc.)
     )
 
-    # --- Italian Note Pattern ---
     ITALIAN_NOTE_PATTERN = re.compile(
         r'(?<![a-zA-Z])'                # no letter before
         r'((?:do|re|mi|fa|sol|la|si)'   # base note names
@@ -56,9 +54,6 @@ class LilyPondParser:
         r')'                # no letter after
         
     )
-    """
-    (?<![a-zA-Z])(~?(?:do|re|mi|fa|sol|la|si)(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?(?:'+|,+)?[!?]?(?:\d+\.*)?)
-    """
     NOTE_PATTERN = re.compile(fr'({ITALIAN_NOTE_PATTERN.pattern})')
     CHORD_PATTERN = re.compile(r'<([^>]+)>(\d+\.?)?')
     SIMULTANEOUS_PATTERN = re.compile(r'<<(.*)>>(\d+\.?)?')
@@ -71,7 +66,7 @@ class LilyPondParser:
     CLEF_PATTERN = re.compile(r'\\clef\s+([a-zA-Z]+)')
     RELATIVE_PATTERN = re.compile(rf"\\relative\s+{NOTE_PATTERN.pattern}*\s*{{")
     TEMPO_PATTERN = re.compile(r'\\tempo\s+((?:\"[^\"]+\"\s*\d*(?:\.)?\s*=\s*\d+)|(?:\"[^\"]+\")|(\d+(?:\.)?\s*=\s*\d+))')
-    REPEAT_PATTERN = re.compile(r'\\repeat\s+unfold\s+(\d+)\s*\{')
+    REPEAT_PATTERN = re.compile(r'\\repeat\s+unfold\s*(\d+)\s*\{')
     
     def __init__(self):
         """Initialize the LilyPond parser."""
@@ -113,7 +108,7 @@ class LilyPondParser:
         # Extract metadata (header block)
         self.metadata = self._extract_metadata(content)
         
-        # Find music blocks
+        # Find header metadata (kind of irrelevant now that we have labels, but maybe useful for future)
         header_match = re.search(r'\\header\s*\{', content, re.DOTALL)
         music_content = ''
         if header_match:
@@ -124,6 +119,7 @@ class LilyPondParser:
           music_content = content[:start_idx] + content[end_idx + len(header_content):]
         else:
           music_content = content
+        # Find music blocks. Default is relative blocks. Can always be changed depending on dataset
         music_blocks = self._extract_music_blocks(music_content, self.RELATIVE_PATTERN)
         
         # Parse each music block
@@ -167,10 +163,9 @@ class LilyPondParser:
                 key = match.group(1)
                 value = match.group(2) or match.group(3)
                 metadata[key] = value
-        print(f"Metadata is: {metadata}")
         return metadata
     
-    def _extract_music_blocks(self, content: str, blockPattern: re.Pattern) -> List[str]:
+    def _extract_music_blocks(self, content: str, block_pattern: re.Pattern) -> List[str]:
         """Extract LilyPond music notation blocks inside \relative commands."""
         blocks = []
         i = 0
@@ -180,7 +175,7 @@ class LilyPondParser:
 
         while i < len(content):
             # Try to match a \relative pattern at current position
-            match = blockPattern.match(content, i)
+            match = block_pattern.match(content, i)
             if match:
                 in_music = True
                 brace_level = 1  # The opening brace belongs to this block
@@ -226,31 +221,24 @@ class LilyPondParser:
         return elements
     
     def _tokenize_music(self, block: str) -> List[str]:
-        """Tokenize music block into individual elements."""
-        # This is a simplified tokenization
-        # In practice, you might need more sophisticated parsing
+        """Tokenize music block into individual elements.
+        - Captures relevant musical notation
+        - This is a simplified tokenization. In practice, future researchers might need more advanced parsing
 
-        # At the very least let it capture musical content --> even if it cannot really parse perfectly
-            # In one week if it cannot parse perfectly move on
-        # Switch case
-        # Add some memory, a buffer of some kind so we can retain memory of previous token
-            # List of cases for directives with parameters (white lsit. we KNOW these directives need parameters)
-            # Black list wouldn't work. We do not know how all the cases would work
+        - Add some memory, a buffer of some kind so we can retain memory of previous token
+            -- List of cases for directives with parameters (white lsit. we KNOW these directives need parameters)
+            -- Black list wouldn't work. We do not know how all the cases would work
+        """
         
         tokens = []
         i = 0
         current_token = ""
         while i < len(block):
-             # Handle simultaneous music groupings <<\musicData \forma >>
+             # Discard simultaneous music groupings <<\musicData \forma >>. Avoid counting them as chords. Add functionality for them in future.
             if block.startswith("<<", i):
                 if current_token.strip():
                     tokens.append(current_token.strip())
                     current_token = ""
-                '''
-                simultaneous_group = "<<" + self.parse_enclosure(block[i+2],"<<",">>")
-                tokens.append(simultaneous_group)
-                i += len(simultaneous_group)
-                '''
                 tokens.append("<<")
                 i += len("<<")
                 continue
@@ -271,7 +259,8 @@ class LilyPondParser:
                     tokens.append(chord)
                     i = j
                     continue
-            # Handle crescendos
+            
+            # Handle crescendos. Avoid counting them as chords
             elif block.startswith(r'\<', i) or block.startswith(r'\>',i) or block.startswith(r'\!',i):
                 if current_token.strip():
                     tokens.append(current_token.strip())
@@ -280,7 +269,7 @@ class LilyPondParser:
                 i += 2
                 continue
 
-            # Handle directives with arguments
+            # Handle musical directives with arguments
             elif block.startswith("\\key", i):
                 if current_token.strip():
                     tokens.append(current_token.strip())
@@ -422,17 +411,10 @@ class LilyPondParser:
     def _parse_token(self, token: str) -> Optional[LilyPondElement]:
         """Parse a single token into a LilyPond element."""
         
-        # Check for chords
+        # Check for chords:
+        # Account for notes contained within them
         chord_match = self.CHORD_PATTERN.match(token)
         if chord_match:
-            '''
-            pnotes = self._tokenize_music(chord_match.group(1))
-            ptokens = (self._parse_token(item) for item in pnotes)
-            notes = []
-            for token in ptokens:
-                if token.type == "notes":
-                    notes.append(token)
-            '''
             note_content = chord_match.group(1)
             notes = re.findall(self.NOTE_PATTERN,note_content)
             duration = chord_match.group(2)
@@ -453,6 +435,8 @@ class LilyPondParser:
                     content=token,
                     attributes={"directive": directive_match.group(1)}
                 )
+            # Check for Repeat Declarations:
+            # Account for notes contained within repeats and the number of times that sequence is to be repeated
             elif directive_match and repeat_match:
                 start_cbracket =  repeat_match.end() - 1
                 note_content = self.parse_enclosure(token[start_cbracket:], "{","}")
