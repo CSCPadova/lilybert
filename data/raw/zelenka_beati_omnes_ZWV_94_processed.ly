@@ -1,0 +1,2073 @@
+\language "italiano"
+%********************************** VARIABILI
+\version "2.24.0"
+
+parentSlur =
+-\tweak stencil
+#(lambda (grob)
+     (let* ((cp (ly:grob-property grob 'control-points))
+            (lp (grob-interpret-markup grob (markup #:teeny "(")))
+            (rp (grob-interpret-markup grob (markup #:teeny ")"))))
+         (set! lp (ly:stencil-aligned-to lp Y CENTER))
+         (set! lp (ly:stencil-aligned-to lp X 0.2))
+         (set! lp (ly:stencil-translate lp (first cp)))
+         (set! rp (ly:stencil-aligned-to rp Y CENTER))
+         (set! rp (ly:stencil-aligned-to rp X -0.2))
+         (set! rp (ly:stencil-translate rp (last cp)))
+         (list-set! cp 0
+                    (cons (cdr (ly:stencil-extent lp X))
+                          (cdr (first cp))))
+         (list-set! cp (1- (length cp))
+                    (cons (car (ly:stencil-extent rp X))
+                          (cdr (last cp))))
+         (ly:grob-set-property! grob 'control-points cp)
+         (apply ly:stencil-add (list lp rp
+                                     (ly:slur::print grob)))))
+\etc
+
+acc = \once \override Flag.stroke-style = #"grace"
+
+tr = \trill
+
+su = \change Staff = up
+
+giu = \change Staff = down
+
+tasto = _\markup\italic"Tasto solo"
+
+dolce = _\markup\italic"doux"
+
+fort = _\markup\italic"fort"
+
+ten = _\markup \italic \center-align "ten"
+
+arco = _\markup \italic "con l'arco"
+
+noarco = _\markup \italic "senz'arco"
+
+pizz = _\markup \italic "pizzicato"
+
+soli = ^\markup \italic { Soli }
+
+solo = ^\markup \italic { Solo }
+
+tu = ^\markup \italic "Tutti"
+
+pad = \once \override TextScript.padding = #3
+
+padall = \override TextScript.padding = #1.2
+
+puntopz = -\parenthesize -.
+
+fermopz = -\parenthesize \fermata
+
+segnopz = -\parenthesize \segno
+
+terzine = \tupletSpan 8
+
+terzinequarto = \tupletSpan 4
+
+sestine = \tupletSpan 2
+
+sestinequarto = \tupletSpan 4
+
+notypeset = \set Score.skipTypesetting = ##f
+
+typeset = \set Score.skipTypesetting = ##f
+
+senza = \override TupletNumber.transparent = ##t
+
+con = \override TupletNumber.transparent = ##f
+
+upl =
+#(let ((m (make-articulation 'stopped)))
+     (set! (ly:music-property m 'tweaks)
+           (acons 'font-size 3
+                  (acons 'stencil (lambda (grob)
+                                      (grob-interpret-markup
+                                       grob
+                                       (make-draw-line-markup '(0 . 1))))
+                         (ly:music-property m 'tweaks))))
+     m)
+
+pratu = ^\markup \override #'(baseline-skip . 1) {
+    \halign #-0
+    \center-column {
+        \musicglyph "scripts.turn"
+        \musicglyph "scripts.prall"
+    }
+}
+
+
+mbreak = { }
+
+
+IobIn = \relative do'' {
+
+    r8 sol8 re' mib re4-! do~
+    do16 la sib do re8 do sib8. la16(sol8)\once\stemDown sib'~
+    sib16 la sol fa mib re do si la8 la'~la16 sol fad mi?
+
+    %4
+    fad8 sol la, fad' sol sol, r4\mbreak
+    R1
+    r4 r8 sib'~sib16 la sol fa mib re do si
+
+    %7
+    do8 la'~la16 sol fad mi? fad8 re r4
+    R1*2
+
+    %10
+    r8 fa\f do re re(do) r4
+    R1*2\mbreak
+
+    %13
+    r2 r8 sib fa' sol
+    fa4 mib~mib16 do re mib fa8 mib
+    re8. do16 sib4 r2
+
+    %16
+    R1
+    r2 r8 fa'\f do re
+    re16(do do8) r4 r2
+    R1
+    r2 r8 re\f la sib\mbreak
+    sib16(la la8) r4 r2
+    R1*3
+    r2 r8 sol re' mib
+    re4-!  r8 do~do16 la sib do re8 do
+    sib8. la16 sol4 r sol'8 fa
+
+    %28
+    mib? re do sol r2\mbreak
+    r2 r8 do sol' lab
+    sol4-! fa~fa16 re mib fa sol8 fa
+
+    %31
+    mib8. re16 do4 r2
+    R1
+    r2 r8 sol'\f\noBeam re mib
+
+    %34
+    mib?(re) r4 r2
+    R1*3
+    r8 do\f sol' lab sol4 fa~
+    fa16 re mib fa sol8 fa mib8.(re16) do8 mib~
+
+    %40
+    mib16 re do sib lab sol fa mi! fa8 re'~re16 do si la?\mbreak
+    si8 do re, si' do4 r
+    r r16 sol si re sol re si sol do sol mib do
+
+    %43
+    r2 r4 r16 la' dod mi
+    la mi dod la re la fa re r2
+    r2 re'4. re8
+
+    %46
+    do la si dod re dod16 si dod8 re
+    mi4 re8 re dod dod re4~
+    re dod8. dod16 re8 la re8 do?\mbreak
+
+    %49
+    sib4 la8. (la16) la2
+    r re8. re16 re8 re
+    fa4 dod re8. re16 mi!8 re
+
+    %52
+    dod8[(sib)] la4 r2\mbreak
+    R1
+    r4 re mi mi8 mi
+
+    %55
+    fa4 fa8 mi re4. re8
+    re4 do si4. si8\mbreak
+    la4 mi'4. mi8  mi re
+
+    %58
+    dod[sib] dod4 fa8. fa16 fa8 mi
+    re[dod] re[re, fa sol16 la] sib8[do?]
+    re4. sol,8 re'2~\mbreak
+
+    %61
+    re4 dod re8[mi] fa4
+    mi fa4. fa8 fa mi
+    re[dod] re4 mi8. mi16 re8 do?
+
+    %64
+    si4 do re2\mbreak
+    dod4 re2 dod4
+    re re do!8. do16 do4
+
+    %67
+    r do re re8 do
+    sib4. sib8 do2\mbreak
+    sib4 do re mib~
+
+    %70
+    mib re8 re do2
+    sib do
+    sib la\mbreak
+
+    %73
+    sol4 sol2 fad8[la]
+    sib4(do8.) do16 fad,4 sol8 la16[(sib)]
+    do8 sol do8. do16 re4 mib
+
+    %76
+    re2. do4~
+    do sib la4. la8
+    r8 sol re' mib re4-! do~
+
+    %79
+    do16 la sib do re8 do sib8. la16 sol4
+    R1*5\mbreak
+    r4 r8 fa'~ fa16 mi re do sib la sol fad
+
+    %86
+    sol8 mi'~mi16 re dod si? dod8 la r4
+    R1*3
+    r2 r4 r8 sol'
+
+    %91
+    sol, fad r sol 'sol, fad r sol'
+    sol,  fad re' re mib4. fa16 mib\mbreak
+    re8 do sib[la16 sib] do8.[sib16 la8 re]
+
+    %94
+    sib sol sib sib re4. mib16 re
+    do4. do8 sib do la4
+    sol r8 do, do' si r do,\mbreak
+
+    %97
+    do' si r sol' sol, re' sol mi!
+    fa fa, do'8 do mib4. fa16 mib
+    re8. do16 si8 si do2
+
+    %100
+    si4 do8[si] lab4 sol\mbreak
+    sol2 sol4. do8
+    la4 sib?8[do] re2
+
+    %103
+    r8 sol, re' mib re4-! do~
+    do16 la sib do re8 do sib8. la16 \once\stemUp sol8 sib'~\mbreak
+    sib16 la sol fa mib? re do si do8 la'~la16 sol fad mi?
+
+    %106
+    fad8 sol la, fad' sol sol, r4
+    R1*4
+
+}
+
+IobIIn = \relative do'' {
+
+    sib8. la16 sol8 sol16 la sib4 r8 do16 sib
+    la8 re, r la' sol sol r re'
+    sol, re' r fa, sol fa mib la~
+
+    %4
+    la8 re do la sib4 r\mbreak
+    R1
+    r4 r8 re sol,[re'] r fa,
+
+    %7
+    sol fa mib la la4 r
+    R1*2
+    r8 la\f\noBeam la sib sib (la) r4
+    R1*2\mbreak
+
+    %13
+    r2 re8. do16 sib8 sib16 do
+    re4 r8 sol, do4 r8 la
+    sib fa sib4 r2
+
+    %16
+    R1\mbreak
+    r2 r8 la\f\noBeam la sib
+    sib (la) r4 r2
+
+    %19
+    R1
+    r2 r8 fad\f fad sol
+    sol (fad) r4 r2
+    R1*3
+
+    %25
+    r2 sib8.(la16) sol mi sol la
+    sib8 sib r do la re, r la'
+    sol sol r4 r re'8 si
+
+    %28
+    do4 sol8 si r2\mbreak
+    r mib?8.[re16 do8 do16 re]
+    mib?4 r8 fa mib fa, r re'
+
+    %31
+    do8. do16 sol4 r2
+    R1
+    r2 r8 si\f\noBeam si do
+
+    %34
+    do(si) r4 r2
+    R1*3
+    mib?8.\f re16 do8 do16 re mib4 r8 fa
+    re sol, r re' do do, r sol'
+
+    %40
+    do, sol' r  sib, do[sib] lab re\mbreak
+    re sol lab sol sol4 r
+    r r16 sol si re sol re si sol do sol mib do
+
+    %43
+    r2 r4 r16 la' dod mi
+    la mi dod la re la fa re r2
+    r2 re'4. re8
+
+    %46
+    do la si dod re dod16 si dod8 re
+    mi4 re8 re dod dod re4~
+    re dod8. dod16 re8 la re8 do?\mbreak
+
+    %49
+    sib4 la8. (la16) la2
+    r re8. re16 re8 re
+    fa4 dod re8. re16 mi!8 re
+
+    %52
+    dod8[(sib)] la4 r2\mbreak
+    R1
+    r4 re mi mi8 mi
+
+    %55
+    fa4 fa8 mi re4. re8
+    re4 do si4. si8\mbreak
+    la4 mi'4. mi8  mi re
+
+    %58
+    dod[sib] dod4 fa8. fa16 fa8 mi
+    re[dod] re[re, fa sol16 la] sib8[do?]
+    re4. sol,8 re'2~\mbreak
+
+    %61
+    re4 dod re8[mi] fa4
+    mi fa4. fa8 fa mi
+    re[dod] re4 mi8. mi16 re8 do?
+
+    %64
+    si4 do re2\mbreak
+    dod4 re2 dod4
+    re re do!8. do16 do4
+
+    %67
+    r do re re8 do
+    sib4. sib8 do2\mbreak
+    sib4 do re mib~
+
+    %70
+    mib re8 re do2
+    sib do
+    sib la\mbreak
+
+    %73
+    sol4 sol2 fad8[la]
+    sib4(do8.) do16 fad,4 sol8 la16[(sib)]
+    do8 sol do8. do16 re4 mib
+
+    %76
+    re2. do4~
+    do sib la4. la8
+    sol8 sib16 la sol8 sol16 la sib4 r8 do
+
+    %79
+    la re, r la' sol8. fa16 re4
+    R1*5
+    fa8 [sol la8. la16] re,8 la' r do,
+
+    %86
+    re do sib mi! mi4 r
+    R1*4
+    r8 re' la sib sib la r4
+
+    %92
+    r8 re re re mib4. fa16 mib\mbreak
+    re8 do sib[la16 sib] do8.[sib16 la8 re]
+
+    %94
+    sib sol sib sib re4. mib16 re
+    do4. do8 sib do la4
+    sol8 sol' re mi mi re r4\mbreak
+    r8 sol re mi mi re sol,8 sol
+
+    %98
+    lab4. sib16 lab sol8 fa mib do
+    fa[re sol fa] mib[re16 mib] fa4
+    sol8[re] sol4. fa16[mib] re4\mbreak
+
+    %101
+    mib re4. do8 sol'4
+    fad sol2 fad4
+    r8 sol re' mib re4-! do~
+
+    %104
+    do16 la sib do re8 do sib8. la16 \once\stemUp sol8 sib'~\mbreak
+    sib16 la sol fa mib? re do si do8 la'~la16 sol fad mi?
+    fad8 sol la, fad' sol sol, r4
+
+    %107
+    R1*4
+
+}
+
+IvlIn = \relative do'' {
+
+    r8 sol8 re' mib re4-! do~
+    do16 la sib do re8 do sib8. la16(sol8)\once\stemDown sib'~
+    sib16 la sol fa mib re do si la8 la'~la16 sol fad mi?
+
+    %4
+    fad8 sol la, fad' sol sol, r4\mbreak
+    R1
+    r4 r8 sib'~sib16 la sol fa mib re do si
+
+    %7
+    do8 la'~la16 sol fad mi? fad8 re r4
+    r8 re\p la sib sib(la) r4\mbreak
+    R1
+
+    %10
+    r8 fa'\f do re re(do) r4
+    r8 fa\p do re re(do) r4
+    R1\mbreak
+
+    %13
+    r2 r8 sib fa' sol
+    fa4 mib~mib16 do re mib fa8 mib
+    re8. do16 sib4 r2
+
+    %16
+    r8 do\p la' la, r fa fa'4\mbreak
+    r2 r8 fa\f do re
+    re16(do do8) r4 r8 fa\p do re
+
+    %19
+    re16(do do8) r4 r2
+    r r8 re\f la sib\mbreak
+    sib16(la la8) r4 r8 re\p la sib
+
+    %22
+    sib16(la la8) r4 r8 la'\p re,4
+    r r8 sib sol'4 r8 re
+    mib la, r do sol'4 r8 sib,\mbreak
+
+    %25
+    mib sol, fad4-! r8 sol re' mib
+    re4-!  r8 do~do16 la sib do re8 do
+    sib8. la16 sol4 r sol'8 fa
+
+    %28
+    mib? re do sol r2\mbreak
+    r2 r8 do sol' lab
+    sol4-! fa~fa16 re mib fa sol8 fa
+
+    %31
+    mib8. re16 do4 r r8 si\p
+    do4 r r r8 sol'\mbreak
+    sol,4 r r8 sol'\f\noBeam re mib
+
+    %34
+    mib?(re) r4 r8 sol\p\noBeam re mib
+    mib?(re) r4 r r8 sol
+    sol,4 r r r8 lab'\mbreak
+
+    %37
+    re,4 r r2
+    r8 do\f sol' lab sol4 fa~
+    fa16 re mib fa sol8 fa mib8.(re16) do8 mib~
+
+    %40
+    mib16 re do sib lab sol fa mi! fa8 re'~re16 do si la?\mbreak
+    si8 do re, si' do4 r
+    r r16 sol si re sol re si sol do sol mib do
+
+    %43
+    r2 r4 r16 la' dod mi
+    la mi dod la re la fa re r2
+    r2 re'4. re8
+
+    %46
+    do la si dod re dod16 si dod8 re
+    mi4 re8 re dod dod re4~
+    re dod8. dod16 re8 la re8 do?\mbreak
+
+    %49
+    sib4 la8. (la16) la2
+    r re8. re16 re8 re
+    fa4 dod re8. re16 mi!8 re
+
+    %52
+    dod8[(sib)] la4 r2\mbreak
+    R1
+    r4 re mi mi8 mi
+
+    %55
+    fa4 fa8 mi re4. re8
+    re4 do si4. si8\mbreak
+    la4 mi'4. mi8  mi re
+
+    %58
+    dod[sib] dod4 fa8. fa16 fa8 mi
+    re[dod] re[re, fa sol16 la] sib8[do?]
+    re4. sol,8 re'2~\mbreak
+
+    %61
+    re4 dod re8[mi] fa4
+    mi fa4. fa8 fa mi
+    re[dod] re4 mi8. mi16 re8 do?
+
+    %64
+    si4 do re2\mbreak
+    dod4 re2 dod4
+    re re do!8. do16 do4
+
+    %67
+    r do re re8 do
+    sib4. sib8 do2\mbreak
+    sib4 do re mib~
+
+    %70
+    mib re8 re do2
+    sib do
+    sib la\mbreak
+
+    %73
+    sol4 sol2 fad8[la]
+    sib4(do8.) do16 fad,4 sol8 la16[(sib)]
+    do8 sol do8. do16 re4 mib
+
+    %76
+    re2. do4~
+    do sib la4. la8
+    r8 sol re' mib re4-! do~
+
+    %79
+    do16 la sib do re8 do sib8. la16 sol4
+    R1*2
+    r4 r8 re' re re, r4
+
+    %83
+    r r8 sib' sib sib, r4
+    R1 \mbreak
+    r4 r8 fa''~fa16 mi re do sib la sol fad
+
+    %86
+    sol8 mi'~mi16 re dod si? dod8 la r4
+    R1*3
+    r2 r4 r8 sol'
+
+    %91
+    sol, fad r sol' sol, fad r sol'
+    sol,  fad re' re mib4. fa16 mib\mbreak
+    re8 do sib[la16 sib] do8.[sib16 la8 re]
+
+    %94
+    sib sol sib sib re4. mib16 re
+    do4. do8 sib do la4
+    sol r8 do, do' si r do,\mbreak
+
+    %97
+    do' si r sol' sol, re' sol mi!
+    fa fa, do'8 do mib4. fa16 mib
+    re8. do16 si8 si do2
+
+    %100
+    si4 do8[si] lab4 sol\mbreak
+    sol2 sol4. do8
+    la4 sib?8[do] re2
+
+    %103
+    r8 sol, re' mib re4-! do~
+    do16 la sib do re8 do sib8. la16 \once\stemUp sol8 sib'~\mbreak
+    sib16 la sol fa mib? re do si do8 la'~la16 sol fad mi?
+
+    %106
+    fad8 sol la, fad' sol sol, sib4\pp~
+    sib16 la sol fa mib re do si do8 la'~la16 sol fad mi
+    fad8 sol la, fad' sol sol' fa sol\mbreak
+
+    %109
+    sol4\fermata sol2 sol4
+    sol2 sol
+
+}
+
+IvlIIn = \relative do'' {
+
+    sib8. la16 sol8 sol16 la sib4 r8 do16 sib
+    la8 re, r la' sol sol, r re''
+    sol, re' r fa, sol fa mib la~
+
+    %4
+    la8 re do la sib4 r\mbreak
+    R1
+    r4 r8 re sol,[re'] r fa,
+
+    %7
+    sol fa mib la la4 r
+    r8 fad\p\noBeam fad8 sol sol (fad) r4\mbreak
+    R1
+
+    %10
+    r8 la\f\noBeam la sib sib (la) r4
+    r8 la\p\noBeam la sib sib (la) r4
+    R1\mbreak
+
+    %13
+    r2 re8. do16 sib8 sib16 do
+    re4 r8 sol, do4 r8 la
+    sib fa sib,4  r r8 sib'\p
+
+    %16
+    fa' fa, r la' sib sib, r4\mbreak
+    r2 r8 la\f\noBeam la sib
+    sib (la) r4 r8 la\noBeam\p la sib
+
+    %19
+    sib (la) r4 r2
+    r r8 fad\f fad sol\mbreak
+    sol (fad) r4 r8 fad\p  fad sol
+
+    %22
+    sol(fad) r4 r8 la'\p re,4
+    r r8 sib sol'4 r8 re
+    mib la, r do sol'4 r8 sib,\mbreak
+
+    %25
+    mib sol, fad sol16 la sib8.(la16) sol mi sol la
+    sib8 sib, r do' la re, r la'
+    sol sol, r4 r re''8 si
+
+    %28
+    do4 sol8 si r2\mbreak
+    r mib?8.[re16 do8 do16 re]
+    mib?4 r8 fa mib fa, r re'
+
+    %31
+    do8. do16 sol4 r2
+    r4 r8 la' re,4 r\mbreak
+    r2 r8 si\f\noBeam si do
+
+    %34
+    do(si) r4 r8 si\p\noBeam si do
+    do(si) r4 r2
+    r4 r8 sol' sol,4 r
+
+    %37
+    sol'4. fa16 mib?re4 r
+    mib?8.\f re16 do8 do16 re mib4 r8 fa
+    re sol, r re' do do, r sol'
+
+    %40
+    do, sol' r  sib, do[sib] lab re\mbreak
+    re sol lab sol sol4 r
+    r r16 sol si re sol re si sol do sol mib do
+
+    %43
+    r2 r4 r16 la' dod mi
+    la mi dod la re la fa re la'4. la8\mbreak
+    fa[re mi fa] sol[fa16 mi] fa8[sol]
+
+    %46
+    la4 sol8 sol fa2
+    mi8[sol fa sol] la[sol] fa4
+    mi4. mi8 re2\mbreak
+
+    %49
+    r la'8. la16 la8 la
+    sib4 fad sol4. sol8
+    fa?4 mi re sol
+
+    %52
+    mi2 r\mbreak
+    r4 sol la la8 la
+    sib4 sib8 la sol4. sol8
+
+    %55
+    fa2 sol4 la
+    sold la2 sold8. sold16\mbreak
+    la4 r r2
+
+    %58
+    r4 la4. la8 la sol
+    fa[mi] fa4 sib8. sib16 sib8 la
+    sol[fad] sol4 sib4. la8\mbreak
+
+    %61
+    sol2 fa?4 la~
+    la8 la la sol fa[mi] fa4
+    sib8. sib16 sib8 la sol4 fad
+
+    %64
+    sold la sol?2~\mbreak
+    sol4 fa8[sol] la2
+    la4 sib la8. la16 la4
+
+    %67
+    r la sib sib8 sib
+    sib4. sib8 la4 la8 la\mbreak
+    sol4 fa2 sol4
+
+    %70
+    fa1
+    fa4 sib2 la4~
+    la sol2 fad4\mbreak
+
+    %73
+    sib8[la sol sib] la2(
+    sol4.) sol8 la4 sib8[la]
+    sol4 fa2 mib8[fa]
+
+    %76
+    sol1\mbreak
+    fad4 sol2 fad4
+    sol8 sib16 la sol8 sol16 la sib4 r8 do
+
+    %79
+    la re, r la' sol8. fa16 re4
+    R1*2
+    r2 r4 r8 do'
+
+    %83
+    do do, r4 r r8 la'
+    la la, r4 r2\mbreak
+    fa'8 [sol la8. la16] re,8 la' r do,
+
+    %86
+    re do sib mi! mi4 r
+    R1*4
+    r8 re' la sib sib la r4
+
+    %92
+    r8 re sol4 r sol,8 sol
+    sib4. do16 sib la8 sol fad fad
+    sol2 fa?8[re] sol4
+
+    %95
+    la2~la8 sol sol fad
+    sol sol' re mi mi re r4\mbreak
+    r8 sol re mi mi re sol,8 sol
+
+    %98
+    lab4. sib16 lab sol8 fa mib do
+    fa[re sol fa] mib[re16 mib] fa4
+    sol8[re] sol4. fa16[mib] re4\mbreak
+
+    %101
+    mib re4. do8 sol'4
+    fad sol2 fad4
+    r8 sol re' mib re4-! do~
+
+    %104
+    do16 la sib do re8 do sib8. la16 \once\stemUp sol8 sib'~\mbreak
+    sib16 la sol fa mib? re do si do8 la'~la16 sol fad mi?
+    fad8 sol la, fad' sol sol, sib4\pp~
+
+    %107
+    sib16 la sol fa mib re do si do8 la'~la16 sol fad mi
+    fad8 sol la, fad' sol sol' fa sol\mbreak
+    sol4\fermata mib8 re mib do mib4~
+
+    %110
+    mib re8 do re2
+
+}
+
+Ivlan = \relative do'{
+
+    re4 r8 do sol'8. [fa16 mi8 fad16 sol]
+    la8. (sol16) fad8.(mi16) re8 do sib sol'~
+    sol8 sol sol8. fa?16 mib8 fa r mib
+
+    %4
+    re re mib[re] re4 r
+    R1
+    r4 r8 sol ~ sol sol sol8. fa16
+
+    %7
+    mib8 fa r mi re4 r
+    R1*5
+    r2 fa4 r8 mi
+
+    %14
+    sib'4 r8 do fa,8. mib?16 re8 do
+    sib re16 mib? fa8 sib, sib'[sib,] r4
+    R1*6
+
+    %22
+    r2 r4 r8 re\p
+    mib la, r4 r8 sol re'4
+    r8 re do'4 r8 re re,4 \mbreak
+
+    %25
+    r8 mib re8. re16 re4 r
+    r8 sol mi?4 r8 la fad8. fad16
+    sol4 r r r8 sol~
+
+    %28
+    sol fa mib?[re] r2
+    r sol4 r8 re
+    do'8. sib16 la8 do sol4 r8 si
+
+    %31
+    sol2 r
+    R1*6
+    sol4\f r8 fa do'8.[sib16 la8 do]
+
+    %39
+    sol4 r8 si sol fa mi sol
+    r do, do[sib] lab sib r fa'\mbreak
+    re mi r re do4 r
+
+    %42
+    r2 r8 sol' mi4
+    R1
+    r8 la fa4 r2
+
+    %45
+    R1*4\mbreak
+    re8. re16 re8 re fa4 dod
+
+    %50
+    re8. re16 re8(do?) sib[la] sol16[la sib do]
+    re8. re16 la8 la sib2
+    la r4 re\mbreak
+
+    %53
+    mi mi8 mi fa4 fa8 mi
+    re2~re8 re do sib
+    la4 re8 do sib4 la
+
+    %56
+    si do8[re] mi4. mi8\mbreak
+    mi4 r r2
+    R1
+
+    %59
+    r4 re4. re8 re do
+    sib[la] sib8.[la16] sol4 sol'~\mbreak
+    sol8 [fa] mi4 re2~
+
+    %62
+    re4 dod re2
+    sol8. sol16 sol8 fa mi[la,] re4
+    mi2 re4 sol8[fa]\mbreak
+
+    %65
+    mi4 fa mi2
+    re4 fa fa8. fa16 fa4
+    r fa fa fa8 fa
+
+    %68
+    fa4 mi8. mi16 fa2\mbreak
+    mib4. mib8 re4 do8 sib
+    la4 sib2 la4
+
+    %71
+    sib2 r
+    R1*2
+    mib2 re
+
+    %75
+    do si4 do~
+    do si mib2\mbreak
+    re re4. re8
+
+    %78
+    re4 r r2
+    R1*11
+    r2 r8 re la sib
+
+    %91
+    sib la r4 r8 re la sib
+    sib[la re si] do4 r\mbreak
+    r2 r4 re8 re
+
+    %94
+    mib4. fa16 mib re8. do16 sib8 sib
+    do4 re4. mib8 mib[re]
+    re4 r r8 sol re mib\mbreak
+
+    %97
+    mib re r do do si do4
+    do r r2
+    r r4 do8 do
+
+    %100
+    mib4. fa16 mib re8 do si si\mbreak
+    do4 si8 [re] mib?8.[re16] do4~
+    do sib? la2
+
+    %103
+    sol8 sib16[do] re8 do r sib la4
+    r8 re fad,[re'] re2\mbreak
+    r8 re[do] fa r4 r8 do
+
+    %106
+    la[sib] la4 sol r8 re'\pp
+    sol, re' sol,[fa] sol fa r la
+    la sib la4 sol8 re' do[la]\mbreak
+
+    %109
+    sib4\fermata do8 si do[mib16 re] do4~
+    do si8[la] si2
+
+}
+
+Isopranon = \relative do'' {
+
+    \autoBeamOff
+
+    R1*40
+    r2 mib4\tu re
+    mib re r2
+
+    %43
+    fa4 mi! fa mi
+    R1\mbreak
+    r2 re4. re8
+
+    %46
+    do [la] si [dod] re [dod16 si] dod8 [re]
+    mi4 re8 re dod dod re4~
+    re dod8. dod16 re8 la re8 do?\mbreak
+
+    %49
+    sib4 (la8.) la16 la2
+    r re8. re16 re8 re
+    fa4 dod re8. re16 mi!8 re
+
+    %52
+    dod8[(sib)] la4 r2\mbreak
+    R1
+    r4 re mi mi8 mi
+
+    %55
+    fa4 fa8 mi re4. re8
+    re4 do si4. si8\mbreak
+    la4 mi'4. mi8  mi re
+
+    %58
+    dod[sib] dod4 fa8. fa16 fa8 mi
+    re[dod] re[re, fa sol16 la] sib8[do?]
+    re4. sol,8 re'2~\mbreak
+
+    %61
+    re4 dod re8[mi] fa4
+    mi fa4. fa8 fa mi
+    re[dod] re4 mi8. mi16 re8 do?
+
+    %64
+    si4 do re2\mbreak
+    dod4 re2 dod4
+    re re do!8. do16 do4
+
+    %67
+    r do re re8 do
+    sib4. sib8 do2\mbreak
+    sib4 do re mib~
+
+    %70
+    mib re8 re do2
+    sib do
+    sib la\mbreak
+
+    %73
+    sol4 sol2 fad8[la]
+    sib4(do8.) do16 fad,4 sol8 la16[(sib)]
+    do8 sol do8. do16 re4 mib
+
+    %76
+    re2. do4~
+    do sib la4. la8
+    sol4 r4 r2
+
+    %79
+    r sib4. do16 sib
+    la4 re8 do sib4. la8\mbreak
+    la4 sib8 la sol[la] sol fad?
+
+    %82
+    mi4 fad?8[sol16 la] sib4. la16[sol]
+    la4. sol16[fa?] sol4. fa16[mi]
+    fa4. sol16[fa] mi2\mbreak
+
+    %85
+    re r
+    r2 la'4. sol8
+    fad mib' re do sib8. la16 sol8 sib
+
+    %88
+    la dod re4. dod4 re8\mbreak
+    mi4 r8 dod re la re[sib]
+    do? [sib16 la] sib4. la8 r4
+
+    %91
+    r8 re la sib sib la r4
+    r re8 re mib4. fa16 mib\mbreak
+    re8 do sib[la16 sib] do8.[sib16 la8 re]
+
+    %94
+    sib sol sib sib re4. mib16 re
+    do4. do8 sib do la4
+    sol8 sol' re mib  mib re r4\mbreak
+
+    %97
+    r8 sol re mib? mib re sol[mi!]
+    fa4 do8 do mib4. fa16 mib
+    re8. do16 si8 si do2
+
+    %100
+    si4 do8[si] lab4 sol\mbreak
+    sol2 sol4. do8
+    la4 sib?8[do] re2
+
+    %103
+    re4 r8 mib re4 r8 do~
+    do16 [la sib do] re8[do] sib[la] sol4\mbreak
+    r8 re'[mib si] do4 r8 mib
+
+    %106
+    re4 mib8[(re)] re4 r
+    R1
+    r8 re[mib] re r re[mib re]\mbreak
+
+    %109
+    re4\fermata mib8 re mib8[do] mib4~
+    mib re8[do] re2
+
+}
+
+ItestoI = \lyricmode {
+
+    Ec -- ce ec -- ce ec -- ce ec -- ce sic be -- ne -- di -- ce -- tur ho -- mo
+    qui ti -- met Do - minum _ qui ti -- met Do -- minum. _
+
+    Be -- ne -- dicat _ ti -- bi Do  -- mi -- nus ex Si -- on,
+    et vi -- deas _ bo -- na Je -- ru -- sa -- lem Je -- ru -- sa -- lem
+    om -- nibus _ di -- e -- bus, om -- nibus _ di -- e - -  - bus vi -- tæ tu - æ,
+    om -- nibus _ di -- e -- bus, om -- nibus _ di -- e -- bus vi -- tæ tu - æ.
+
+    Et vi -- deas _ et vi -- deas _ fi  -- li -- os  fi -- li -- o - rum tu -- o -- rum: pa -- cem su -- per
+    su -- per I -- sra -- ël, su - - per I -- sra -- ël pa -- cem su -- per I -- sra -- ël.  %% bar 78 p 15
+
+    Glo -- ria _ Pa -- tri et Fi -- li -- o et Spi -- ri -- tui _ San - - - - - - - - - -  cto.
+
+    Si -- cut e -- rat in prin -- ci -- pio, _  et nunc et sem -- per et nunc et nunc et sem - - per
+    et nunc et sem -- per et in sae -- cula _ sæ -- cu -- lo - - rum et in sae -- cula _
+    sæ -- cu -- lo -- rum a -- men et nunc et sem -- per et nunc et sem -- per sem -- per et in sae -- cula _
+    sæ -- cu -- lo -- rum a - - - men a -- men a - - - men a -- men a - -  men a -- men a -- men a -- men a -- men
+    a -- men a -- men a - - men.
+
+}
+
+Ialton = \relative do' {
+
+    \autoBeamOff
+
+    R1*40
+    r2 sol'4 sol
+    sol sol r2
+
+    %43
+    la4 la la la
+    r2 la4. la8\mbreak
+    fa[re] mi[fa] sol[fa16 mi] fa8[sol]
+
+    %46
+    la4 sol8 sol fa2
+    mi8[sol] fa[sol] la[sol] fa4
+    mi4. mi8 re2\mbreak
+
+    %49
+    r la'8. la16 la8 la
+    sib4 fad sol4. sol8
+    fa?4 mi re sol
+
+    %52
+    mi2 r\mbreak
+    r4 sol la la8 la
+    sib4 sib8 la sol4. sol8
+
+    %55
+    fa2 sol4 la
+    sold la2 sold8. sold16\mbreak
+    la4 r r2
+
+    %58
+    r4 la4. la8 la sol
+    fa[mi] fa4 sib8. sib16 sib8 la
+    sol[fad] sol4 sib4. la8\mbreak
+
+    %61
+    sol2 fa?4 la~
+    la8 la la sol fa[mi] fa4
+    sib8. sib16 sib8 la sol4 fad
+
+    %64
+    sold la sol?2~\mbreak
+    sol4 fa8[sol] la2
+    la4 sib la8. la16 la4
+
+    %67
+    r la sib sib8 sib
+    sib4. sib8 la4 la8 la\mbreak
+    sol4 fa2 sol4
+
+    %70
+    fa1
+    fa4 sib2 la4~
+    la sol2 fad4\mbreak
+
+    %73
+    sib8[la] sol[sib] la2(
+    sol4.) sol8 la4 sib8[la]
+    sol4 fa2 mib8[fa]
+
+    %76
+    sol1\mbreak
+    fad4 sol2 fad4
+    sol r r2
+
+    %79
+    r sol4. la16 sol
+    fad4 sib8 la sol4. fad8\mbreak
+    fad4 sol8 fad mi[fad] mi re
+
+    %82
+    dod[la] la'4. sol16[fad] sol4~
+    sol8 fa?16[mi] fa4. mi16[re] mi4~
+    mi8 la, re4. dod16[si] dod4\mbreak
+
+    %85
+    re2 r
+    R1*2
+    r2 mi4. re8\mbreak
+
+    %89
+    dod sib' la sol fa8. mi16 re8 sol
+    fad sol sol4. fad8 r sol
+    sol fad r sol sol fad r sol
+
+    %92
+    sol[fad] sol4 sol sol8 sol\mbreak
+    sib4. do16 sib la8 sol fad fad
+    sol2 fa?8[re] sol4
+
+    %95
+    la2~la8 sol sol[fad]
+    sol4 r8 do do si r do\mbreak
+    do si r4 r sol8 sol
+
+    %98
+    lab4. sib16 lab sol8 fa mib do
+    fa[re sol fa] mib[re16 mib] fa4
+    sol8[re] sol4. fa16[mib] re4\mbreak
+
+    %101
+    mib re4. do8 sol'4
+    fad sol2 fad4
+    sol r8 sol sol4 r8 la
+
+    %104
+    la4 r8 fad sol2\mbreak
+    r8 sol mib[fa] sol2
+    fad8 sol4 fad8 sol4 r
+
+    %107
+    R1
+    r8 sol4 fad8 sol[sib la fad]\mbreak
+    sol4\fermata sol2 sol4
+
+    %110
+    sol2 sol
+
+}
+
+ItestoII = \lyricmode {
+
+    Ec -- ce ec -- ce ec -- ce ec -- ce sic be -- ne -- di -- ce -- tur ho -- mo
+    qui ti -- met qui ti -- met Do -- minum. _
+
+    Be -- ne -- dicat _ ti -- bi Do  -- mi -- nus ex Si - on,
+    et vi -- deas _ bo -- na Je -- ru -- sa -- lem bo -- na Je -- ru - sa -- lem  %%% bar 56
+    om -- nibus _ di -- e -- bus, om -- nibus _ di -- e -- bus vi -- tæ tu -- æ,
+    om -- nibus _ di -- e -- bus, om -- nibus _ di -- e -- bus vi -- tæ vi -- tæ tu -- æ.
+
+    Et vi -- deas _ et vi -- deas _ fi  -- li -- os  fi -- li -- o -- rum tu -- o -- rum: pa -- cem su -- per
+    su -- per I -- sra -- ël,  pa - - cem su -- per I -- sra -- ël.
+
+    Glo -- ria _ Pa -- tri et Fi -- li -- o et Spi -- ri -- tui _ San - - - - - - - - - -  - cto.
+
+    Si -- cut e -- rat in prin -- ci -- pio, _  et nunc et sem -- per et  sem -- per
+    et sem -- per  et sem - per et in sae -- cula _ sæ -- cu -- lo -- rum a - - - men a -- men et sem -- per et sem -- per
+    et in sae -- cula _ sæ -- cu -- lo -- rum a - - - - - - men a -- men a - - -  men  a -- men  a -- men
+    a -- men  a - - men  a - men  a - - men a -- men a -- men.
+
+}
+
+Itenoren = \relative do' {
+
+    \autoBeamOff
+
+    R1*3
+    r2 r8 sol\solo re' mib\mbreak
+    re4 do4. la8 re16[mib] do8
+
+    %6
+    sib8. la16 sol4 r2
+    r r8 re' la sib
+    sib la r4 r8 re la sib\mbreak
+
+    %9
+    do16[sib la sib] do [la re do] sib[la sol la] sib[sol do sib]
+    la8. sol16 fa4 r8fa' do re
+    re do r4 r8 fa do re
+
+    %12
+    mib4 re do8[la] sib[mib]\mbreak
+    re16[(do sib8)] do4 sib r
+    R1
+
+    %15
+    r8 sib fa' sol fa8. mib?16 re8 mib
+    do re16[mib?] fa8 mib re  do sib4~\mbreak
+    sib16[sol la sib] do8 sib la16[sol] fa8 r4
+
+    %18
+    r8 fa' do re do4 r
+    r8 fa do re mib4(re)~
+    re8 sib do4 re r\mbreak
+
+    %21
+    r8 re la sib la4 r
+    r8 re la sib do4 sib
+    la8[sol16 fa] sol8[mib'] re16[do sib la] sib8[sol]
+
+    %24
+    la[sol16 fad] sol8 [mib'] re16[do sib la] sib8 [sol']\mbreak
+    sib,4 la8\tr[sol] sol4 r
+    R1
+
+    %27
+    r4 re'8 do si?[la] sol4
+    r sol'8 fa mib? re do si\mbreak
+    do4 re8 do16[re] mib?8.[re16] do4
+
+    %30
+    R1
+    r4 r8 sol' fa4 mib8 re
+    mib4 re8 do si[la] sol4\mbreak
+
+    %33
+    do4. re16 do do8 si r4
+    r8 sol' re  mib mib re r4
+    r8 sol re mib mib re16[mib] fa8 re
+
+    %36
+    mib8 re do re mib4 re8 do\mbreak
+    si4 do4. la8 si8.[do16]
+    do4 r r2
+
+    %39
+    R1*2\mbreak
+    r2 do4 si
+    do si r2
+
+    %43
+    re4 dod re dod
+    R1*5\mbreak
+    re8. re16 re8 re fa4 dod
+
+    %50
+    re8. re16 re8(do?) sib[la] sol16[la sib do]
+    re8. re16 la8 la sib2
+    la r4 re\mbreak
+
+    %53
+    mi mi8 mi fa4 fa8 mi
+    re2~re8 re do sib
+    la4 re8 do sib4 la
+
+    %56
+    si do8[re] mi4. mi8\mbreak
+    mi4 r r2
+    R1
+
+    %59
+    r4 re4. re8 re do
+    sib[la] sib8.[la16] sol4 sol'~\mbreak
+    sol8 [fa] mi4 re2~
+
+    %62
+    re4 dod re2
+    sol8. sol16 sol8 fa mi[la,] re4
+    mi2 re4 sol8[fa]\mbreak
+
+    %65
+    mi4 fa mi2
+    re4 fa fa8. fa16 fa4
+    r fa fa fa8 fa
+
+    %68
+    fa4 mi8. mi16 fa2\mbreak
+    mib4. mib8 re4 do8 sib
+    la4 sib2 la4
+
+    %71
+    sib2 r
+    R1*2
+    mib2 re
+
+    %75
+    do si4 do~
+    do si mib2\mbreak
+    re re4. re8
+
+    %78
+    re4 r r2
+    R1*11
+    r2 r8 re la sib
+
+    %91
+    sib la r4 r8 re la sib
+    sib[la re si] do4 r\mbreak
+    r2 r4 re8 re
+
+    %94
+    mib4. fa16 mib re8. do16 sib8 sib
+    do4 re4. mib8 mib[re]
+    re4 r r8 sol re mib\mbreak
+
+    %97
+    mib re r do do si do4
+    do r r2
+    r r4 do8 do
+
+    %100
+    mib4. fa16 mib re8 do si si\mbreak
+    do4 si8 [re] mib?8.[re16] do4~
+    do sib? la2
+
+    %103
+    sol8 sib16[do] re8 do r sib la4
+    r8 re fad,[re'] re2\mbreak
+    r8 re[do] fa r4 r8 do
+
+    %106
+    la[sib] la4 sol r
+    R1
+    r8 sib la4 sol8 re' do[la]\mbreak
+
+    %109
+    sib4\fermata do8 si do[mib16 re] do4~
+    do si8[la] si2
+
+}
+
+ItestoIII = \lyricmode {
+
+    Be -- ati _ om -- nes qui ti -- ment Do -- minum, _ be -- ati _ om -- nes qui ti -- ment Do - - - - minum, _
+    be -- ati _ om -- nes qui am -- bu -- lant in vi -- is e - jus.
+
+    La -- bores _ ma -- nuum _ tu -- a - - rum qui -- a man  - du -- cabis _
+    be -- atus _  es, et be -- ne ti -- bi e -- rit, be -- atus _  es, et be -- ne ti -- bi e - - - - - - - - - rit.
+
+    U -- xor tu -- a u -- xor tu -- a si -- cut vi -- tis a -- bundans _  in la -- te -- ri -- bus do -- mus tu -- æ;
+    fi -- lii _ tu -- i si -- cut no -- vellæ _ si -- cut no -- vellæ _ o -- li -- varum _ in cir -- cu -- itu _ men - sæ tu -- æ.
+
+    Ec -- ce ec -- ce ec -- ce ec -- ce
+
+    Be -- ne -- dicat _ ti -- bi Do -- mi -- nus  Do  - - minus _ ex Si -- on,
+    et vi -- deas _ bo -- na Je -- ru -- sa -- lem et vi -- deas _ bo -- na Je -- ru - sa -- lem
+    om -- nibus _ di -- e - bus vi -- tæ tu - æ, om -- nibus _ di -- e - -  bus vi - tæ tu -- æ.
+
+    Et vi -- deas _ et vi -- deas _ fi  - lios _  fi -- li -- o -- rum tu -- o - - rum: pa -- cem su -- per
+    pa -- cem su -- per I -- sra -- ël.
+
+    Et nunc et sem -- per et nunc et sem -- per et in sæ -- cula _ sæ -- cu -- lorum _ a - men a -- men
+    et nunc et sem -- per et nunc et sem -- per et in sæ -- cula _ sæ -- cu -- lorum _ a - - - - - men
+    a  - men a -- men a - men a -- men a - - men
+    a - - men a -- men a -- men a - - men.
+
+}
+
+Ibasson = \relative do {
+
+    \autoBeamOff
+
+    R1*40
+    r2 do'4 sol
+    do, sol' r2
+
+    %43
+    re'4 la re, la'
+    R1*4
+    la 8. la16 la8 la sib4 fad\mbreak
+
+    %49
+    sol8. sol16 fa?8 mi re4 la'
+    sol re r2
+    r sol2
+
+    %52
+    la4 la8 la sib4 sib8 la\mbreak
+    sol2 fa4. fa8
+    sib,2 r4 do
+
+    %55
+    re4 re8 re sol4 fa8 fa
+    mi4 (la) mi4. mi8\mbreak
+    la,4 r r2
+
+    %58
+    R1*2
+    r4 sol'4. sol8 sol fa\mbreak
+
+    %61
+    mi! [re] mi4 fa4. sol8
+    la2 sib
+    r r4 re~
+
+    %64
+    re8 re do do sib!4 sol\mbreak
+    la re, la2
+    re4 sib fa'8. fa16 fa4
+
+    %67
+    r fa sib sib8 la
+    sol4. sol8 fa2\mbreak
+    sol4 la sib mib,8 mib
+
+    %70
+    fa4 (sib) fa2
+    sib, r
+    R1
+
+    %73
+    r2 re'~
+    re4 do2 sib4~
+    sib la sol2~
+
+    %76
+    sol4 sol do,2\mbreak
+    re4 sol re4. re8
+    sol,4 r r2
+
+    %79
+    R1*11
+    r2 r4 r8 sol'
+    re' re, r sol re' re, r sol
+
+    %92
+    re'8. [do16] si8 [sol] do do, r4\mbreak
+    R1
+    r4 sol'8 sol sib4. do16 sib
+
+    %95
+    la8 sol fad re sol [mib] do [re]
+    sol,4 r8 do sol' sol, r do\mbreak
+
+    %97
+    sol' sol, r do sol'8.[fa16] mi!8 [do]
+    fa fa, r4 r2
+    r4 sol'8 sol lab4. sib16 lab
+
+    %100
+    sol8 fa mib do fa4 sol8 [fa]\mbreak
+    mib [fa] sol4 do,  mib8 [do]
+    re4 sol re2
+
+    %103
+    sol,8 [sol'16 la] sib8 [do] sib [sol] la [sol]
+    fad4 r8 re sol,2\mbreak
+    r8 si' do [re] mib [re] do do,
+
+    %106
+    re [sib do re] sol,4 r
+    R1
+    r8 sib [do? re] mib [sib do re]\mbreak
+
+    %109
+    sol,4\fermata  do8 sol' do,2
+    sol'1
+
+}
+
+ItestoIV = \lyricmode {
+
+    Ec -- ce ec -- ce ec -- ce ec -- ce
+
+    Be -- ne -- dicat _ ti -- bi Do -- mi -- nus ex Si - - on,
+    et vi -- deas _ bo -- na Je -- ru - sa -- lem et vi -- deas _ bo -- na Je -- ru - sa -- lem
+    om -- nibus _ di -- e -- bus vi -- tæ tu -- æ, om -- nibus _ di -- e --  bus vi -- tæ tu -- æ.
+
+    Et vi -- deas _ et vi -- deas _ fi  -- lios _  fi -- li -- o -- rum tu -- o - rum: pa -- cem
+    su -- per I -- sra -- ël su -- per I -- sra -- ël.
+
+    Et sem -- per et sem -- per et nunc et sem -- per et in sæ -- cula _ sæ -- cu -- lorum _ a - men
+    et sem -- per et sem -- per et nunc et sem -- per et in sæ -- cula _ sæ -- cu -- lorum _ a - - - men a - - - men a - - men
+    a -- men a - - - - - men a - men a -- men a -- men.
+
+}
+
+Ibcn = \relative do {
+
+    sol8\solo sol'16 la sib8 do sib sol la [sol]
+    fad4 r8 re sol la sib sol
+    mib'? si do re mib! re do do,
+
+    %4
+    re sib do re sol, sol'16 la sib8 do\mbreak
+    sib sol la sol fad4 r8 re
+    sol la sib sol mib' si do re
+
+    %7
+    mib re do do, re re, r sol'
+    re' re, r sol, \p re' re, r sol'\mbreak
+    la4 r8 fad sol4 r8 mib
+
+    %10
+    fa fa, r sib fa' fa, r sib
+    fa' fa, r sib' fa' fa, r sib
+    sol la sib sib, fa' mib re[do]\mbreak
+
+    %13
+    sib sol' mib fa sib,\f sib'16 do re8 mib
+    re sib do sib la4 r8 fa
+    sib, sib'16 do re8 mib re do sib sol
+
+    %16
+    la4 r8 fa sib [sib,16 do re8 sib]\mbreak
+    mi!4 mi fa r8 sib
+    fa' fa, r sib, fa' fa, r sib'\p
+
+    %19
+    fa' fa, r sib do la sib16 la sol fa
+    mib2 re8 re, r sol'\f \mbreak
+    re' re, r sol,\p re' re, r sol'
+
+    %22
+    re' re, r  sol mi fad sol sol,
+    do re mib do sib sol r sib
+    do re mib do si sol sol' mib\mbreak
+
+    %25
+    do4 re sol,8[sol'16 la sib8 do]
+    sib sol la sol fad4 r8 re
+    sol la sib fad sol la si sol
+
+    %28
+    do, re mib sol do sol do, sol'\mbreak
+    mib do si sol do re mib fa
+    mib do re do si4 r8 sol
+
+    %31
+    do re mib do la si do[sol']
+    do do, fa[fad] sol8[fa? mib do16 re]\mbreak
+    mib8 do mib fa sol sol, r do'\f
+
+    %34
+    sol' sol, r do, sol' sol, r do'
+    sol' sol, r do, sol' sol, la si
+    do re mib si do re mib fa\mbreak
+
+    %37
+    sol fa mib fa sol fa sol sol,
+    do re mib fa mib do re do
+    si4 r8 sol do re mib do
+
+    %40
+    lab' mi! fa[sol] lab sol fa4\mbreak
+    sol8 mi fa sol do4\tu sol
+    do, sol' r2
+
+    %43
+    re'4 la re, la'
+    r2 \clef violin\key fa\major  la'4.-! la8-!
+    fa-! re-! mi-! fa-! <<
+        {
+            re'4. re8
+
+            %46
+            do la si dod re[dod16 si] dod8[re]
+            mi4 re8 re dod4 re
+        }\\{
+            sol,8 fa16 mi fa8 sol
+            la4 sol8 sol fa2
+            mi8 sol fa[sol] la sol fa4
+        }
+    >>
+    \clef bass \key fa\major la,8.[la16 la8 la] sib4 fad\mbreak
+
+    %49
+    sol8.[sol16 fa?8 mi] re4 la'
+    sol re8 do' sib la sol16 la sib do
+    re4 la sol2
+
+    %52
+    la4 la8 la sib4 sib8 la\mbreak
+    sol2 fa
+    sib, do
+
+    %55
+    re4 re8 re sol4 fa
+    mi la mi2\mbreak
+    la,4 \clef violin \key fa\major <<
+        {
+            mi'''4._! mi8_! mi_![re_!]
+
+            %58
+            dod?_! sib_! dod4 fa8.[fa16 fa8 mi]
+            re [dod]
+        }\\{
+            s2. r4 la4. la8 la [sol]
+            fa [mi]
+        }
+    >> \clef bass \key fa\major re4. re8 re[do?]
+    sib la sol4. sol8 sol fa\mbreak
+
+    %61
+    mi! re mi4 fa4. sol8
+    la2 sib
+    sol'8.[sol16 sol8 fa] mi la, re4~
+
+    %64
+    re8 re do [do] sib!4 sol\mbreak
+    la re, la2
+    re4 sib fa'8. fa16 fa4
+
+    %67
+    r fa sib sib8 la
+    sol4. sol8 fa2\mbreak
+    sol4 la sib mib,
+
+    %70
+    fa sib fa2
+    la,4 \clef violin \key fa\major <<
+        {
+            s do''2
+            sib la\mbreak
+
+            %73
+            sib8[la sol sib]
+        }\\{
+            sib2 la4~
+            la sol2 fad4
+            sol2
+        }
+    >> \clef bass\key fa\major re2~
+    re4 do2 sib4~
+    sib la sol2~
+
+    %76
+    sol4 sol do,2\mbreak
+    re4 sol re re,
+    sol8[sol'16\solo la sib8 do] sib sol la sol
+
+    %79
+    fad4 r8 re sol,[sol'16\p la sib8 sol]
+    re' do sib fad sol sol,16 la sib8 do\mbreak
+    re re' sol, la16 sib do8 fad,? sol sol,
+
+    %82
+    la la' fad? re sol, sol' mi do
+    fa, fa' re sib mi, mi' dod la
+    re4 sib sol la\mbreak
+
+    %85
+    re8\f mi fa re sib' fad sol la
+    sib la sol sol, la la'16 sol fa?8 mi
+    re do sib la sol sol'16 la sib8 sol
+
+    %88
+    fa mi re sol la mi'16 re dod8 si\mbreak
+    la sol fa mi re re'16 do sib8 sol
+    la sol mib'[do] re4 r8 sol,\tu
+
+    %91
+    re' re, r sol re' re, r sol
+    re'8. do16 si8 sol do [do,]\clef violin \key fa\major <<
+        {
+            mib''8 fa16 mib\mbreak
+            re8 do sib4 do8. sib16
+        }\\{
+            sol8 sol
+            sib4. la16 sol la8 [sol]
+        }
+    >> \clef bass\key fa\major re8 re
+
+    %94
+    mib4 sol,8 sol sib4. do16 sib
+    la8 sol fad re sol mib do re
+    sol,4 r8 do sol' sol, r do\mbreak
+
+    %97
+    sol' sol, r do sol'8.[fa16 mi!8 do]
+    fa fa, \clef violin\key fa\major <<
+        {
+            do'''8 do\noBeam mib4. fa16 mib
+            re8.[do16]
+        }\\{
+            la8 sib16 la sol8 fa mib do
+            fa[re]
+        }
+    >> \clef bass \key fa\major sol,8 sol lab4. sib16 lab
+
+    %100
+    sol8 fa mib[do] fa4 sol8 fa\mbreak
+    mib fa sol sol, do re mib do
+    re4 sol re re,
+
+    %103
+    sol8 sol'16 la sib8 do sib sol la sol
+    fad4 r8 re sol la sib sol\mbreak
+    mib' si do re mib re do do,
+
+    %106
+    re sib do re sol,8[sib'16 la sol8\solo\pp fa]
+    mib si do[re] mib re do dod
+    re sib do? re mib sib do re\mbreak
+
+    %109
+    sol,4\fermata do8 sol' do,2
+    sol'1
+
+}
+
+Ibfn = \figures {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s4 <6> <6> \bassFigureExtendersOn <5>8 <5>16 s
+    \bassFigureExtendersOff <6 5>4 s8 <_+> s4 <6>
+    <5>8 <6> <_-> <6!> <6> <5 _->16 s \bassFigureExtendersOn <6 5 _->8 <6 5 _->
+    \bassFigureExtendersOff <_+> <6> <_-> <_+> s4 <6>
+    <6> <5> <6 5> s8 <_+>
+    s4 <6> <5->8 <6> <_-> <6!>
+    <6> <5 _->16 s \bassFigureExtendersOn <6 5 _->8 <6 5 _-> <_+>2
+    \bassFigureExtendersOff  <6 4>8 <5 _+> s4 <6 4>8 <5 _+> s4
+    s s8 <6> s4 s8 <6>
+    s1
+    s
+    <6>2 s4 <6>
+    s <6> s2
+    s4 <_-> <6 5>2
+    s4 <6> <6>2
+    <6> s4 <6>
+    <5> <6> s2
+    <6 4>8 <5 3> s4 <6 4>8 <5 3> s4
+    <6 4>8 <5 3>s4 <_-> s
+    <7> <6> <_+>2
+    <6 4>8 <5 _+> s4 <6 4>8 <5 _+> s4
+    <6 4>8 <5 _+> s4 <6>2
+    <6 _->8 <_+> <5> <_-> <6>4 s8 <6>
+    <6 _-> <_+> <6>4 <6> s8 <5>
+    <7 _->4 <5 _+> s <6>
+    <6> <5> <6 4> s8 <_+>
+    s4 <6> s <6>8 <_!>
+    s4 <6>8 <_!> <_-> <_!>  s <_!>
+    <6> s <6> <_!> <_->4 s8 <_->
+    <6>4 <5> <6> s8 <_!>
+    <_->2\bassFigureExtendersOn <6>8 <6> <_-> <_!>
+    \bassFigureExtendersOff  <_->4 <_->8 <6 _!> <_!>4 <6>8 s
+    \bassFigureExtendersOn <6>4 <6> <4>8 <_!> s <_->
+    \bassFigureExtendersOff <6 4> <5 _!> s <_-> <6 4> <5 _!> s <_->
+    <6 4> <5 _!> s <_-> <6 4> <5 _!>\bassFigureExtendersOn <6>8 <6>
+    \bassFigureExtendersOff <_->4 <6> <_-> <7>8 <5>
+    <_!>4 <6> <5 4> <_!>
+    <_-> <6>8 <_-> <6> <_-> <5>4
+    <6 5> s8 <_!> <_->2
+    <5->8 <6> <_-> <6!> <6> <5 _-> <6 5 _->4
+    <_!>8 <6> <6 _-> <_!> <_->4 <_!>
+    <_-> <_!> s2
+    s4 <_+> s <_+>
+    s1*4
+    <4>4 <_+> <6> <6>
+    <5>4 \bassFigureExtendersOn <6>8 <6> \bassFigureExtendersOff  s4 <_+>
+    <5>4 <_+>8 <6> <6>4 s8 <6>
+    s4 <_+> <5> <6>
+    \bassFigureExtendersOn <_+>8 <_+> s4 s2\bassFigureExtendersOff
+    <6> <5>
+    s <9 _!>4 <8>
+    s2 s4 <6>
+    <7 _+>2 <4>4 <_+>
+    s1
+    s
+    s4 <5 3>4 <6 3> s8 <8 _->
+    <6> <6\\> s4 s2
+    <7>4 <6\\> <6> s
+    <5 4> <6 _+> <5>2
+    <5> <7>8 <_+> <_+>4
+    <6! 4\+>4 <6> <6>2
+    <7 _+> <4>4 <_+>
+    s4 <5> <5> s
+    s1
+    <7>4 <6> s2
+    <6->4 <5-> s2
+    <7-> <4>4 <3>
+    s1
+    s
+    s2 <4>4 <_+>
+    <6 4 2->4 <5 _-> <6 4\+ 2> <6>
+    <6 4! 2> <6> <7 _!> <6- 4>
+    <4> <_!> <9 _-> <8 _->
+    <7 _+>2 <4>4 <_+>
+    s4 <6>8 <_-> <6>4 \bassFigureExtendersOn <5!>8 <5!>
+    \bassFigureExtendersOff <6 5>4 s8 <_+> s4 <6>
+    <_+> <6>8 <6> s4\bassFigureExtendersOn <6>8 <6>\bassFigureExtendersOff
+    <_+>4 s8 <6> <5 _!>4 <8 6>8 <7 5>
+    <_+>4 <6> <9> <3>
+    <9> <3> <9> <3>
+    <9> <3> <6 5> <5 _+>
+    s <6> <5>8 <6> s <6\\>
+    <6> <5> <6 5> s <_+>4 <6>
+    <_+>8 <_-> <6> <6\\> s4 <6>
+    <6>8 <6\\> s4 <_+>8 <6\\> <6> <6 3>
+    <_+> <_-> <6> <6\\> \bassFigureExtendersOn <_-> <_-> s4
+    <6\\> <5 3>8 <5 3> <6 4> <5 _+> s4\bassFigureExtendersOff
+    <6 4>8 <5 _+> s4 <6 4>8 <5 _+> s4
+    <6 4>8 <5 _+> <6> <_!> <_->4 s
+    s2 s4 <_+>
+    <5> <6-> <5> <6>
+    <6\\>4 s8 <_+> s <6> <_-> <_+>
+    s2 <6- 4>8 <5 _!> s4
+    <6- 4>8 <5 _!> s4 <6 - 4>8 s16  <5 _!> s8 <6!>
+    <_->1
+    s4 <_!> <5-> <6>
+    <_!> <6> <_-> <_!>
+    <6> <_!> <4> <6>
+    <7 _+>2 <4>4 <_+>
+    s <6>8 <_-> s4 <5!>
+    <6> s8 <_+> s4 <6>
+    <5>8 <6> <_-> <6!> <6> <5>16 s \bassFigureExtendersOn <6 5 _->8 <6 5 _-> \bassFigureExtendersOff
+    <_+>8 <6> <_-> <_+> s <6> s4
+    <5>8 <6> <_-> <6!> <6> <5 3> <6 5 _-> <6 _!>
+    <_+> s <_-> <_+> <6> <6> <4 _-> <_+>
+    s4 <_->8 <_!> <_->2
+    <6- 4>4 <5 _!>8 <4 2> <5 _!>2
+
+}
+
+
+forma = {
+
+    \time 4/4
+    \key fa\major
+    \tempo 2 = 55
+    s1*108
+    \override Score.RehearsalMark.extra-offset = #'(+8 . 0) \mark\markup\italic "ada[gio]"
+    s1*2
+    \bar "|."
+
+}
+
+IobI = {
+    <<\IobIn \forma>>
+
+}
+
+IobII = {
+    <<\IobIIn \forma>>
+
+}
+
+IvlI = {
+    <<\IvlIn \forma>>
+
+}
+
+IvlII = {
+    <<\IvlIIn \forma>>
+
+}
+
+Ivla = {
+    \clef alto
+    <<\Ivlan \forma>>
+
+}
+
+Isoprano = {
+    \new Voice = "beati1"
+    <<\Isopranon \forma>>
+}
+
+Ialto = {
+    \new Voice = "beati2"
+    <<\Ialton \forma>>
+}
+
+Itenore = {
+    \new Voice = "beati3"
+    <<\Itenoren \forma>>
+}
+
+Ibasso = {
+    \clef bass
+    \new Voice = "beati4"
+    <<\Ibasson \forma>>
+}
+
+
+
+Ibc = {
+    \clef bass
+    <<\Ibcn \forma \Ibfn>>
+}
+#(set-global-staff-size 16.5)
+
+
+\pointAndClickOff
+
+global = 	{
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletNumber.transparent = ##t
+    \override TupletBracket.bracket-visibility = ##f
+
+}
+
+\paper {
+
+    systems-per-page = #2
+    print-first-page-number = ##t
+    first-page-number = #2
+
+}
+
+
+\header {
+    title = \markup "Beati omnes a 4 voci [ZWV 94]"
+    composer = \markup {"J. D. Zelenka (1660-1725)"}
+}
+
+\markup \huge {Beati omnes - Allegro}
+
+\score {
+    <<
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"oboe"
+                \set Staff.instrumentName = \markup {"Oboe 1."}
+                \set Staff.shortInstrumentName = "ob1"
+                \IobI\global
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"oboe"
+                \set Staff.instrumentName = \markup {"Oboe 2."}
+                \set Staff.shortInstrumentName = "ob2"
+                \IobII\global
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup {"Violino 1."}
+                \set Staff.shortInstrumentName = "vl1"
+                \IvlI\global
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup {"Violino 2."}
+                \set Staff.shortInstrumentName = "vl2"
+                \IvlII\global
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"viola"
+                \set Staff.instrumentName = \markup {"Viola"}
+                \set Staff.shortInstrumentName = "vla"
+                \Ivla\global
+            >>
+        >>
+
+        \new ChoirStaff  <<
+
+            \new Staff  <<
+                \set Staff.instrumentName = \markup \center-column{""}
+                \incipit { \clef soprano \key fa\major \time 4/4 r2 mib''4 re'' ^\markup\center-align "Soprano"}
+                \clef violin
+                \set Staff.midiInstrument = #"synth voice"
+                \set Staff.shortInstrumentName = "sop"
+                \Isoprano \global
+                \new Lyrics \lyricsto "beati1" \ItestoI
+            >>
+
+            \new Staff <<
+                \set Staff.instrumentName = \markup \center-column{""}
+                \incipit { \clef alto \key fa\major \time 4/4 r2 r8^\markup\center-align "Contralto" re' la'4.}
+                \clef violin
+                \set Staff.midiInstrument = #"synth voice"
+                \set Staff.shortInstrumentName = "alt"
+                \Ialto \global
+                \new Lyrics \lyricsto "beati2" \ItestoII
+            >>
+
+            \new Staff <<
+                \set Staff.instrumentName = \markup \center-column{""}
+                \incipit { \clef tenor \key fa\major \time 4/4 r2 ^\markup\center-align"Tenore" r8 re' dod' re'}
+                \clef "treble_8"
+                \set Staff.midiInstrument = #"synth voice"
+                \set Staff.shortInstrumentName = "ten"
+                \Itenore \global
+                \new Lyrics \lyricsto "beati3" \ItestoIII
+            >>
+
+            \new Staff <<
+                \set Staff.instrumentName = \markup \center-column{"Basso"}
+                \set Staff.midiInstrument = #"synth voice"
+                \set Staff.shortInstrumentName = "bas"
+                \Ibasso \global
+                \new Lyrics \lyricsto "beati4" \ItestoIV
+            >>
+        >>
+
+        \new Staff <<
+            \set Staff.instrumentName = \markup \center-column{"[Basso""continuo]"}
+            \set Staff.midiInstrument = #"contrabass"
+            \set Staff.shortInstrumentName = "bc"
+            \Ibc\global
+        >>
+    >>
+
+    \layout {
+
+        indent = 2\cm
+        incipit-width =2\cm
+
+        \context	{
+            \Score
+            \override StaffGrouper.staffgroup-staff-spacing.padding = #1
+            \override StaffGrouper.staffgroup-staff-spacing.basic-distance = #4
+            \override StaffGrouper.staff-staff-spacing.padding = #1
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #4
+            \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/4)
+            \override SpacingSpanner.uniform-stretching = ##t
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}

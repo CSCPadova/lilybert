@@ -1,0 +1,1963 @@
+\language "italiano"
+	%********************************** VARIABILI
+
+\version "2.18.0"
+
+su = \change Staff = up
+
+giu = \change Staff = down
+
+tasto = _\markup\italic"Tasto Solo"
+
+tr = \trill
+
+arco = _\markup \italic "con l'arco"
+
+noarco = _\markup \italic "senz'arco"
+
+pizz = _\markup \italic "pizz."
+
+soli = ^\markup \italic { Soli }
+
+solo = ^\markup \italic { Solo }
+
+dolce = _\markup \italic { dol[ce] }
+
+tu = ^\markup \italic "Tutti"
+
+pad = \once \override TextScript.padding = #3
+
+padall = \override TextScript.padding = #1.2
+
+puntopz = -\parenthesize -.
+
+fermopz = -\parenthesize \fermata
+
+terzine = \tupletSpan 8
+
+terzinequarto = \tupletSpan 4
+
+sestine = \tupletSpan 2
+
+sestinequarto = \tupletSpan 4
+
+ds = _\markup \italic \center-align \center-column{"Da Capo""Dal Segno"}
+
+notypeset = \set Score.skipTypesetting = ##f
+
+typeset = \set Score.skipTypesetting = ##f
+
+senza = \override TupletNumber.transparent = ##t
+
+con = \override TupletNumber.transparent = ##f
+
+parentSlur =
+ -\tweak stencil
+ #(lambda (grob)
+   (let* ((cp (ly:grob-property grob 'control-points))
+          (lp (grob-interpret-markup grob (markup #:teeny "(")))
+          (rp (grob-interpret-markup grob (markup #:teeny ")"))))
+     (set! lp (ly:stencil-aligned-to lp Y CENTER))
+     (set! lp (ly:stencil-aligned-to lp X 0.2))
+     (set! lp (ly:stencil-translate lp (first cp)))
+     (set! rp (ly:stencil-aligned-to rp Y CENTER))
+     (set! rp (ly:stencil-aligned-to rp X -0.2))
+     (set! rp (ly:stencil-translate rp (last cp)))
+     (list-set! cp 0
+       (cons (cdr (ly:stencil-extent lp X))
+             (cdr (first cp))))
+     (list-set! cp (1- (length cp))
+       (cons (car (ly:stencil-extent rp X))
+             (cdr (last cp))))
+     (ly:grob-set-property! grob 'control-points cp)
+     (apply ly:stencil-add (list lp rp
+       (ly:slur::print grob)))))
+ \etc
+
+
+upl =
+#(let ((m (make-articulation "stopped")))
+   (set! (ly:music-property m 'tweaks)
+         (acons 'font-size 3
+                (acons 'stencil (lambda (grob)
+                                  (grob-interpret-markup
+                                   grob
+                                   (make-draw-line-markup '(0 . 1))))
+                       (ly:music-property m 'tweaks))))
+   m)
+
+pratu = ^\markup \override #'(baseline-skip . 1) {
+    \halign #-0
+    \center-column {
+	  \musicglyph #"scripts.turn"
+      \musicglyph #"scripts.prall"}}
+mbreak = { }
+
+
+
+Iglobal = 	{
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.4
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+}
+
+
+Ivln = \relative do'' {
+
+    \stemUp <sib' sib, re,>4\f <sib, re,>8 <fa la,> <re sib>4 r\stemNeutral
+    r8 sib'\p~sib16[do](la8\noBeam)~la16 sib do,8\noBeam~do16 mib(fa8)\noBeam~
+    fa16 sib(fa) re-. fa8(mib)\tr re4 r
+
+    %4
+    r8 sib'\p~sib16[do](la8\noBeam)~la16 sib do,8\noBeam~do16 mib(fa8)\noBeam~
+    fa16 sib(fa) re-. fa8(mib)\tr re4 r8 fa_\markup\italic{"dolcis[simo]"}
+    sib sib4 re16. sib32 \slashedGrace do16 sib[la!] la4 fa8
+
+    %7
+    mib'16.(do32) la8\noBeam~la16 mib'(re) do \slashedGrace re do8 sib4 r8
+    r2 fa'\tr~
+    fa\tr~\afterGrace fa4\tr({mib32[fa)]} r4
+
+    %10
+    fa,4\< sib,2 sol'4\!\mbreak
+    r8 sol4\f mi8 do4 r
+    r8 la'\p r la r sib r sib
+
+    %13
+    la fa4 fa8 r <do' mi, sol,>\f <do mi, sol,>4
+    r8 sol'16\p mi fa(do) do8\noBeam~\tuplet 3/2 { do16 mi fa }  \slashedGrace la8 sol16[fa32 mi] fa16(do) do8\noBeam~
+    do16 la'(sol) mi fa(do) do8\noBeam r fa,4 fa8
+
+    %16
+    fa r r mi\< (fa) fa4 mi8\!\parenthesize \f
+    \once\stemUp fa sol'16\p mi fa[(do)] do8~\tuplet 3/2 { do16 mi fa } \slashedGrace la8 sol16 [fa32 mi] fa16[(do)] do8~
+    do16 la'(sol) mi fa(do) do8\noBeam ~\sestine\tuplet 6/4 { do16 [mi sol sib sol mi] } fa[(do)] do8
+
+    %19
+    r8 fa,4 fa8 fa r r mi\<(
+    fa8) fa4 mi8\! \f fa4. do'16-.(mib!-.)\mbreak
+    \slashedGrace mib8 re re16-.(fa-.) \slashedGrace fa8 mi mi16-.(fa-.) sol\tr(fa) fa4 do,16 (mib!-.)
+
+    %22
+    \slashedGrace mib8 re re16-.(fa-.) \slashedGrace fa8 mi mi16-.(sol-.) fa8\f <la do,> <la do,>4
+    do4._\markup\italic"dolcis[simo]" \slashedGrace do8 sib16. la32 re4. \slashedGrace re8 do16. sib32
+    mi?4 re(do) r
+
+    %25
+    do,4. \slashedGrace do8 sib16. la32\mbreak re4. \slashedGrace re8 do16. sib32
+    mib4 re(do) r
+    \once\stemUp <sib'' sib, re,>4\f <sib, re,>8 <fa la,> <re sib>4 r
+
+    %28
+    r8  sib'\p\noBeam~sib16 do(la8\noBeam)~la16 sib-. re,8\noBeam~re16 mib(fa8)\noBeam~
+    fa16 sib(fa) re fa8(mib\tr) re4 r\mbreak
+    r8  sib'\p\noBeam~sib16 do(la8\noBeam)~la16 sib-. re,8\noBeam~re16 mib(fa8)\noBeam~
+
+    %31
+    fa16 sib(fa) re fa8(mib\tr \once\stemUp re16) sib''(fa) re-. sib-. fa-. re-. sib-.
+    r lab''(fa) re-. sib-. fa-. re-. sib-. r sol''(mib) sib-. sol-. mib-. sib-. sol-.
+    r lab''(fa) re-. sib-. fa-. re-. sib-. r sol''(mib) sib-. sol-. mib-. sib-. sol-.\mbreak
+
+    %34
+    r sol''(re) si-. sol-. re-. si-. sol-. r sol''(mib!) do-. sol-. mib-. do-. sol-.
+    r sol''(re) si-. sol-. re-. si-. sol-. r sol''(mib) do-. sol-. mib-. do-. sol-.
+    r do''(la) fa-. mib-. do-. la-. fa-. r sib'(fa) re-. sib-. fa-. re-. sib-.\mbreak
+
+    %37
+    r do''(la) fa-. mib-. do-. la-. fa-. r sib'(fa) re-. sib-. fa-. re-. sib-.
+    r8 sib''\ff sib\noBeam sib,4 sib'8 sib[sib,]~
+    sib sib' sib[sib,] r16 la(do) la fa8\p fa
+
+    %40
+    sib sib4 re16.(sib32) \slashedGrace do8 sib la4 fa8\mbreak
+    mib'16.(do32) la8\noBeam~la16 mib'(re) do \slashedGrace re8 do sib4 r8
+    r2 fa'\tr~
+
+    %43
+    fa\tr~\afterGrace fa4\tr({mi32[fa)]} r4
+    r8 sib^\markup\italic{"dolcis[simo]"} sib[(sib,)] r \slashedGrace la'8 sib\noBeam sib(sib,)
+    r \slashedGrace la' sib \slashedGrace la sib(sib,)\mbreak  r la fa4
+
+    %46
+    r8 do'16 la sib(fa) fa8\noBeam~\tuplet 3/2 { fa16 la sib } \slashedGrace re8 do16 [sib32 la] sib16[(fa)] fa8\noBeam~
+    fa16 re'(do) la sib(fa) fa8\noBeam r sib,4 sib8
+    sib4 r8 la\<(sib) sib'4 la8\!
+
+    %49
+    sib\p do16 la sib(fa) fa8\noBeam~\mbreak \tuplet 3/2 { fa16 la sib } \slashedGrace re8 do16 [sib32 la] sib16[(fa)] fa8\noBeam~
+    fa16 re'(do) la sib(fa) fa8\noBeam~\con \tuplet 6/4 {fa16 la do mib do la} sib(fa) fa8\noBeam
+    r8 sib,4 sib8 sib4 r8 la\<(
+
+    %52
+    sib) sib'4 la8 sib4.\p fa16-. lab-.\mbreak
+    \slashedGrace lab8 sol\noBeam sol16-. (sib-.) \slashedGrace sib8 la\noBeam la16-.(do-.) do\tr(sib) sib4 fa'16-.(lab-.)
+    \slashedGrace lab8 sol\noBeam sol,16-.(sib-.) \slashedGrace sib8 la!8\noBeam la,16-.(do-.) <<{s8\f sib'' sib4\fermata}\\{\once\stemUp sib,,8 re' re4}>>
+
+}
+
+Imdn = \relative do'' {
+    \Iglobal
+
+    <<<sib' fa re>8\\sib,\f>> fa'16.[re32] sib8 fa <re sib>4 r16 sib''(la) sol
+    mi(fa) re fa re(mib) do mib dod!(re) sib re si(do) la do
+    \slashedGrace do8 sib! sib (la16) mib' do la sib4 r16 sib'(la) sol
+
+    %4
+    mi(fa) re fa re(mib) do mib dod!(re) sib re si(do) la do
+    \slashedGrace do8 sib! sib (la16) mib' do la sib4 r
+    r2 fa'2\tr_\markup\italic"dolcis[simo]"~
+
+    %7
+    fa\tr~fa4\tr ~ fa16 fa fa8\tr
+    sib8 sib,~sib16 fa' re sib \slashedGrace do8 sib8 la4 mib'8
+    do'8[<mib, do fa,>8.] mib16\tr do' mib, \slashedGrace fa8 mib re4 fa8
+
+    %10
+    sib sib,4\< fa'8\mbreak \slashedGrace sol8 fa mi4 mi32\f\!(fa sol la)
+    \tupletSpan 4 \tuplet 6/4 { sib16 la sol fa mi re do[re do \slashedGrace do8 sib16 la sib] la fa la do la do fa[do fa la sol la] }
+    do16.^\dolce(la32) fa16. fa32 do'16.(la32) fa16. fa32 sib16.(sol32) mi16. mi32 sib'16.(sol32) mi16. mi32
+
+    %13
+    \tuplet 6/4 {fa16\< la sol fa mi re do[si do re sib sol]} \slashedGrace fa8 mi4.\! sol'16^\p mi?\mbreak
+    fa(do) do8~\tuplet 6/4 {do16 mi fa \slashedGrace la8 sol16 fa mi} fa(do) do8~do16 la'(sol) mi
+    fa(do) do8~\tuplet 6/4 {
+        do16 mi sol sib sol mi fa[la sol fa sol la] do, mib re do re mib
+
+        %16
+        re\< fa mi re mi fa sol,[sib la sol la sib] la fa' do re sib sol
+    }\slashedGrace fa8 sol4\tr\!
+    fa4. sol'16^\dolce mi\mbreak fa(do) do8~\tuplet 6/4 {do16 mi fa \slashedGrace la8 sol16 fa mi}
+    fa(do) do8~do16 la'(sol) mi fa(do) do8~\tuplet 6/4 {
+        do16 mi sol sib sol mi
+
+        %19
+        fa la sol fa sol la do,[mib! re do re mib] re\< fa mi re mi fa sol,[sib la sol la sib\!]
+        la^\f fa' mi re do sib
+    } la8 sol \senza\tuplet 3/2 {
+        \giu\clef violin\key sib\major \once\stemUp la'16[\su do(la)] \once\stemUp \giu fa[\su la(fa))] \once\stemUp \giu do[\su fa(do)] \once\stemUp \giu la[\su do(la)]
+        \giu \once\stemUp re [\su fa re] \giu \once\stemUp sib [\su re sib] \giu \once\stemUp sol [\su sib sol] \giu \once\stemUp mi [\su sol mi] \giu \once\stemUp la [\su do la] \giu \once\stemUp fa [\su la fa]  \giu \once\stemUp do [\su fa do] \giu \once\stemUp la [\su do la]
+
+        %22
+        \clef bass\giu \clef bass\key sib\major \once\stemUp re [\su \clef bass\key sib\major \su  fa re] \giu \once\stemUp sib [\su re sib] \giu \once\stemUp sol [\su sib sol] \giu \once\stemUp mi [\su sol mi]
+    } r8 <<{<do' la>8 <do la>4}\\{fa,8\f fa4}>>
+    \clef violin\key sib\major \afterGrace fa''8\dolce\tr {mi32[fa]} r8 \con \tuplet 6/4 { fa16 do la fa la do } \afterGrace fa8\tr {mi32[fa]} r8 \tuplet 6/4 { fa16 re sib fa sib re }
+    \afterGrace fa8\tr {mi32[fa]} r8 \afterGrace fa8\tr {mi32[fa]} r8 \tuplet 6/4 { fa,16 fa' do la do la} fa8 r
+    \afterGrace fa'8\dolce\tr {mi32[fa]} r8 \con \tuplet 6/4 { fa16 do la fa la do } \afterGrace fa8\tr {mi32[fa]} r8 \tuplet 6/4 { fa16 re sib fa sib re }
+    \afterGrace fa8\tr {mi32[fa]} r8 \afterGrace fa8\tr {mi32[fa]} r8 \tuplet 6/4 { fa,16 fa' do la do la} fa8 r
+
+    %27
+    <<<sib' fa re>\\sib,\f>> fa'16.[re32] sib8  fa <re sib>4 r16 sib''\p(la) sol\mbreak
+    mi(fa) re fa re(mib) do mib dod!(re) sib re si(do) la do
+    \slashedGrace do8 sib! sib (la16) mib' do la sib4 r16 sib'(la) sol
+
+    %30
+    mi(fa) re fa re(mib) do mib dod!(re) sib re si(do) la do
+    \slashedGrace do8 sib! sib (la16) mib' do la \tuplet 6/4 {
+        re, fa sib re sib fa  re fa sib re sib fa
+        re fa sib re sib fa  re fa sib re sib fa mib sol sib mib sib sol mib sol sib mib sib sol
+
+        %33
+        re fa sib re sib fa  re fa sib re sib fa mib sol sib mib sib sol mib sol sib mib sib sol
+        si, re sol si sol re si re sol si sol re do mib sol do sol mib do mib sol do sol mib\mbreak
+        si re sol si sol re si re sol si sol re do mib sol do sol mib do mib sol do sol mib
+
+        %36
+        la, do fa la fa do la do fa la fa do sib re fa sib fa re sib re fa sib fa re
+        la do fa la fa do la do fa la fa do sib re fa sib fa re sib re fa sib re fa
+    }
+    \tupletSpan 8 \tuplet 3/2 {
+        sib^\f fa re fa[re sib] re sib fa sib[fa re] sib''^\f sol mib sol[mib sib] mib sib sol sib[sol mib]
+
+        %39
+        sib''^\f sol mi sol[mi sib] mi sib sol sib[sol mi]
+    } \stemUp fa8^\f <fa' do la fa> r4\stemNeutral
+    r2 fa\tr\p~
+    fa\tr~fa4\tr~fa16 fa32(sol) fa16 fa
+
+    %42
+    sib8^\f sib,~sib16 \slashedGrace sol'8 fa16 \slashedGrace mib8 re16 \slashedGrace  do8 sib16 \slashedGrace do8 sib16[la32 sib] la4 \afterGrace mib'8\tr {re32[mib]}\mbreak
+    do'8 <mib, la,>~mib16 mib\tr do' mib, \slashedGrace fa8 mib re4 sib'8^\markup\italic"dolcis[simo]"
+    sib sib,4 \slashedGrace la'8 sib sib sib,4 \slashedGrace la'8 sib
+
+    %45
+    \slashedGrace la8 sib sib,4 sib'8 la  fa4 do'16 la
+    sib(fa) fa8~\tupletSpan 4 \tuplet 6/4 { fa16 la sib \slashedGrace re8 do16 sib la } sib\parentSlur (fa) fa8\noBeam~fa16 re'(do) la\mbreak
+    sib(fa) fa8\noBeam~\tuplet 6/4 {
+        fa16 la do mib do la sib re do sib do re fa,\< lab sol fa sol lab
+
+        %48
+        sol sib la! sol la sib\! do,^\f  mib re do re mib re fa mib \slashedGrace mib8 re16 do sib
+    } do4\tr
+    \stemUp sib4 r8\stemNeutral  do'16^\markup\italic"dolcis[simo]" la sib(fa) fa8~\tuplet 6/4 {fa16 la sib \slashedGrace re8 do16 sib la}\mbreak
+    sib(fa) fa8~fa16 re'(do) la sib(fa) fa8~\tuplet 6/4 {
+        fa16 la do mib do la
+
+        %51
+        sib re do sib do re fa,\< lab sol fa sol lab sol sib la! sol la sib\! do,\f  mib re do re mib
+        re fa mib \slashedGrace mib8 re16 do sib
+    } do4\tr \giu\clef violin\tupletSpan 8 \tuplet 3/2 {
+        \once\stemUp sib'16 \su re sib \giu \once\stemUp fa [\su sib fa] \giu \once\stemUp re \su fa re \giu \once\stemUp sib [\su re sib]
+        \giu \once\stemUp sol '\su sib sol \giu \once\stemUp mib [\su sol mib] \giu \once\stemUp do \su mib do \giu \once\stemUp la [\su do la] \giu \once\stemUp re \su fa re \giu \once\stemUp sib [\su re sib] \giu \once\stemUp fa \su sib fa \giu \once\stemUp re [\su fa re]
+
+        %54
+        \giu \once\stemUp sol \su sib sol \giu \once\stemUp mib [\su sol mib ]\giu \once\stemUp re \su mib do  la [\su do la]
+    } \su <sib' fa re sib>8 <sib fa  re sib> <sib fa re sib>4
+
+}
+
+Imsn = \relative do { \Iglobal
+
+    << <sib' fa re>4\\sib,\f>> sib8 fa sib,16 sib' fa re sib4
+    r2 r4 r8 mib'\p (
+    re) sib fa' fa, sib16 sib' fa re sib4
+
+    %4
+    r2 r4 r8 mib(
+    re) sib fa' fa,\mbreak sib16_\markup\italic"dolcis[simo]"(re fa re sib re fa re)
+    sib(re fa re sib re fa re) do(mib fa mib do mib fa mib)
+
+    %7
+    do(mib fa mib do mib fa mib) re(fa sib fa re fa sib fa)
+    re(fa sib fa re fa sib fa) mib(fa do' fa, mib fa do' fa,)
+    mib(fa do' fa, mib fa do' fa,) re(fa sib fa re fa sib fa)
+
+    %10
+    re\<(fa sib fa re fa sib fa)\mbreak do sol' sib sol do, sol' sib sol\!
+    do,8\f do do' do, <fa fa,>4 r
+    r16 fa\dolce fa'8~fa16 fa, fa'8\noBeam r16 sol, sol'8~sol16 sol, sol'8\noBeam
+
+    %13
+    r8 la,\< la, sib \con \tuplet 6/4 { do16 do' sol mi sol mi\! }  do\p do'(sib do)\mbreak
+    la(do sib do la do sib do) la(do sib do la do sib do)
+    la(do sib do la do sib do) la8 la la, la
+
+    %16
+    sib\< sib'16. sol32 mi8 do' fa, sib do do,\!
+    fa16\p(do' sib do la do sib do)\mbreak la(do sib do la do sib do)
+    la(do sib do la do sib do) la(do sib do la do sib do)
+
+    %19
+    la8 la la, la' sib,\< sib'16. sol32 mi8 do\!
+    fa\f sib do do, s2
+    s1
+
+    %22
+    s2 <<{fa,8\f[la] la4}\\{s8 fa fa4}>>
+    la'16\dolce(fa la fa la fa la fa) sib(fa sib fa sib fa sib fa)\mbreak
+    do' (fa, do' fa, sib fa sib fa) la4\f \tupletSpan 4 \tuplet 6/4 { r16 fa do la do la }
+
+    %25
+    fa\dolce (fa' la fa la fa la fa) sib(fa sib fa sib fa sib fa)
+    do'(fa, do' fa, sib fa sib fa) <<la4\\fa>> fa16 mib! re do
+    <<<sib' fa re>4\f\\sib,>> sib'8 fa sib,16 sib fa re sib4\mbreak
+
+    %28
+    r2 r4 r8 mib'(
+    re8) sib fa' fa, sib16 sib'(fa) re sib4
+    r2 r4 r8 mib(
+
+    %31
+    re) sib fa'[fa,] sib4 r8 \clef violin sib'''
+    lab \clef bass sib,,, [sib,] \clef violin lab''''\noBeam sol sib r sib
+    lab \clef bass sib,,, [sib,] \clef violin lab''''\noBeam sol sib r sol
+
+    %34
+    fa\clef bass sol,,,[sol,] \clef violin fa''''\noBeam mib sol r sol\mbreak
+    fa\clef bass sol,,[sol,] \clef violin fa'''\noBeam mib sol r sol
+    mib \clef bass fa,,,[fa,] \clef violin mib''''\noBeam re[fa] r fa
+
+    %37
+    mib \clef bass fa,,[fa,] \clef violin mib''' re[fa] r \clef bass re,,
+    re,4.\f re'8 mib,4. \f mib'8\mbreak
+    mi,4.\f mi'8 fa,\f\tupletSpan 8 \tuplet 3/2 { fa16 la do } fa8\noBeam r
+
+    %40
+    sib,16\p(re fa re sib re fa re) do (mib fa mib do mib fa mib)
+    do(mib fa mib do mib fa mib) re(fa sib fa re fa sib fa)
+    re\f(fa sib fa re fa sib fa) mib(fa do' fa, mib fa do' fa,)\mbreak
+
+    %43
+    mib fa do' fa, mib fa do' fa, re fa sib fa re fa sib fa
+    reb_\markup\italic"dolcis[simo]" fa sib fa reb fa sib fa mib! solb sib solb mib solb sib solb
+    mi! sol! sib sol mi sol sib sol \once\stemUp fa\su fa' mib! fa \stemDown re fa mib fa
+
+    %46
+    re fa mib fa re fa mib fa re fa mib fa re fa mib fa
+    re fa mib fa re fa mib fa re8 re\giu\stemUp re,\< re \stemNeutral
+    mib\noBeam mib'16. do32\! la!8\f fa sib re, mib fa
+
+    %49
+    \giu \stemDown sib16\p\su fa' mib fa re fa mib fa re fa mib fa re fa mib fa\mbreak
+    re fa mib fa re fa mib fa re fa mib fa re fa mib fa
+    re8 re\stemUp\giu re, re\stemNeutral mib\noBeam mib'16. do32 la8 fa
+
+    %52
+    sib re, mib fa s2
+    s1
+    s2 \clef bass sib,8\f <sib sib,> <sib sib,>4\fermata
+
+}
+
+Ibfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+
+
+}
+
+
+forma = {
+
+    \time 4/4
+    \tempo 2 = 35
+    \key sib\major
+    s1*22
+    \bar ":..:"\break
+    s1*32
+    \bar":|."
+
+}
+
+Ivl = {
+    \Iglobal
+    %\notypeset
+    <<\Ivln \forma>>
+
+}
+
+Imd = {
+    \Iglobal
+    \context Staff = up
+    <<\Imdn \forma>>
+
+}
+
+Ims = {
+    \Iglobal
+    \clef bass
+    \context Staff = down
+    <<\Imsn \forma \Ibfn>>
+    \typeset
+
+}
+
+
+
+IIglobal = 	{
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.4
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+}
+
+IIvln = \relative do'' {
+
+    sol4\p^\markup\italic"Con sordini" \slashedGrace fa8 mib16 re mib fa sol8 sol(lab) sib
+    mib,4~mib32 mib(fa sol lab sib do re mib8) r r4
+    r r32 lab(sol fa mib re do sib lab8) lab(re,)[re]
+
+    %4
+    mib r16 \tupletSpan 16 \tuplet 3/2 { mib 32 sol sib} mib8\noBeam r16 \tuplet 3/2 { mib32 sib sol } mib8\noBeam r16 \tuplet 3/2 { mib32 sol sib } mib8\noBeam r
+    lab,, fa'(mib8) \slashedGrace sol8 fa16. mib32 re8 fa(mib8) \slashedGrace sol8 fa16. mib32\mbreak
+    \slashedGrace fa8 mib re16. mib32  re8 re re4 r
+
+    %7
+    r8 <mib sol,>16.\f <mib sol,>32 <mib sol,>4 r2
+    r8 <re sib>16.\f <re sib>32 <re sib>4 r2
+    r8 do'4\p do\< do8(sib)[sib]
+
+    %10
+    la4 la32(sib la sib do [re do re]\!\mbreak mib8) mib(la,) [la]
+    sib^\markup\italic"dolcis[simo]" sol'4 \slashedGrace sol8 fa16. mib?32 re8 mib4 \slashedGrace mib8 re16. do32
+    sib8 sol4 \slashedGrace sol8 fa16. mib32 re8 mib4 mib8
+
+    %13
+    re sib'4 sib8 sib16\< sib sib sib la [la la la]
+    sib2\!~sib16\p sol'(fa) mib \slashedGrace fa8 mib16 [re \slashedGrace mib8 re16 do]\mbreak
+    sib2\<~sib16\p\! sol(fa) mib \slashedGrace fa8 mib16 [re8 mib16]
+
+    %16
+    <re sib>2\f fa'8\p \slashedGrace mib8 re16.[do32] sib8 sib
+    <<
+        {
+            sib2 sib
+            sib4
+        }\\{
+            re,2 mib
+            re4
+        }
+    >> r r lab'32\f(sib do) lab fa[(sol lab) fa]\mbreak
+
+    %19
+    <<re2\f\\re>> sib4\f~sib8 r
+    mib8.\p\tr(re32 mib) \tupletSpan 4 \tuplet 6/4 { sol16 sib-. lab-. sol-. fa-. mib-. } mib8.\tr(re32 mib) \tuplet 6/4 {
+        sib'16 reb-. do-. sib do-. reb-.
+        do-. sib-. lab-. sol-. fa-. mib-.
+    } mib8.\tr(re32  mib) \tuplet 6/4 { lab16 do-. sib-. lab-. sib-. do-. } mib,8.\tr  (re32 mib) %%%%% fine pagina 121
+
+    %22
+    \tuplet 6/4 { do'16-. sib-. lab-. sol-. fa-. mi-.} fa8\noBeam r \tuplet 6/4 { do''16-. sib-. lab-. sol-. fa-. mi-.} fa8\noBeam r
+    \tuplet 6/4 { sib,16 lab-. sol-. fa-. mib?-. re-.} mib8\noBeam r  \tuplet 6/4 { sib''16 lab-. sol-. fa-. mib-. re-.} mib8\noBeam r
+    <<re,2\\re\f>> <sib' re,>4\f~\tuplet 6/4 { sib16 re-. mib-. fa-. sol-. lab-.}\mbreak
+
+    %25
+    sol8\p sol,4 sol'8\<(solb) solb4 \slashedGrace solb8 fa16. mib32\!
+    re8 fa,(mib) \slashedGrace sol8 fa16. mib32 re8 fa(mib) \slashedGrace sol8 fa16. mib32
+    \slashedGrace fa8 mib re16. mib32 re8 re re\p re-. re(mib)
+
+    %28
+    \slashedGrace sol8 fa16 mib32 fa re8\noBeam fa(re)\mbreak fa re fa'32(mib) re-.(do-. sib-. lab-. sol-. fa-.)
+    mib8 sol, sib[(sol)] sol'\staccatissimo \slashedGrace fa' mib32[re  mib fa] sol(fa) mib-. re-. do-. sib-. lab-. sol-.
+    \slashedGrace sol8 fa16 mib32 fa re8\noBeam \slashedGrace mib' re16 do32 re sib[(do) re mib] fa(mib) re mib fa[(mib) re mib] fa(mib re) do-. sib-. lab-. sol-. fa-.\mbreak
+
+    %31
+    mib8 do'~do32 [do(si) do-.] re(do) sib lab sol16.(lab32) lab8\noBeam ~lab32[lab(sol) lab-.] sib(lab) sol fa
+    mib8 do~do32[ do(si) do-.] re(do) sib lab sol8\noBeam lab4 lab8
+    sol mib'4\< mib8 mib16-.(mib-. mib-. mib-.) re-.([re-. re-. re-.\!)]\mbreak
+
+    %34
+    <<{mib'2~mib16}\\{mib,2~mib16\p [\slashedGrace re'8 \once\slurUp do16(sib) lab}]>> \slashedGrace sib8 lab16 \slashedGrace lab8 sol16 sol fa
+    <<{mib'2~mib16}\\{mib,2~mib16\p [\once\slurUp do(sib) lab]}>> \slashedGrace sib8 lab16 sol8 lab16
+    sol8\f <sol' sib,>16. <sol sib,>32 <sol sib,>8 <sol sib,> <sol sib,>4\fermata r
+
+}
+
+IImdn = \relative do'' {
+    \IIglobal
+
+    sib4^\markup\italic"Soave" \slashedGrace lab8 sol16 fa sol lab <<
+        {
+            sib8 mib re reb
+            \slashedGrace re8 do(sib16 do sib4)~sib32 mib,(fa sol lab sib do re)
+        }\\{
+            s8 mib, fa sol
+            \slashedGrace sib8 lab sol16 lab sol4
+        }
+    >> mib'32[(sib mib sol sib sol mib sib]
+    lab) lab(sib do re mib fa sol lab4) r32 lab, (sib do re mib fa sol lab[sol fa mib re do sib lab)]
+
+    %4
+    <<{sol16 sib(do sib) r sib'(do sib) r sib,[(do sib)] \slashedGrace do8 sib16 lab \slashedGrace sib8 lab16 sol}\\{s16 sol(lab sol) s sol'(lab sol) s sol,[(lab sol)] \slashedGrace lab8 sol16 fa \slashedGrace sol8 fa16 mib}>>
+    <<{fa8 sib4}\\{re,8 [fa sol]}>> \slashedGrace sib lab16. sol32\mbreak <<{fa8 sib4}\\{s8 [fa sol]}>> \slashedGrace sib lab16. sol32
+    \slashedGrace lab8 sol fa16. sol32 fa8[fa] fa \noBeam\slashedGrace sol' fa \slashedGrace mib re \slashedGrace do sib
+
+    %7
+    sol' \f mib,~mib32 mib\p(fa sol lab sib do re ) mib32[\slashedGrace fa8 mib64(re mib32) fa] sol \slashedGrace lab8 sol64(fa sol32) lab <<
+        {
+            \stemDown sib[mib,(sol sib mib sib sol mib]
+            \stemUp fa8\f)
+        }\\{s4 re8 re,~\stemUp re32 re\p(mib fa sol la sib do)}
+    >> re[sib64(re do mib re fa] mib sol fa lab! sol sib la do sib32)[la-. (sol-. fa-. mib-. re-. do-. sib-.)]
+    r16 <<
+        {mib\p mib mib r mib mib mib r mib mib mib r mi mi mi}\\{
+            do do do s do do do s do\< do do s do do do
+            %10
+            \stemDown \slurUp fa32(sol fa sol la sib la sib do8)\!\noBeam
+        }
+    >> r fa,32-. \slashedGrace sol8 fa64(mi fa32) sol-. la-.[\slashedGrace sib8 la64(sol la32) sib-.] do-. \slashedGrace re8 do64 (sib do32) re-. mib-. [do(la) mib?-.]
+    re8_\markup\italic"dolcis[simo]" sib'4 \slashedGrace sib8 la16. sol32 fa8 sol4 \slashedGrace sol8 fa16. mib32
+    re8 mib4 \slashedGrace mib8 re16. do32 sib8\noBeam do4 \slashedGrace do8 sib16. la32\mbreak
+
+    %13
+    sib16 sib' fa(fad sol)[mib(re)\< do] \slashedGrace sib8 do2\tr\!
+    sib16 <re' sib>\p(<do la> <sib sol> <la fa>[<sol mib> <fa re> <mib do>] <re sib>) \slashedGrace fa8 mib16 re do \slashedGrace re8 do16[sib\slashedGrace do8 sib16 la]
+    <<{s16 re(do sib la[sol fa mib] <re sib>)[\slashedGrace fa8 mib16 re do]}\\{sib'16 sib la sol fa[mib re do]}>> \slashedGrace re8 do16 sib \slashedGrace do8 sib16 la
+
+    %16
+    sib8\f <sib' fa re sib> <sib fa re sib>4 \mbreak r2
+    fa'8\slashedGrace mib8 re16. do32 sib8[sib] sib'16.(sol32) mib8\noBeam ~mib16 mib(sol) sib
+    lab32 sib do lab fa[sol lab fa] re mib fa re lab[sib do lab] fa sol lab fa re[mib fa re] sib8 r
+    r32 sib'(do re mib fa sol lab sib16)[\tupletSpan 16 \tuplet 3/2 { sib,32 (do sib } ] fa'16) lab \slashedGrace sol8 lab4\tr sol8 r
+
+    %20
+    \tupletSpan 4 \tuplet 6/4 { sol16-.\p [sib-. lab-. sol-. fa-. mib-.] } mib8.\tr(re32 mib) \tuplet 6/4 { lab16[do-. sib-. lab-. sib-. do-.] } mib,8.\tr(re32 mib)
+    mib,8 r \tuplet 6/4 { reb''16-. sib-. lab-. sol-. fa-. mib-. } mib8.\tr[(re32 mib)] \tuplet 6/4 { sib!16 reb-. do-. sib-. do-. reb-. }
+    do8 r \tuplet 6/4 { do'16-. sib-. lab-. sol-. fa-. mi-. } fa8\tr\noBeam r \tupletSpan 8 \tuplet 3/2 { do16 sib lab \slashedGrace sib8 lab16[sol fa] }\mbreak
+
+    %23
+    mib?8\tr r  \tupletSpan 4 \tuplet 6/4 { sib''16-. lab-. sol-. fa-. mib-. re-.} mib8\noBeam\tr r \tupletSpan 8 \tuplet 3/2 { sib'16 lab sol }\slashedGrace lab8 sol16 fa32 mib
+    lab32\f sib do lab fa[sol lab fa] re mib fa re lab[sib do lab] fa sol lab fa re[mib fa re] sib8 r
+    r32 mib\p(sol sib mib sib sol mib) r mib(sol sib mib sib sol mib) r mib\<(la do mib do la mib) r mib(la do mib do la mib)\!
+
+    %26
+    re8<<sib'4\\{fa8[sol]}>> \slashedGrace sib8 lab16. sol32 fa8 <<sib4\\{fa8[sol]}>> \slashedGrace sib8 lab16. sol32
+    \slashedGrace lab8 sol fa16. sol32 fa8[fa] fa fa4\p sol8
+    \slashedGrace sib8 lab16 sol32 lab fa8\noBeam lab32 fa(sol lab sib do re mib re) [mib(re mib fa sol fa sol] lab) sol(fa mib re do sib lab
+
+    %29
+    \slashedGrace lab16 sol16) fa32 sol mib8\noBeam sol32 mib(fa sol lab sib do re) \slashedGrace fa8  mib32[(re mib) fa] \slashedGrace lab8 sol32(fa sol) lab sib[(lab sol fa mib re do sib]
+    \slashedGrace sib8 lab16) sol32 lab fa8\noBeam \slashedGrace sol'8 fa16(mib32 fa) re[(mib fa sol] lab) sol( fa sol lab[sol fa sol)] lab(sol fa  mib re do sib lab
+    sol8) mib'~mib32[mib(re mib fa mib re do)]\mbreak sib16(do) do8\noBeam~do32 do(si do re do sib lab
+
+    %32
+    sol8) lab~lab32[lab(sol lab sib lab sol fa)] mib16. (fa32) fa8\noBeam~fa32 fa(mi fa sol fa mib re
+    mib16) mib' sib\< (si do)[lab sol fa] \slashedGrace mib8 fa2\tr\!
+    <<{s16 sol'\p(fa mib re[do sib lab] sol)[\slashedGrace sib8 lab16 sol fa]}\\{mib16[mib' re do] sib [lab sol fa]}>> \slashedGrace sol8 fa16 mib \slashedGrace fa8 mib16 re
+
+    %35
+    \stemUp \slurUp mib(<sol mib> <fa re> <mib do> <re sib>[\giu <do lab> <sib sol> <lab fa>] <sol mib>) lab sol fa s4
+    \su s4 mib'8 mib mib4\fermata r
+
+}
+
+IImsn = \relative do {
+
+    <<{mib4 mib mib mib
+       mib mib mib mib
+       fa fa sib, sib}\\{mib,1
+                         mib
+                         fa2 \stemUp\shiftOn sib,}>>
+    mib4 mib' mib mib,
+    sib'16 sib' re, (sib' mib,[sib') lab, lab']\mbreak sib, sib' re, (sib' mib,[sib') lab, lab']
+    sib,8 sib' sib, sib sib4 r
+    r8 <<{mib\f mib2.(
+          r8 sib\f sib2.
+          \stemDown do'4) sib la sol
+
+          %10
+          \stemUp fa fa8 fa\mbreak fa4 fa}\\{\stemUp\shiftOn mib,8 mib2.
+                                     \stemUp\shiftOn s8 sib8 sib2.
+                                     \stemDown \shiftOn do'4\p sib la\< sol
+                                     \stemDown fa2~fa4\! fa}>>
+    <<{sib16 [sib' sib sib]}\\sib,4>> sib16[sib' sib, sib'] <<{sib, [sib' sib sib]}\\sib,4>> sib16[sib' sib, sib']
+    <<{sib, [sib' sib sib]}\\sib,4>> sib16[sib' sib, sib'] <<{sib, [sib' sib sib]}\\sib,4>> sib16[sib' sib, sib']
+
+    %13
+    sib,8 re(mib) mib'\< fa, fa fa, fa\!
+    <<{sib2\p~sib8 \once\slurDown mib(fa) fa
+       sib,2~sib8 \slurDown mib,(fa)[fa]\mbreak}\\{\stemUp\shiftOn sib,2~sib8 s4.
+                                         sib2~sib8 s4.}>>
+
+    %16
+    <sib' sib,>8 sib16. sib32 <sib sib,>8[<sib sib,>] <sib sib,>4 sib'\p(
+    lab!) lab,(sol) <sol' sol,>
+    <fa fa,>2\f <sib, sib,>\f
+
+    %19
+    sib,4\f sib' mib, r32 mib'(fa sol lab sib do re)\mbreak
+    mib8\p mib, reb'[mib,] do' mib, sol[mib]
+    lab mib sib'[mib,] do' mib, sol[mib]
+
+    %22
+    lab4 lab(lab,) lab'(
+    sol) sol(sol,) sol'
+    <fa fa,>2\f <sib, sib,>
+
+    %25
+    mib,4\p mib' la,\< la'\!
+    sib,16 sib' re, (sib' mib,[sib') lab, lab']\mbreak sib, sib' re, (sib' mib,[sib') lab, lab']
+    sib,4 sib'8[sib] sib4 r
+
+    %28
+    <<{sib,\p sib sib sib
+       sib sib sib sib
+       sib sib sib sib}\\{sib,1
+                          sib
+                          sib}>>
+
+    %31
+    <<{mib16[mib' mib mib]}\\mib,4>> mib16 mib' mib, mib' <<{mib,[mib' mib mib]}\\mib,4>> mib16 mib' mib, mib'
+    <<{mib,[mib' mib mib]}\\mib,4>> mib16 mib' mib, mib' <<{mib,[mib' mib mib]}\\mib,4>> mib16 mib' mib, mib'
+    mib,8 sol'\<(lab) lab,(sib) sib sib' sib,\!
+
+    %34
+    <<{mib2 s
+       \tieDown mib s4 \slashedGrace sol8 fa16 mib \slashedGrace fa8 mib16 re
+       mib4 \override Stem.cross-staff = ##t \override Stem.length = #14 \override Flag.style = #'no-flag  <sib' sol mib>8\noBeam <sib sol mib>\noBeam <sib sol mib>4}\\{mib,,2~\stemUp  mib8\p  lab(sib)[sib]
+                                                             \stemDown mib,2~mib8 lab sib[sib]
+                                                             <sol mib>4 <sol mib>8 [<sol mib>] <sol mib>4}>>\parenthesize r
+
+}
+
+IIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+
+
+}
+
+
+forma = {
+
+    \time 2/2
+    \tempo 4 = 35
+    \key mib\major
+    s1*36
+    \bar "|."
+
+}
+
+IIvl = {
+    \IIglobal
+    \notypeset
+    <<\IIvln \forma>>
+
+}
+
+IImd = {
+    \IIglobal
+    \context Staff = up
+    <<\IImdn \forma>>
+
+}
+
+IIms = {
+    \IIglobal
+    \clef bass
+    \context Staff = down
+    <<\IImsn \forma \IIbfn>>
+    \typeset
+
+}
+
+
+
+IIIglobal = 	{
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.4
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+}
+
+IIIvln = \relative do'' {
+
+    <sib' sib, re,>4\f r
+    <fa re re,> fa,8. re16
+    <<{mib2(
+
+       %4
+       re4)}\\{do2(sib4)}>> r
+    sib'8\p r sib'-. r
+    sol-. r mib8. do16
+
+    %7
+    la8-. r la'-. r
+    fa-. r re8. sib16\mbreak
+    sol8 r sol'-. r
+
+    %10
+    mib r do8. la16
+    fa8 r fa' r
+    re r sib r
+
+    %13
+    sib'2~
+    sib
+    sib,~
+
+    %16
+    sib
+    sib,~
+    sib
+
+    %19
+    la4 sib
+    <la' fa do> r
+    R2\mbreak
+
+    %22
+    <<<fa' la,>4\\fa,\f>> do'8. la16
+    <<sib2\\sol>>
+    <<la4\\fa>> r
+
+    %25
+    mi8\p-.[(sol-. mi-. sol-.)]
+    fa2
+    do'8.\tr(re16) do8 do
+
+    %28
+    do2
+    mi,8-.[(sol-. mi-. sol-.)]
+    fa2
+
+    %31
+    do'8.\tr\parentSlur (re16) do8 do
+    do16 la sib do re mi fa sol\mbreak
+    la8^\f <<{la4 la8~
+
+           %34
+           la la4 la8~
+           la la4 la8~
+           la}\\{la,4 la8~
+                 la8 la4 la8~
+                 la la4 la8~
+                 la}>> fa'[(do) fa]
+
+    %37
+    la, la'4 la8~
+    la la4 la8~
+    la la4 la8~
+
+    %40
+    la fa[(do) la-.]
+    fa2~
+    fa8 fa'4 fa8
+
+    %43
+    fa,2~\mbreak
+    fa8 fa'4 la,8
+    <<{sib2\<
+
+      %46
+      la
+      sol\!}\\{sol
+               fa
+               sib,}>>
+    <fa' la,>16\f la sib do re  mi? fa sol
+
+    %49
+    la8 <<{la4 la8~
+           la la4 la8~
+           la la4 la8~
+
+           %52
+           la}\\{la,4 la8~
+                 la8 la4 la8~
+                 la la4 la8~
+                 la}>> fa'[(do) fa]
+    la, \p la'4 la8~
+    la la4 la8~
+
+    %55
+    la la4 la8~
+    la fa[(do) la-.]
+    fa2~
+
+    %58
+    fa8 fa'4 fa8
+    fa,2~\mbreak
+    fa8 fa'4 la,8
+
+    %61
+    <<{sib2\<
+      la
+      sol\!}\\{sol
+               fa
+               sib,}>>
+
+    %64
+    <<<fa'' la,>4\\fa,\f>> do'8. la16
+    fa4 r
+    <<<fa' la,>4\\fa,>> do8. la16
+
+    %67
+    sib2
+    <<<fa'' la,>4\f\\fa,>> do'8. la16
+    fa4 r
+
+    %70
+    <<<fa' la,>4\\fa,>> do8. la16
+    sib2
+    fa'16\f(do) la do fa(do) la do
+
+    %73
+    fa(do) la do fa(do) la do
+    <fa la,>4 <fa la,>
+    <fa la,> r
+
+    %76
+    r8 la[(la') sol-.]\mbreak
+    fad-.[mib!-. re-. do-.]
+    sib r sol r
+
+    %79
+    re r sib r
+    r la[(la')] sol-.
+    fad-. [mib!-. re-. do-.]
+
+    %82
+    sib r re r
+    sib r sol r
+    r sol'[(sol')] fa-.
+
+    %85
+    mi-.[reb-. do-. sib-.]
+    lab r fa r
+    do r lab? r\mbreak
+
+    %88
+    r sol[(sol')] fa-.
+    mi-.[reb-. do-. sib-.]
+    lab? r do r
+
+    %91
+    fa r r4
+    <<{fa'2\f~
+       fa
+
+       %94
+       fa\f~
+       fa
+       fa,\f
+
+       %97
+       sol\f}\\{la~
+                la
+                sib~
+                sib
+                \stemUp\shiftOn sib,
+                sib}>>
+    <la' fa la,>4 r
+    R2
+
+    %100
+    <<{fa'2\f~
+       fa
+       fa\f~
+
+       %103
+       fa
+       fa,
+       solb4 sol}\\{la2~
+                la
+                sib~
+                sib
+                \stemUp\shiftOn sib,
+                sib4 sib}>>
+
+    %106
+    <<{la'2\f~
+       la
+       sib\f~
+
+       %109
+       sib
+       do\f~
+       do
+
+       %112
+       sib\f~
+       sib\mbreak
+       mi\f~
+
+       %115
+       mi
+       fa\f~
+       fa
+
+       %118
+       mi\f~
+       mi
+       fa4}\\{fa,2~
+              fa
+              mi~
+              mi
+              mib!~
+              mib
+              re~
+              re
+              sib'~
+              sib
+              la~
+              la
+              sib~
+              sib
+              la4}>>r
+
+    %121
+    R2*10
+    r4\fermata r
+    la8-.[(do-. la-. do-.)]
+
+    %133
+    sib2
+    fa'8.\tr(sol16 fa8) fa\mbreak
+    fa2
+
+    %136
+    la,8-.[(do-. la-. do-.)]
+    sib2
+    fa'8.\tr(sol16 fa8) fa
+
+    %139
+    fa16\f re, mib fa sol la sib do
+    re8 re'4 re8~
+    re re4 re8~
+
+    %142
+    re\p re4 re8
+    re[(sib) fa sib]
+    re, re'4 re8~
+
+    %145
+    re re4 re8~
+    re re4 re8
+    re[(sib) fa re]
+
+    %148
+    sib2~
+    sib8 sib'4 sib8
+    sib,2~
+
+    %151
+    sib8 sib'4  re,8
+    <<{mib2\<
+       re
+
+       %154
+       do\!}\\{fa,
+               fa
+               mib}>>
+    <sib' re,>16\f re mib fa sol la sib do
+    re8 re4 re8~
+
+    %157
+    re re4 re8~
+    re re4 re8
+    re(sib) fa sib
+
+    %160
+    re,8\p re'4 re8~
+    re re4 re8~
+    re re4 re8
+
+    %163
+    re(sib) fa re
+    sib2~
+    sib8 sib'4 sib8
+
+    %166
+    sib,2~
+    sib8 sib'4  re,8
+    <<{mib2\<
+
+       %169
+       re
+       do\!}\\{fa,
+               fa
+               mib}>>
+    <sib'' sib, re,>4\f fa8. re16
+
+    %172
+    <sib re,>4 r
+    <sib re, sib>\f fa8. re16
+    <mib do>2
+
+    %175
+    <sib'' sib, re,>4\f fa8. re16
+    sib4 r
+    <sib re, sib>4\f fa8. re16
+
+    %178
+    <<mib2\\do>>
+    <re sib>8\f re16 fa sib(fa) re fa
+    sib(fa) re fa sib(fa) re fa
+
+    %181
+    <sib re,>4 <sib' sib, re,>
+    sib,,2\fermata
+
+}
+
+IIImdn = \relative do'' {
+    \IIIglobal
+
+    <<<sib' fa re>4^\f\\sib,>> fa'8. re16
+    <<<fa re>4\\sib,>> re8. sib16
+    mib8[do la fa]
+
+    %4
+    sib4 sib,
+    \stemUp r16\p fa'' sib fa r fa sib fa
+    r sol sib sol r sol sib sol
+
+    %7
+    r mib la mib r mib la mib
+    r fa la\tr fa r fa la\tr fa\mbreak
+    r re sol re r re sol re
+
+    %10
+    r mib sol mib r mib sol mib
+    r do fa do r do fa do
+    r re fa re r re fa re
+
+    %13
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %16
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %19
+    r fa fa' fa, r fa fa' fa,\stemNeutral
+    r fa' mi re do sib la sol
+    <<<fa' do la>4^\f\\fa,>> do'8. la16
+
+    %22
+    <<<do la>4\\fa,>> la8. fa16
+    sib8[sol mi do]
+    fa4 r
+
+    %25
+    do''16.\tr^\p(si32 do16 re) do8 do-.
+    do4(si)
+    \stemUp sib!16.\tr(la32 sib16 do) sib8 sib-.
+
+    %28
+    \stemNeutral sib4(la)\mbreak
+    do,16.\tr(si32 do16 re) do8 do-.
+    do4(si)
+
+    %31
+    sib!16.\tr(la32 sib16 do) sib8 sib
+    la16 fa sol la sib do re mi
+    fa^\ff fa, fa' fa, r fa fa' fa,
+
+    %34
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %37
+    r fa^\p fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,\mbreak
+    r fa fa' fa, r fa fa' fa,
+
+    %40
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %43
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+    r \<do' mi sol r mi sol sib\!
+
+    %46
+    r la^\f do la r fa la fa
+    r sol sib sol r mi sol mi
+    fa4 r
+
+    %49
+    r16 fa,^\ff fa' fa, r fa fa' fa,\mbreak
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %52
+    r fa fa' fa, r fa fa' fa,
+    r fa^\p fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %55
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %58
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+    r fa fa' fa, r fa fa' fa,
+
+    %61
+    r\< do' mi sol r mi sol sib\!
+    r la^\f do la r fa la fa
+    r sol sib sol r mi sol mi
+
+    %64
+    fa4 r
+    <<<fa do la>^\ff\\fa,>> do'8. la16
+    <<<do la>4\\fa,>> la8. fa16
+
+    %67
+    sib8[sol mi do]
+    fa4 r
+    <<<fa' do la>\\fa,>> do'8. la16
+
+    %70
+    <<<do la>4\\fa,>> la8. fa16
+    sib8[sol mi do]
+    fa16 do la do fa do la do
+
+    %73
+    fa do la do fa do la do
+    fa4 <<<fa' do la>\\fa,>>
+    <<<fa' do la>\\fa,>> r
+
+    %76
+    r16 la' do la mib' do8 do16
+    r sib r la r sol r fad
+    r sol sib sol r re sol re
+
+    %79
+    r sib re sib r sol sib sol
+    r la do la mib' do8 do16
+    r sib r la r sol r fad
+
+    %82
+    r sol sib sol r re sol re
+    r sib re sib r\giu\stemUp sol sib sol\mbreak
+    \su \stemNeutral r sol'' sib sol reb' sib8 sib16
+
+    %85
+    r lab r sol r fa r mi
+    r fa lab fa r do fa do
+    r lab do lab r fa lab fa
+
+    %88
+    r sol sib sol reb' sib8 sib16
+    r lab r sol r fa r mi
+    r fa lab fa r do fa do\mbreak
+
+    %91
+    r lab do lab \giu\stemUp r fa lab fa
+    \su r \stemNeutral mib''^\f do' mib, r mib do' mib,
+    r mib do' mib, r mib do' mib,
+
+    %94
+    r re sib' re, r re sib' re,
+    r re sib' re, r re sib' re,
+    r sib sib' sib, r sib sib' sib,
+
+    %97
+    r sib sib' sib, r sib sib' sib,
+    r la, do fa la do, fa la\mbreak
+    do fa, la do fa la, do fa
+
+    %100
+    \stemUp  r16 \stemNeutral mib do' mib, r mib do' mib,
+    r mib do' mib, r mib do' mib,
+    r reb sib' reb, r reb sib' reb,
+
+    %103
+    r reb sib' reb, r reb sib' reb,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %106
+    r fa^\f (la do fa do la fa)\mbreak
+    r fa(la do fa do la fa)
+    r sol^\f(sib do mi do sib sol)
+
+    %109
+    r sol(sib do mi do sib sol)
+    r la^\f(do mib! fa mib do la)
+    r la(do mib fa mib do la)
+
+    %112
+    r sib^\f(re fa sib fa re sib)
+    r sib(re fa sib fa re sib)
+    r sib^\f (reb mi sol mi reb sib)\mbreak
+
+    %115
+    r sib (reb mi sol mi reb sib)
+    r la^\f(do fa la fa do la)
+    r la (do fa la fa do la)
+
+    %118
+    r sib^\f (reb mi sol mi reb sib)
+    r sib (reb mi sol mi reb sib)
+    \once\stemUp la\f do' sib la sol fa mi re
+
+    %121
+    do la' sol fa mi re do sib
+    la do sib la sol fa mi re
+    do fa mi re \stemUp do\giu sib la sol
+
+    %124
+    s2*3
+    s16 \su \stemUp fa'' fa' fa, mi' mi, re' re,
+    do' do, sib' sib, la' la, sol' sol,
+
+    %129
+    \stemNeutral fa'2\tr\fermata_\markup\italic"a piacere" ~
+    fa4\tr mi8 fa
+    fa,4 r\fermata
+
+    %132
+    fa'8.\tr^\p(sol16 fa8) fa
+    fa4 (mi)
+    mib!8.\tr(fa16 mib8) mib
+
+    %135
+    mib4(re)
+    fa,8.\tr(sol16 fa8) fa
+    fa4 (mi)
+
+    %138
+    mib!8.\tr(fa16 mib8) mib
+    re16 sib do re mib fa sol la
+    \stemUp sib\noBeam \stemNeutral sib sib' sib, r sib sib' sib,\mbreak
+
+    %141
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %144
+    r sib\p sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %147
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %150
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r fa'\< la do r la do mib
+
+    %153
+    r re fa re r sib re sib
+    r do mib do r la do la
+    sib4\! r
+
+    %156
+    r16 sib,^\f sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %159
+    r sib sib' sib, r sib sib' sib,
+    r sib^\p sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %162
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %165
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+    r sib sib' sib, r sib sib' sib,
+
+    %168
+    r fa'\< la do r la do mib
+    r re fa re r sib re sib
+    r do mib do r la do la
+
+    %171
+    sib4\! r
+    <<<sib fa re>4^\f\\sib,>> fa'8. re16
+    <<<fa re>4\\sib,>> re8. sib16
+
+    %174
+    mib8[do la fa]\mbreak
+    sib4 r
+    <<<sib' fa re>4^\f\\sib,>> fa'8. re16
+
+    %177
+    <<<fa re>4\\sib,>> re8. sib16
+    mib8[do la fa]
+    sib16\f(fa re fa) sib(fa re fa)
+
+    %180
+    sib(fa re fa) sib(fa re fa)
+    sib4 <<<sib' fa re>4\\sib,>>
+    <<<sib' fa re>4\\sib,>> r\fermata
+
+}
+
+IIImsn = \relative do {
+
+    <<<sib' fa re>4\f\\sib,>> r
+    <<<sib' fa re>4\\sib,>> fa'8. re16
+    mib8[do la fa]
+
+    %4
+    sib4 sib,
+    \su\stemDown re'''8 r sib r
+    mib r mib, r
+
+    %7
+    do' r la r
+    re r re, r\mbreak
+    si' r sol r
+
+    %10
+    do r do, r
+    la' r fa r
+    sib? r sib, r
+
+    %13
+    <sol' mib>4 <sol mib>
+    <sol mib> <fa re>
+    <<{\su \stemDown mib re}\\{\giu sol, fa}>>
+
+    %16
+    <<{\su \stemDown mib' re}\\{\giu sol, fa}>>
+    \giu <<{sol fa
+            sol fa
+
+            %19
+            mib re
+            do}\\{mib re
+                  mib re
+                  do sib
+                  fa}>> r
+    <<{fa'2\f
+
+       %22
+       fa}\\{\stemUp\shiftOn fa,
+                  fa}>>
+    sib'8[sol mi do]
+    fa4 fa,
+
+    %25
+    \su\stemDown do''8_\p mi do mi
+    re fa re fa
+    mi sol mi sol
+
+    %28
+    fa do\giu\stemUp la fa
+    \stemNeutral do[mi do mi]
+    re[fa re fa]
+
+    %31
+    mi[sol mi sol]
+    fa2
+    <<{fa4_\ff la
+
+       %34
+       sib si
+       do dod
+       re la
+
+       %37
+       s la
+       sib si
+       do dod
+
+       %40
+       re la
+       \stemDown <re sib> <do la>
+       <re sib> <do la>
+
+       %43
+       \stemUp sib la
+       sib la}\\{\stemUp\shiftOn fa,4 la\mbreak
+                  sib si
+                  do dod
+                  re \stemDown fa
+                  \stemUp fa,\p la
+                  sib si
+                  do dod
+                  re \stemDown fa
+                  s2*2
+                  re4 do
+                  re do}>>
+    mi'\< do\!
+
+    %46
+    fa_\f la,
+    sib do
+    fa, r
+
+    %49
+    <<{fa4_\ff la
+       sib si
+       do dod
+
+       %52
+       re la
+       s la
+       sib si
+
+       %55
+       do dod
+       re la
+       \stemDown <re sib> <do la>
+
+       %58
+       <re sib> <do la>
+       \stemUp sib la
+       sib la}\\{\stemUp\shiftOn fa,4 la\mbreak
+                  sib si
+                  do dod
+                  re \stemDown fa
+                  \stemUp fa,\p la
+                  sib si
+                  do dod
+                  re \stemDown fa
+                  s2*2
+                  re4 do
+                  re do}>>
+
+    %61
+    mi'\< do\!
+    fa_\f <<{la,
+    sib do}\\{la,
+            sib do}>>
+
+    %64
+    <<<fa do la>\\fa,>> r
+    <<{fa'2_\ff
+       fa4}\\{\stemUp\shiftOn fa,2
+              fa4}>> do'8. la16
+
+    %67
+    sib8[sol mi do]
+    fa4 r
+    <<{fa'2
+
+       %70
+       fa4}\\{\stemUp\shiftOn fa,2
+              fa4}>> do'8. la16
+    sib8[sol mi do]
+    fa4 fa'8 do
+
+    %73
+    fa do fa do
+    fa4 <<{fa
+           fa}\\{\stemUp\shiftOn fa,
+                 fa}>> r
+
+    %76
+    \clef violin \key sib\major fad'''4. mib8
+    re[do sib la]
+    sib r re r
+
+    %79
+    sib r sol r
+    fad4. mib8
+    \clef bass re8[do sib la]
+
+    %82
+    sib16 r r8 re16 r r8
+    sib16 r r8 sol16 s s8\mbreak
+    \clef violin mi''4. reb8
+
+    %85
+    do[sib lab sol]
+    lab r do16 r r8
+    lab16 r r8 fa16 r r8
+
+    %88
+    mi4. reb8
+    \clef bass do[sib lab sol]
+    lab r  do16 r r8\mbreak
+
+    %91
+    lab16 r r8 fa16 r r8
+    \su \once\stemDown mib'! \giu _\f mib, do' do,
+    la'! la, fa' fa,
+
+    %94
+    sib' sib, fa' fa,
+    re' re, sib' sib,
+    re'' re, sib' sib,
+
+    %97
+    sol' sol, mi' mi,
+    fa4 r\mbreak
+    <<la'4\\fa>> r
+
+    %100
+    \su\once	\stemDown mib'8 \giu mib, do' do,
+    la'! la, fa' fa,
+    sib' sib, fa' fa,
+
+    %103
+    reb' reb, sib' sib,
+    reb'' reb, sib' sib,
+    solb' solb, mi' mi,
+
+    %106
+    fa2\f\tenuto\mbreak
+    fa'
+    fa,\f
+
+    %109
+    fa'
+    fa,\f
+    fa'
+
+    %112
+    fa,\f
+    fa'
+    fa,\f
+
+    %115
+    fa'
+    fa,\f
+    fa'
+
+    %118
+    fa,\f
+    fa'
+    fa,\f ~
+
+    %121
+    fa
+    fa\f ~
+    fa\mbreak
+
+    %124
+    \once\stemUp fa'16\noBeam fa mi re do sib la sol
+    \once\stemDown fa\noBeam fa la do \once\stemUp fa\noBeam fa la do
+    \su \stemDown fa \giu\stemUp fa,[la do]\su fa \stemDown fa[la do]
+
+    %127
+    fa\giu \stemNeutral r r8 r4
+    R2
+    fa,,,2_\markup\italic"a piacere" ~
+
+    %130
+    fa~
+    fa4 r\fermata
+    fa'8\p[la fa la]
+
+    %133
+    sol[sib sol sib]
+    la[do la do]
+    sib[re sib re]
+
+    %136
+    fa,,[la fa la]
+    sol[sib sol sib]
+    la[do la do]
+
+    %139
+    sib4 r
+    <<{sib\f re
+       mib mi
+
+       %142
+       fa fad
+       sol sib}\\{\stemUp\shiftOn sib,, re
+                  mib mi
+                  fa fad
+                  sol sib}>>
+    sib\p re
+
+    %145
+    mib mi
+    fa fad
+    sol sib
+
+    %148
+    <mib sol,> <re fa,>
+    <mib sol,> <re fa,>
+    <<{sol, fa
+
+       %151
+       sol fa}\\{mib re
+                 mib re}>>
+    la'\< fa
+    sib re,
+
+    %154
+    mib fa
+    sib,\! r
+    <<{sib\f re
+
+       %157
+       mib mi
+       fa fad
+       sol sib}\\{\stemUp\shiftOn sib,, re
+                  mib mi
+                  fa fad
+                  sol sib}>>
+
+    %160
+    sib\p re
+    mib mi
+    fa fad
+
+    %163
+    sol sib
+    <mib sol,> <re fa,>
+    <mib sol,> <re fa,>
+
+    %166
+    <<{sol, fa
+       sol fa}\\{mib re
+                 mib re}>>
+    la'\< fa
+
+    %169
+    sib re,
+    mib fa
+    sib,\! r
+
+    %172
+    <<{sib2\f}\\{\stemUp \shiftOn sib,}>>
+    sib''4 fa8. re16
+    mib8[do la fa]
+
+    %175
+    sib4 r
+    <<{sib2\f}\\{\stemUp \shiftOn sib,}>>
+    sib''4 fa8. re16
+
+    %178
+    mib8[do la fa]
+    sib\ff[fa sib fa]
+    sib[fa sib fa]
+
+    %181
+    sib4 <<{sib
+            sib}\\{\stemUp\shiftOn sib,
+                   sib}>> r\fermata
+
+}
+
+IIIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+
+
+}
+
+
+forma = {
+
+    \time 2/4
+    \tempo 2 = 60
+    \key sib\major
+    s2*75
+    \bar ":..:"\break
+    s2*107
+    \bar ":|."
+
+}
+
+IIIvl = {
+    \IIIglobal
+    \notypeset
+    <<\IIIvln \forma>>
+
+}
+
+IIImd = {
+    \IIIglobal
+    \context Staff = up
+    <<\IIImdn \forma>>
+
+}
+
+IIIms = {
+    \IIIglobal
+    \clef bass
+    \context Staff = down
+    <<\IIImsn \forma \IIIbfn>>
+    \typeset
+
+}
+#(set-global-staff-size 18.5)
+
+
+\pointAndClickOff
+
+\paper  {
+
+    systems-per-page = #4
+    print-first-page-number = ##t
+    first-page-number = #2
+
+}
+
+\header {
+   title = \markup\smaller"Sonata I per Forte-piano con Violino [Op. 5]"
+   composer = \markup \center-column{"   ""L. Boccherini (1743 - 1805)"}
+}
+
+\markup \huge {[1.] Allegro con moto}
+
+\score {
+
+    \new ChoirStaff \with {
+        \override StaffGrouper.staffgroup-staff-spacing.basic-distance = #8
+    } <<
+
+        \new Staff <<
+            \set Staff.midiInstrument = #"violin"
+            \set Staff.instrumentName = \markup \center-column{"Violino"}
+            \Ivl
+        >>
+
+        \new PianoStaff <<
+
+            \set PianoStaff.midiInstrument = #"bright acoustic"
+            \new Staff = "up" \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \set PianoStaff.instrumentName =  \markup \center-column{"Forte-piano"}
+                \Imd
+            >>
+
+            \new Staff = "down"  \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \Ims
+            >>
+        >>
+    >>
+
+    \layout {
+
+        indent = 2\cm
+
+        \context {
+            \PianoStaff
+            \consists #Span_stem_engraver
+        }
+        \context {
+            \Score
+            \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/4)
+            %\override SpacingSpanner.uniform-stretching = ##t
+            \override BarLine.hair-thickness = #1.2
+            \override StaffGrouper.staff-staff-spacing.padding = #1
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #7
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak
+
+\markup \huge {[2.] Grave}
+
+\score {
+
+    \new ChoirStaff \with {
+        \override StaffGrouper.staffgroup-staff-spacing.basic-distance = #8
+    } <<
+
+        \new Staff <<
+            \set Staff.midiInstrument = #"violin"
+            \IIvl
+        >>
+
+        \new PianoStaff <<
+
+            \set PianoStaff.midiInstrument = #"bright acoustic"
+            \new Staff = "up" \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \IImd
+            >>
+
+            \new Staff = "down"  \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \IIms
+            >>
+        >>
+    >>
+
+    \layout {
+
+        indent = 1\cm
+
+        \context {
+            \PianoStaff
+            \consists #Span_stem_engraver
+        }
+        \context {
+            \Score
+            \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/4)
+            %\override SpacingSpanner.uniform-stretching = ##t
+            \override BarLine.hair-thickness = #1.2
+            \override StaffGrouper.staff-staff-spacing.padding = #1
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #7
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak
+
+\markup \huge {[3.] Presto assai}
+
+\score {
+
+    \new ChoirStaff \with {
+        \override StaffGrouper.staffgroup-staff-spacing.basic-distance = #8
+    } <<
+
+        \new Staff <<
+            \set Staff.midiInstrument = #"violin"
+            \IIIvl
+        >>
+
+        \new PianoStaff <<
+
+            \set PianoStaff.midiInstrument = #"bright acoustic"
+            \new Staff = "up" \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \IIImd
+            >>
+
+            \new Staff = "down"  \with {
+                fontSize = #+1
+                \override StaffSymbol.staff-space = #(magstep +1)
+            }
+            <<
+                \IIIms
+            >>
+        >>
+    >>
+
+    \layout {
+
+        indent = 1\cm
+
+        \context {
+            \PianoStaff
+            \consists #Span_stem_engraver
+        }
+        \context {
+            \Score
+            \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/4)
+            %\override SpacingSpanner.uniform-stretching = ##t
+            \override BarLine.hair-thickness = #1.2
+            \override StaffGrouper.staff-staff-spacing.padding = #1
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #7
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}

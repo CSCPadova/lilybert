@@ -1,0 +1,2347 @@
+\language "italiano"
+	%********************************** VARIABILI
+\version "2.18.0"
+
+MyCadenza = \relative do'' {
+
+\cadenzaOn
+
+s1^\markup\column\italic\center-align{"Qui si ferma a piaci[men]to"\vspace #-0.2"[v. Cadenza I]"}\bar "|"
+
+\cadenzaOff
+
+}
+
+MyCadenzabis = \relative do'' {
+
+\cadenzaOn
+
+s2.^\markup\column\italic\center-align{"Qui si ferma a piaci[men]to"\vspace #-0.2"[v. Cadenza III]"}\bar "|"
+
+\cadenzaOff
+
+}
+
+salta = #(skip-of-length MyCadenza)
+
+saltabis = #(skip-of-length MyCadenzabis)
+
+parentSlur =
+ -\tweak stencil
+ #(lambda (grob)
+   (let* ((cp (ly:grob-property grob 'control-points))
+          (lp (grob-interpret-markup grob (markup #:teeny "(")))
+          (rp (grob-interpret-markup grob (markup #:teeny ")"))))
+     (set! lp (ly:stencil-aligned-to lp Y CENTER))
+     (set! lp (ly:stencil-aligned-to lp X 0.2))
+     (set! lp (ly:stencil-translate lp (first cp)))
+     (set! rp (ly:stencil-aligned-to rp Y CENTER))
+     (set! rp (ly:stencil-aligned-to rp X -0.2))
+     (set! rp (ly:stencil-translate rp (last cp)))
+     (list-set! cp 0
+       (cons (cdr (ly:stencil-extent lp X))
+             (cdr (first cp))))
+     (list-set! cp (1- (length cp))
+       (cons (car (ly:stencil-extent rp X))
+             (cdr (last cp))))
+     (ly:grob-set-property! grob 'control-points cp)
+     (apply ly:stencil-add (list lp rp
+       (ly:slur::print grob)))))
+ \etc
+
+acc = \once \override Flag.stroke-style = #"grace"
+
+tr = \trill
+
+su = \change Staff = up
+
+giu = \change Staff = down
+
+tasto = _\markup\italic"Tasto solo"
+
+dolce = _\markup\italic"dolce"
+
+ten = _\markup \italic \center-align "ten"
+
+arco = _\markup \italic "con l'arco"
+
+noarco = _\markup \italic "senz'arco"
+
+pizz = _\markup \italic "pizzicato"
+
+soli = ^\markup \italic { Soli }
+
+solo = ^\markup \italic { Solo }
+
+tu = ^\markup \italic "Tutti"
+
+pad = \once \override TextScript.padding = #3
+
+padall = \override TextScript.padding = #1.2
+
+puntopz = -\parenthesize -.
+
+fermopz = -\parenthesize \fermata
+
+segnopz = -\parenthesize \segno
+
+terzine = \tupletSpan 8
+
+terzinequarto = \tupletSpan 4
+
+sestine = \tupletSpan 2
+
+sestinequarto = \tupletSpan 4
+
+notypeset = \set Score.skipTypesetting = ##f
+
+typeset = \set Score.skipTypesetting = ##f
+
+senza = \override TupletNumber.transparent = ##t
+
+con = \override TupletNumber.transparent = ##f
+
+upl =
+#(let ((m (make-articulation "stopped")))
+   (set! (ly:music-property m 'tweaks)
+         (acons 'font-size 3
+                (acons 'stencil (lambda (grob)
+                                  (grob-interpret-markup
+                                   grob
+                                   (make-draw-line-markup '(0 . 1))))
+                       (ly:music-property m 'tweaks))))
+   m)
+
+pratu = ^\markup \override #'(baseline-skip . 1) {
+    \halign #-0
+    \center-column {
+	  \musicglyph #"scripts.turn"
+      \musicglyph #"scripts.prall"}}
+mbreak = { }
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \senza
+
+}
+
+IvlIn = \relative do'' {
+
+    fa16 sol
+    la8 la4 sol16 fa do'8 do4 sib16 la
+    re8 do4 sib16 la re8 do4 do16 re
+    mi,(fa sol8) sol16(la sib8) la sol4 do16 re
+
+    %4
+    mi,(fa sol8) sol16(la sib8) la sol4 sol16 fa
+    mi8[do16 re  mi fa sol la] sol8[do,16 re mi fa sol la]
+    do,8 fa sib16 sol la fa\mbreak do8 fa sib16 sol la fa
+
+    %7
+    do8 fa la16 fa sol mi fa4 r8 \set Staff.midiInstrument = #"oboe" do\pp^\markup\italic\column{"solo Viol[in]o e l'Oboè,"	\vspace #-0.3"mà tutti pianis[si]mo"} %% fine ripresa
+    fa,16 sol la sib do8 sib16 la re8 do4 sib16 la
+    re8 do4 sib16 la fa'8[mi16 re do8 sib]
+
+    %10
+    la16 sol fa8 r do' fa,16(sol la8) la16(sib do8)
+    do16(re mib8)\parentSlur (mib) re16 \parentSlur (do) re16(do sib) la sib8 re
+    sol,16 (la si8) si16(do re8) re16(mi? fa8)\parentSlur(fa) mi16 (re)
+
+    %13
+    mi(re do) si do8 do\mbreak mi,16 fa sol8~sol16 la sol fa
+    mi fa sol8~sol16 sib la sol fa sol la8~la16 do sib la
+    sol la sib8~sib16 re do sib la8.[si16 si8. do16]
+
+    %16
+    do re mi8 fa16(re do re) mi(do si do) fa(re do re)
+    mi(sol mi do) re8.\tr do16 do4 r8 \set Staff.midiInstrument = #"violin" do16\f  re
+    mi8 mi4 re16 do sol'8 sol4 fa16 mi
+
+    %19
+    la8 sol4 fa16 mi la8 sol4 sol16 la\mbreak
+    si,(do re8) re16(mi fa8) mi re4 sol16 la
+    si,(do re8) re16(mi fa8) mi re4 sol16 fa
+
+    %22
+    mi8 do' fa,16 re mi do sol'8 do fa,16 re mi do
+    sol'8 do mi,16 do re si do \set Staff.midiInstrument = #"oboe" re mi\pp^\markup\italic"Oboè, e Violino Solo"  fa sol8 mi
+    dod sib' la16 sol fa mi fa(mi re dod) re4~
+
+    %25
+    re8 sib' la16(sol) fa(mi) fa(mi re dod re8) fa
+    sib, sib~\tuplet 3/2 { sib16 do(re mi[fa sol] } la,8) la~\tuplet 3/2 { la16 sib(do re[mi fa] }
+    sol,8) sol~\tuplet 3/2 { sol16 la(si dod[re mi)]} fa,8 mi16 re re'8 do?16 sib?
+
+    %28
+    sib8\tr la r la fa mi16 re re'8 do16 sib
+    sib8\tr la r re sol, sib la16(sol) fa(mi)
+    fa(sol la8) sol16(la sib8) la16(si do8) si16(dod re8)
+
+    %31
+    dod la fa'4~fa8 mi16 re dod8. re16
+    \set Staff.midiInstrument = #"violin" re8\f la'4 sol16 fa sib8 la4 sol16 fa
+    sib8 la4 la16 sib\mbreak dod,(re mi8) mi16(fa sol8)
+
+    %34
+    fa mi4 la16 sib dod,(re mi8) mi16 fa sol8
+    fa mi4 la16 sol fa8 re mi dod
+    re4 r8 \set Staff.midiInstrument = #"oboe" do\pp^\markup\italic"Oboè e Viol[in]o Solo" fa,16 sol la sib do8 sib16 la
+
+    %37
+    re8 do4 sib16 la re8 do4 sib16 la
+    fa'8[mi16 re do8 sib] la16 sol fa8 r do'
+    la16 sib do re mib8 do sib16 la sol4 re'8
+
+    %40
+    si16 do re mi fa8 re dod16 sib? la8 r fa'\mbreak
+    sib8[la16(sol) fa(mi) re(do)] la'8[sol16(fa) mi(re) do(sib)]
+    sol' fa mi re do8 sib sib4\tr la
+
+    %43
+    r8 do[la sol16 fa] mi(fa sol la sib re do sib)
+    la8 do16 sib la8 sol16 fa mi(fa sol la sib re do sib)
+    la8[do16 sib la8 sol16 fa] sol8[sib16 la sol8 fa16 mi]
+
+    %46
+    fa8[la16 sol fa8 mi16 re] mi8(mi' sol sib,)
+    la do16 sib la8 fa' mi re16 do la'8 sol16 fa
+    sol4.\tr fa8 fa4 r8 \set Staff.midiInstrument = #"violin" fa16\f sol
+
+    %49
+    la8 la4 sol16 fa do'8 do4 sib16 la
+    re8 do4 sib16 la re8 do4 do16 re
+    mi,(fa sol8) sol16(la sib8) la sol4 do16 re
+
+    %52
+    mi,(fa sol8) sol16(la sib8) la sol4 sol16 fa
+    mi8[do16 re  mi fa sol la] sol8[do,16 re mi fa sol la]
+    do,8 fa sib16 sol la fa\mbreak do8 fa sib16 sol la fa
+
+    %55
+    do8 fa la16 fa sol mi fa4\fermata r
+
+}
+
+IvlIIn = \relative do'' {
+
+    fa8
+    fa fa4 fa8 la la4 sol16 fa
+    sib8 la4 sol16 fa sib8 la4  la16 sib
+    do,(re mi8) mi16(fa sol8) fa mi4 la16 sib
+
+    %4
+    do,(re mi8) mi16(fa sol8) fa mi4 mi16 re
+    do8[do16 si do re mi fa] mi8[do16 si do re mi fa]
+    la,8 do sol'16 mi fa do\mbreak la8 do sol'16 mi fa do
+
+    %7
+    la8 do do16 la sib sol la4 r8 la\pp %% ripresa
+    la la la la sib la4 sol16 fa
+    sib8 la4 sol16 fa re'8 re sol, sol
+
+    %10
+    fa do' do do la la la la
+    la la la la fa fa fa fa
+    re re re re re re re re
+
+    %13
+    sol sol sol sol\mbreak sol mi mi mi
+    mi mi mi mi fa fa fa fa
+    sol sol sol sol fa fa sol sol
+
+    %16
+    sol sol sol sol sol sol sol sol
+    sol sol si si sol4 r8 do\f  %%% OK
+    do do4 do8 mi mi4 re16 do
+
+    %19
+    fa8 mi4 re16 do fa8 mi4 mi16 fa\mbreak
+    sol,16 \parentSlur (la si8) si16\parentSlur (do re8) do si4 re16 fa
+    sol,16 (la si8) si16 (do re8) do si4 re8
+
+    %22
+    do mi re16 si do sol mi8 mi' re16 si do sol
+    mi8 mi' do16 mi, fa re do8 mi\pp mi mi
+    mi mi dod' dod la la la la
+
+    %25
+    la la mi' mi la, la re re
+    sol, sol sib sib\mbreak fa fa la la
+    mi mi dod dod re re sib' sol
+
+    %28
+    sol fa fa[fa] re re sib' sol
+    sol fa r fa mi mi mi mi
+    re fa mi sol fa la sol si
+
+    %31
+    la la la fa sib sib la la
+    fa\f fa'4 mi16 re sol8 fa4 mi16 re
+    sol8 fa4 fa16 sol\mbreak la,16(si dod8) dod16(re mi8)
+
+    %34
+    re8 dod4 fa16 sol la,(si dod8) dod16(re mi8)
+    re8 dod4 mi8 re fa sol mi
+    fa4 r8 la,\pp la la la la
+
+    %37
+    sib la la la sib la la la
+    re re sol, sol fa fa fa la,
+    do do do fad re re re sib'
+
+    %40
+    re, re re sold mi mi' re re\mbreak
+    re sib sol mi' do la fa re'
+    sib sib sol[sol] do, do do do
+
+    %43
+    la la la la sol sol mi' mi
+    do do do la sol sol mi' mi
+    do do do do do do do do
+
+    %46
+    re re si si sol sol mi' mi
+    do do fa fa sol do do do
+    mi, mi mi mi fa4 r8 fa'8\f
+
+    %49
+    fa fa4 fa8 la la4 sol16 fa
+    sib8 la4 sol16 fa sib8 la4  la16 sib
+    do,(re mi8) mi16(fa sol8) fa mi4 la16 sib
+
+    %52
+    do,(re mi8) mi16(fa sol8) fa mi4 mi16 re
+    do8[do16 si do re mi fa] mi8[do16 si do re mi fa]
+    la,8 do sol'16 mi fa do\mbreak la8 do sol'16 mi fa do
+
+    %55
+    la8 do do16 la sib sol la4\fermata r
+
+}
+
+Ivlan = \relative do' {
+
+    do'8
+    do do4 do8 la la4 la8
+    fa fa4 fa8 fa fa4 fa8
+    sol do4 do8 do do mi, fa
+
+    %4
+    sol do4 do8 do do mi, fa
+    sol4 r8 do, do4 r8 do
+    do4 r8 do\mbreak do4 r8 do
+
+    %7
+    do4 r8 do do4 r8 fa\pp %%%5 ripresa
+    fa fa fa fa fa fa fa fa
+    fa fa fa fa fa fa mi mi
+
+    %10
+    fa fa fa fa fa fa fa fa
+    fa fa fa fa sib, sib sib sib
+    si si si si si si si si
+
+    %13
+    do do do do\mbreak do do do do
+    do do do do re re re re
+    mi mi mi mi fa fa fa fa
+
+    %16
+    mi do si si do do si si
+    do do sol sol do4 r8 sol'\f
+    sol sol4 sol8 mi mi4 mi8
+
+    %19
+    do do4 do8 do do4 do8\mbreak
+    re re4 sol8 sol sol4 sol8
+    sol sol4 sol8 sol sol4 sol8
+
+    %22
+    sol4 r8 sol sol4 r8 sol
+    sol sol, sol sol sol do\pp do do
+    la la la la re re re re
+
+    %25
+    re re dod dod re re re re
+    sol sol sol sol \mbreak fa fa fa fa
+    mi mi la, la re re re re
+
+    %28
+    re re re re re re re re
+    re re re re mi mi dod dod
+    re re mi mi fa fa sol sol
+
+    %31
+    la la re, re sol, sol la la
+    fa'\f fa4 fa8 re re4 re8
+    re re4 re8\mbreak mi mi4 mi8
+
+    %34
+    mi mi4 fa8 mi mi4 mi8
+    mi mi4 dod8 la la' la la
+    la4 r8 fa\pp fa fa fa fa
+
+    %37
+    fa fa fa fa fa fa fa fa
+    fa fa mi mi fa fa fa fa,
+    fad fad fad fad sol sol sol sol
+
+    %40
+    sold sold sold sold la la re re\mbreak
+    sol, sol do do  fa, fa sib sib
+    mi, mi mi mi fa fa fa fa
+
+    %43
+    fa fa fa fa do do do do
+    fa fa fa fa do do do do
+    fa fa fa fa mi mi mi mi
+
+    %46
+    re re re re do do do do
+    fa fa fa fa do' do fa,[fa]
+    do' do do do fa,4 r8 do''\f
+
+    %49
+    do do4 do8 la la4 la8
+    fa fa4 fa8 fa fa4 fa8
+    sol do4 do8 do do mi, fa
+
+    %52
+    sol do4 do8 do do mi, fa
+    sol4 r8 do, do4 r8 do
+    do4 r8 do\mbreak do4 r8 do
+
+    %55
+    do4 r8 do do4\fermata r
+
+}
+
+Ibcn = \relative do {
+
+    fa8
+    fa16 sol la sol fa8 fa, fa'16 sol la sol fa8 fa,
+    fa'16 sol la sol fa8 fa, fa'16 sol la sol fa8 fa,
+    do'16 fa  mi re do8 do, do'16 re mi re do8 do,
+
+    %4
+    do'16 fa mi re do8 do, do'16 re mi re do8 do,
+    do' do, r fa do' do, r fa'
+    fa16 do la fa do8 \once\stemDown fa'\mbreak fa16 do la fa do8 \once\stemDown fa'
+
+    %7
+    fa16 do la fa do8 do' fa,4 r %% fine ripresa
+    R1*9
+    r2 r4 r8 do'
+
+    %18
+    do16 re mi re do8 do, do'16 re mi re do8 do,
+    do'16 re mi re do8 do, do'16 re mi re do8 do,\mbreak
+    sol''16 do si la sol8 sol, sol'16 la si la sol8 sol,
+
+    %21
+    sol'16 do si la sol8 sol, sol'16 la si la sol8 sol,
+    do'16 sol mi do sol8\once\stemDown do' do16 sol mi do sol8\once\stemDown do'
+    do16 sol mi do sol'8 sol, do4 r
+
+    %24
+    R1*8
+    re16 mi fa mi re8 re, re'16 mi fa mi re8 re,
+    re'16 mi fa mi re8 re,\mbreak la''16 re dod si la8 la,
+
+    %34
+    la'16 re dod si la8 la, la'16 re dod si la8 la,
+    la'16 si dod si la8 la, re re' sol, la
+    re,4 r r2
+
+    %37
+    R1*11
+    r2 r4 r8 fa
+    fa16 sol la sol fa8 fa, fa'16 sol la sol fa8 fa,
+
+    %50
+    fa'16 sol la sol fa8 fa, fa'16 sol la sol fa8 fa,
+    do'16 fa  mi re do8 do, do'16 re mi re do8 do,
+    do'16 fa mi re do8 do, do'16 re mi re do8 do,
+
+    %53
+    do' do, r fa do' do, r fa'
+    fa16 do la fa do8 \once\stemDown fa'\mbreak fa16 do la fa do8 \once\stemDown fa'
+    fa16 do la fa do8 do' fa,4\fermata r
+
+}
+
+Ibfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s1
+    <6 4>4 <5 3> <6 4> <5 3>
+    s s8 <7> <6 4>4 <5 3>
+    s s <6 4> <5 3>
+    s1
+    s4 <7> s <7>
+    s4 <6>8 <5 7> s2
+    s1*11
+    <6 4>4 <5 3> <6 4> <5 3>
+    s s <6 4> <5 3!>
+    <_!> s <6 4> <5 3!>
+    s <7 _!> s <7 _!>
+    s <6 4>8 <5 3!> s2
+    s1*8
+    s2 <6 4>4 <5 3>
+    <6 4> <5 3><_+> s
+    <6 4> <5 3+> <_+> s
+    <6 4> <5 3+> s2
+    s1*14
+    <6 4>4 <5 3> <6 4> <5 3>
+    s s8 <7> <6 4>4 <5 3>
+    s s <6 4> <5 3>
+    s1
+    s4 <7> s <7>
+    s4 <6>8 <5 7> s2
+
+}
+
+forma = {
+
+    \time 4/4
+    \key fa\major
+    \tempo 2 = 50
+    \partial 8 s8
+    s1*55
+    \bar"|."
+
+}
+
+
+IvlI = {
+    \global
+    %\notypeset
+    <<\IvlIn \forma>>
+
+}
+
+IvlII = {
+    \global
+    <<\IvlIIn \forma>>
+
+}
+
+Ivla = {
+    \global
+    \clef alto
+    <<\Ivlan \forma>>
+
+}
+
+Ibc = {
+    \global
+    \clef bass
+    <<\Ibcn \forma \Ibfn>>
+    \typeset
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+
+}
+
+IIvlIn = \relative do'' {
+
+    fa4. sol8 la4
+    dod,8(mi re dod si la)
+    mi'4. fa8 sol4
+
+    %4
+    fa4. mi8 re4
+    fa4. sol8 la4
+    sib?8(sol fa mi re do)
+
+    %7
+    sol'4. la8 sib4
+    la4. sol8 fa4
+    fa4. sol8 la4
+
+    %10
+    re,4. mi8 fa4
+    la,\upl sib\upl sol\upl
+    fa2.\tr
+
+    %13
+    re'4. mib8 do4
+    sib4. la8 sol4\mbreak
+    mi'?4. fa8 re4
+
+    %16
+    do4. si8 la4
+    fa'4. mi8 re4
+    la'2.~
+
+    %19
+    la4 sol8. [fa16 mi8. re16]
+    do4\upl re\upl si\upl
+    la2.
+
+    %22
+    fa'4. sol8 la4
+    dod,8 (mi re dod si la)
+    mi'4. fa8 sol4
+
+    %25
+    fa4. mi8 re4
+    fa\upl sol\upl la\upl
+    sib,8(re do sib la sol)
+
+    %28
+    sol'4\upl la\upl sib\upl
+    dod,4. la8 re4
+    sol mi4.\tr re8\mbreak
+
+    %31
+    sol,2.~
+    sol8 sib (la sol fa mi)
+    fa mi re4 sol'\upl
+
+    %34
+    fa\upl sol\upl mi\upl
+    re2.\fermata
+
+}
+
+IIvlIIn = \relative do'' {
+
+    re4. mi8 fa4
+    mi2.
+    dod4. re8 mi4
+
+    %4
+    re2.
+    do2 fa4
+    mi2.
+
+    %7
+    mi4. fa8 sol4
+    fa2.
+    la,4. sib8 do4
+
+    %10
+    sib4. do8 re4
+    fa,\parenthesize \upl  sol\parenthesize \upl  mi\parenthesize \upl
+    fa2.
+
+    %13
+    la
+    sol\mbreak
+    si
+
+    %16
+    la
+    la'4. sol8 fa4
+    mi2.~
+
+    %19
+    mi2 si4\upl
+    la\upl si\upl sold\upl
+    la2.
+
+    %22
+    re4. mi8 fa4
+    mi2.
+    dod4. re8 mi4
+
+    %25
+    re2.
+    re4 mi fa
+    sol,2.
+
+    %28
+    mi'4\parenthesize \upl  fa\parenthesize \upl  sol\parenthesize \upl
+    mi4. dod8 la4
+    re dod2\tr\mbreak
+
+    %31
+    mi,2.~
+    mi8 sol fa mi re dod
+    re2 mi'4\upl
+
+    %34
+    re\upl mi\upl dod\upl
+    re2.\fermata
+
+}
+
+IIvlan = \relative do' {
+
+    la'2 la4
+    la2.
+    la2 la4
+
+    %4
+    la2.
+    la2 la4
+    sol2.
+
+    %7
+    sol2 mi4
+    do2.
+    do
+
+    %10
+    re
+    do4\parenthesize \upl  re\parenthesize \upl  do\parenthesize \upl
+    la2.
+
+    %13
+    re
+    re\mbreak
+    mi
+
+    %16
+    mi
+    R
+    do'8.[la16 sold8. fad16 mi8. re16]
+
+    %19
+    do4 la sold'\parenthesize \upl
+    mi\parenthesize \upl  fa?\parenthesize \upl  mi\parenthesize \upl
+    do2 r4
+
+    %22
+    la'2 la4
+    la2.
+    la2 la4
+
+    %25
+    la2.
+    la2 fa4
+    re2.
+
+    %28
+    sib'2\parenthesize \upl  sol4\parenthesize \upl
+    sol2 la4
+    sib mi, la\mbreak
+
+    %31
+    dod,2.
+    dod
+    la2 la'4\upl
+
+    %34
+    la\upl sib\upl la\upl
+    fa2.\fermata
+
+}
+
+IIbcn = \relative do {
+
+    re'4 fa, re
+    la'2 la,4
+    dod si la
+
+    %4
+    re2 re,4
+    la'' sol fa
+    sol do2
+
+    %7
+    mi,4 re do
+    fa2 fa,4
+    la' sol fa
+
+    %10
+    sib,2.
+    fa'4\parenthesize \upl  sib,\parenthesize \upl  do\parenthesize \upl
+    fa,2.
+
+    %13
+    fad'
+    sol2 sol,4\mbreak
+    sold'2.
+
+    %16
+    la2 la,4
+    R2.
+    la'8.[fa16 mi8. re16 do8. si16]
+
+    %19
+    do4 la sold'\parenthesize \upl
+    la\parenthesize \upl  re,\parenthesize \upl  mi\parenthesize \upl
+    la8.[sib16 la8. sol16 fa8. mi16]
+
+    %22
+    re4 fa, re
+    la''2 la,4
+    dod si la
+
+    %25
+    re2 re,4
+    re' re re
+    sol2 sol,4
+
+    %28
+    sol'\parenthesize \upl  sol\parenthesize \upl  sol\parenthesize \upl
+    la8.[sib16 la8. sol16 fa8. re16]
+    sib'4 la la,\mbreak
+
+    %31
+    mi'8.[fa16 mi8. re16 dod8. sib16]
+    la2 la'4
+    re, re, dod'\upl
+
+    %34
+    re\upl sol,\upl la\upl
+    re,2.\fermata
+
+}
+
+IIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s2.
+    <_+>
+    s
+    s
+    <6>
+    <6>
+    s2 <7>4
+    s2.*15
+    <_+>2.
+    s2 <7>4
+    s2.*7
+    <7>2.
+
+}
+
+forma = {
+
+    \time 3/4
+    \override Staff.TimeSignature.style = #'single-digit
+    \key fa\major
+    \tempo 2. = 50
+    s2.*12
+    \bar":..:"%\break
+    s2.*23
+    \bar":|."
+
+}
+
+
+IIvlI = {
+    \global
+    %\notypeset
+    <<\IIvlIn \forma>>
+
+}
+
+IIvlII = {
+    \global
+    <<\IIvlIIn \forma>>
+
+}
+
+IIvla = {
+    \global
+    \clef alto
+    <<\IIvlan \forma>>
+
+}
+
+IIbc = {
+    \global
+    \clef bass
+    <<\IIbcn \forma \IIbfn>>
+    \typeset
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+
+}
+
+IIIvlIn = \relative do'' {
+
+    fa,8
+    la16 sol fa8 la
+    do16 sib la8 fa'
+    re do fa
+
+    %4
+    re do fa
+    mi16 re do8 la'
+    sol16 fa mi8 sib'
+
+    %7
+    sib la r\mbreak
+    sol16(la sib8) la16(sol)
+    la8 sol do,
+
+    %10
+    sol'16(la sib8) la16(sol)
+    la8 sol do,
+    mib(re) re
+
+    %13
+    fa(mi?) mi
+    sol(fa) fa
+    lab(sol) do,
+
+    %16
+    sib'16(sol la8) la
+    sol16(mi fa8) fa
+    mi16(do re8) re
+
+    %19
+    do16(la sib8) sib
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+
+    %22
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+    la16 fa' sol8 mi
+
+    %25
+    fa4 \set Staff.midiInstrument = #"oboe" fa,8\pp^\markup\italic"Oboè e Viol[in]o Sempre Piano"  %%% ripresa OOKK
+    la16(sib do la sol fa)
+    re'8 do16(re mi fa)
+
+    %28
+    re8 do16(re mi fa)
+    sol(fa mi re do sib)
+    sib8\tr la16(sib do re)
+
+    %31
+    sib8\tr la16(sib do re)
+    sib8\tr la do
+    si16(do re8) do16(si)
+
+    %34
+    do(re mi fa sol la)
+    si,(do re8) do16(si)
+    do(re mi fa sol la)\mbreak
+
+    %37
+    fa(re mi8) mi
+    re16(si do8) do
+    fa16(re mi8) mi
+
+    %40
+    re16(si do8) do
+    sol8 la16(si do re)
+    mi(sol fa mi re do)
+
+    %43
+    re8 si4
+    do4 \set Staff.midiInstrument = #"violin" do8\f
+    mi16 re do8 mi
+
+    %46
+    sol16 fa mi8 do'
+    la sol do
+    la sol re
+
+    %49
+    mi16(la sol8) fa
+    mi16(la sol8) fa
+    mi fa re\mbreak
+
+    %52
+    do4 \set Staff.midiInstrument = #"oboe" sol8\pp^\markup\italic"Oboè e Viol[in]o Solo"
+    do16(la' sol fa mi re)
+    do8 sol do
+
+    %55
+    re16(mi fa sol la fa)
+    mi8 re do
+    mi(fa sol)
+
+    %58
+    dod,16(mi re dod si la)
+    sol'16(si? sol8) mi
+    fa4 la,8
+
+    %61
+    do16(re si8) si
+    re16(mi dod8) dod
+    mi16(fa re8) re
+
+    %64
+    sib'?16(sol fa mi fa sol)
+    la(fa mi re mi fa)\mbreak
+    sol8 mi4\tr
+
+    %67
+    re4 \set Staff.midiInstrument = #"violin" re8\f
+    fa16 mi re8 fa
+    la16 sol fa8 la
+
+    %70
+    sib la re,
+    sib' la re,
+    mi16(fa sol8) fa16(mi)
+
+    %73
+    fa8 mi la,
+    mi'16(fa sol8) fa16(mi)
+    fa8 mi la,
+
+    %76
+    sol'16 (la sib8) la16(sol)
+    fa8 sol mi
+    re4 \set Staff.midiInstrument = #"oboe" fa,8\pp ^\markup\italic\column{"Oboè e"\vspace #-0.2"Viol[in]o Solo"}
+
+    %79
+    la16(sib do la sol fa)
+    re'8 do16(re mi fa)\mbreak
+    re8 do16(re mi fa)
+
+    %82
+    sol(fa mi re do sib)
+    sib8\tr la do
+    fa mib16 re mib do
+
+    %85
+    re do sib8 la
+    sol16(la sib8) la16(sol)
+    la(do fa8) la,
+
+    %88
+    sol16(la sib8) la16(sol)
+    la(do fa8) do
+    sib16(do la8) la
+
+    %91
+    do16(re sib8) sib
+    re16(mi do8) do
+    mi16(fa re8) re
+
+    %94
+    fa16(sol mi8) mi
+    fa mi16 re do sib\mbreak
+    la16(sol' fa8) sib,
+
+    %97
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+    la16 sol' fa8 sib,
+
+    %100
+    la8 do fa
+    sib sol4\tr
+    fa \set Staff.midiInstrument = #"violin" fa,8\f
+
+    %103
+    la16 sol fa8 la
+    do16 sib la8 fa'
+    re do fa
+
+    %106
+    re do fa
+    mi16 re do8 la'
+    sol16 fa mi8 sib'
+
+    %109
+    sib la r\mbreak
+    sol16(la sib8) la16(sol)
+    la8 sol do,
+
+    %112
+    sol'16(la sib8) la16(sol)
+    la8 sol do,
+    mib(re) re
+
+    %115
+    fa(mi?) mi
+    sol(fa) fa
+    lab(sol) do,
+
+    %118
+    sib'16(sol la8) la
+    sol16(mi fa8) fa
+    mi16(do re8) re
+
+    %121
+    do16(la sib8) sib
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+
+    %124
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+    la16 fa' sol8 mi
+
+    %127
+    fa4\fermata r8 %% OOKK
+
+}
+
+IIIvlIIn = \relative do'' {
+
+    r8
+    r r fa,
+    la16 sol fa8 la
+    sib la do
+
+    %4
+    sib la do
+    do mi fa
+    mi16 re do8 sol'
+
+    %7
+    sol fa r\mbreak
+    mi16(fa sol8) fa16 \parentSlur (mi)
+    fa8 mi4
+
+    %10
+    mi16(fa sol8) fa16(mi)
+    fa8 mi do
+    mib(re) re
+
+    %13
+    fa(mi?) mi
+    sol(fa) fa
+    lab(sol) do,
+
+    %16
+    sib'16(sol la8) la
+    sol16(mi fa8) fa
+    mi16(do re8) re
+
+    %19
+    do16(la sib8) sib
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+
+    %22
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+    la16 fa' sol8 mi
+
+    %25
+    fa4 la,8\pp %%%%%%% ripresa
+    la la la
+    sib la r
+
+    %28
+    sib la r
+    sol sol sol
+    sol fa r
+
+    %31
+    sol fa r
+    sol fa r
+    re re re
+
+    %34
+    mi mi fa
+    re re re
+    mi  mi fa\mbreak
+
+    %37
+    re' do4
+    si8 sol4
+    re'8 do4
+
+    %40
+    si8 sol4
+    re8 re si'
+    sol sol sol
+
+    %43
+    la sol re
+    mi4 r8
+    r r do'\f
+
+    %46
+    mi16 re do8 mi
+    fa mi mi
+
+    %48
+    fa  mi sol
+    do,16(mi re8) si
+    do16(mi re8) si
+
+    %51
+    do8 re si\mbreak
+    do4 mi,8\pp
+    sol sol sol
+
+    %54
+    sol sol sol
+    sol sol sol
+    sol sol sol
+
+    %57
+    sol sol sol
+    sol sol sol
+    dod dod dod
+
+    %60
+    la la fa
+    re re sol
+    mi mi la
+
+    %63
+    dod la fa'
+    re16 sib sol8[mi']
+    do16 la fa8[re']\mbreak
+
+    %66
+    re dod4
+    re r8
+    r r re\f
+
+    %69
+    fa16 mi re8 fa
+    sol fa fa
+    sol fa fa
+
+    %72
+    dod16( re mi8) re16(dod)
+    re8 dod4
+    dod?16(re mi8) re16(dod!)
+
+    %75
+    re8 dod4
+    mi16(fa sol8) fa16(mi)
+    re8 mi dod
+
+    %78
+    re4 la8\pp
+    la la la
+    sib la r\mbreak
+
+    %81
+    sib la r
+    sol sol sol
+    sol fa r
+
+    %84
+    do' do16 sib do la
+    fa8 fa re
+    mi(sol mi)
+
+    %87
+    fa(la fa)
+    mi sol mi
+    fa la fa
+
+    %90
+    do do fa
+    re re sol
+    mi mi la
+
+    %93
+    fa fa sib
+    sol sol do
+    la la sol\mbreak
+
+    %96
+    fa fa sol
+    mi mi sol
+    re re sol
+
+    %99
+    do, do sol'
+    fa fa fa'
+    fa fa mi
+
+    %102
+    fa4 r8
+    r r fa,\f
+    la16 sol fa8 la
+
+    %105
+    sib la do
+    sib la do
+    do mi fa
+
+    %108
+    mi16 re do8 sol'
+    sol fa r\mbreak
+    mi16(fa sol8) fa16 \parentSlur (mi)
+
+    %111
+    fa8 mi4
+    mi16(fa sol8) fa16(mi)
+    fa8 mi do
+
+    %114
+    mib(re) re
+    fa(mi?) mi
+    sol(fa) fa
+
+    %117
+    lab(sol) do,
+    sib'16(sol la8) la
+    sol16(mi fa8) fa
+
+    %120
+    mi16(do re8) re
+    do16(la sib8) sib
+    la16(sol' fa8) sib,
+
+    %123
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+    la16(sol' fa8) sib,
+
+    %126
+    la16 fa' sol8 mi
+    fa4\fermata r8
+
+}
+
+IIIvlan = \relative do' {
+
+    do8
+    do16 sib la8 fa'
+    fa4 fa8
+    fa4 fa8
+
+    %4
+    fa4 fa8
+    sol16 fa mi8 do
+    do4 do8
+
+    %7
+    do do r\mbreak
+    do4 do8
+    fa do do
+
+    %10
+    do4 do8
+    fa do fa
+    fa fa sol
+
+    %13
+    sol sol la
+    la la fa
+    fa mi mi
+
+    %16
+    mi do' do
+    sib la la
+    sol fa fa
+
+    %19
+    mi mi mi
+    fa fa sol
+    mi mi sol
+
+    %22
+    re re sol
+    do, do sol'
+    do, re do\mbreak
+
+    %25
+    la4 fa'8\pp  %%% ripresa OOKK
+    fa fa fa
+    fa fa fa
+
+    %28
+    fa fa fa
+    mi mi mi
+    fa fa fa
+
+    %31
+    fa fa fa
+    fa fa fa
+    sol, sol sol
+
+    %34
+    sol sol sol
+    sol sol sol
+    sol sol sol\mbreak
+
+    %37
+    sol sol sol
+    sol sol sol
+    sol sol sol
+
+    %40
+    sol sol sol
+    sol sol sol
+    do do do
+
+    %43
+    fa, sol sol
+    do4 sol'8\f
+    sol16 fa mi8 sol
+
+    %46
+    sol4 sol8
+    do, do do
+    fa do do
+
+    %49
+    sol'4 sol8
+    sol4 sol8
+    sol la sol\mbreak
+
+    %52
+    mi4 do8\pp
+    do do do
+    do do do
+
+    %55
+    si si si
+    do do do
+    sol sol sol
+
+    %58
+    la la la
+    la la la
+    re re re
+
+    %61
+    sol, sol sol
+    la la la
+    la la re\noBeam
+
+    %64
+    sol, do[do]
+    fa, re' re\mbreak
+    sib la la
+
+    %67
+    re4 la'8\f
+    la16 sol fa8 la
+    re4 re8
+
+    %70
+    re4 re8
+    re re, la'
+    la la la
+
+    %73
+    re la la
+    la la la
+    re la la
+
+    %76
+    la la la
+    la sib la
+    fa4 fa8\pp
+
+    %79
+    fa fa fa
+    fa fa fa\mbreak
+    fa fa fa
+
+    %82
+    mi mi mi
+    fa fa fa
+    fa fa fa
+
+    %85
+    sib, sib si
+    do do do
+    do do do
+
+    %88
+    do do do
+    do do do
+    fa, fa fa
+
+    %91
+    sol sol sol
+    la la la
+    sib sib sib
+
+    %94
+    do do do
+    fa fa mi\mbreak
+    fa fa sol
+
+    %97
+    mi mi sol
+    re re sol
+    do, do sol'
+
+    %100
+    fa fa fa
+    re do do
+    fa,4 do'8\f
+
+    %103
+    do16 sib la8 fa'
+    fa4 fa8
+    fa4 fa8
+
+    %106
+    fa4 fa8
+    sol16 fa mi8 do
+    do4 do8
+
+    %109
+    do do r\mbreak
+    do4 do8
+    fa do do
+
+    %112
+    do4 do8
+    fa do fa
+    fa fa sol
+
+    %115
+    sol sol la
+    la la fa
+    fa mi mi
+
+    %118
+    mi do' do
+    sib la la
+    sol fa fa
+
+    %121
+    mi mi mi
+    fa fa sol
+    mi mi sol
+
+    %124
+    re re sol
+    do, do sol'
+    do, re do\mbreak
+
+    %127
+    la4\fermata r8
+
+}
+
+IIIbcn = \relative do {
+
+   fa8
+   fa fa, fa'
+   fa fa, fa'
+   sib fa fa,
+
+   %4
+   sib' fa fa,
+   do'' do, fa
+   do' do, do'
+
+   %7
+   fa, fa, fa'\mbreak
+   do' do, do'
+   do do, do'
+
+   %10
+   do do, do'
+   do do, la
+   sib sib' sib,
+
+   %13
+   do do' do,
+   re re' re,
+   do do' do,
+
+   %16
+   do do' do,
+   do do' do,
+   do do' do,
+
+   %19
+   do do' do,
+   fa fa sol
+   mi mi sol
+
+   %22
+   re re sol
+   do, do sol'
+   fa sib, do\mbreak
+
+   %25
+   fa4 r8 %%% ripresa  OOKK
+   R4.*18
+   r8 r do
+
+   %45
+   do do' do,
+   do do' do,
+   do do' do,
+
+   %48
+   do do' sib
+   do, si' sol
+   do, si' sol
+
+   %51
+   do, fa sol\mbreak
+   do,4 r8
+   R4.*14
+
+   %67
+   r8 r re
+   re re' re,
+   re re' re,
+
+   %70
+   re re' re,
+   re re' re,
+   la la' la,
+
+   %73
+   la la' la,
+   la la' la,
+   la la' la,
+
+   %76
+   la la' la,
+   re sol, la
+   re4 r8
+
+   %79
+   R4.*23
+   r4 fa8
+   fa fa, fa'
+
+   %104
+   fa fa, fa'
+   sib fa fa,
+   sib' fa fa,
+
+   %107
+   do'' do, fa
+   do' do, do'
+   fa, fa, fa'\mbreak
+
+   %110
+   do' do, do'
+   do do, do'
+   do do, do'
+
+   %113
+   do do, la
+   sib sib' sib,
+   do do' do,
+
+   %116
+   re re' re,
+   do do' do,
+   do do' do,
+
+   %119
+   do do' do,
+   do do' do,
+   do do' do,
+
+   %122
+   fa fa sol
+   mi mi sol
+   re re sol
+
+   %125
+   do, do sol'
+   fa sib, do\mbreak
+   fa4\fermata r8
+
+}
+
+IIIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s4.*6
+    <6 4>8 <5 3> s
+    s4.
+    <6 4>8 <5 3> s
+    s4.
+    <6 4>8 <5 3> s
+    <5- 4> <3> <6>
+    <5 4> <3 > <6>
+    <5 4> <3 > <6>
+    <6- 4> <[5] 3> s
+    <7>8 <6> s
+    <7 5> <6 4> s
+    <3> <9> s
+    <8> <7> s
+    s4.*27
+    <6 4>8 <5 3> s
+    <6 4> <5 3> s
+    s s <_!>
+    s4.*20
+    <6 4>8 <5 3> s
+    <6 4>8 <5 3> s
+    <_+>4.
+    <6 4>8 <5 3+> s
+    s4.
+    <6 4>8 <5 3+> s
+    s4.*27
+    s4.*6
+    <6 4>8 <5 3> s
+    s4.
+    <6 4>8 <5 3> s
+    s4.
+    <6 4>8 <5 3> s
+    <5- 4> <3> <6>
+    <5 4> <3 > <6>
+    <5 4> <3 > <6>
+    <6- 4> <[5] 3> s
+    <7>8 <6> s
+    <7 5> <6 4> s
+    <3> <9> s
+    <8> <7> s
+
+}
+
+forma = {
+
+    \time 3/8
+    \override Staff.TimeSignature.style = #'single-digit
+    \key fa\major
+    \tempo 4. = 70
+    \partial 8 s8
+    s4.*127
+    \bar"|."
+
+}
+
+
+IIIvlI = {
+    \global
+    %\notypeset
+    <<\IIIvlIn \forma>>
+
+}
+
+IIIvlII = {
+    \global
+    <<\IIIvlIIn \forma>>
+
+}
+
+IIIvla = {
+    \global
+    \clef alto
+    <<\IIIvlan \forma>>
+
+}
+
+IIIbc = {
+    \global
+    \clef bass
+    <<\IIIbcn \forma \IIIbfn>>
+    \typeset
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+    \terzine \con
+
+}
+
+IVvlIn = \relative do'' {
+
+    fa8 fa, do'
+    re\tr do fa
+    mi16 sol do, sol' sib, sol'
+
+    %4
+    la,8 sol fa
+    la'16 fa fa,8 la'
+    sol16 do, mi,8 sol'
+
+    %7
+    fa16 re si sol re[si]
+    do8 sol do'
+    \tuplet 3/2 { si16(do re) } do4
+
+    %10
+    \tuplet 3/2 { si16(do re) } do4
+    \tuplet 3/2 { re16(mi fa) } mi4
+    \tuplet 3/2 { fa16(sol la) } sol4\mbreak
+
+    %13
+    do16 sol mi do re si
+    do8 sol4
+    do16 sol mi do re si
+
+    %16
+    do4.
+    mi'8 do4\tr
+    re16 si sol re sol,8
+
+    %19
+    fa''8 re4\tr
+    mi16 do sol mi do8
+    sib''16 la sol fa mi re
+
+    %22
+    dod si la sol fa mi
+    fa re sol4
+    fa16 re re'4\mbreak
+
+    %25
+    dod16 la sol'4
+    fa16 re la'4
+    sol16 fa mi re mi dod
+
+    %28
+    re8\noBeam r32 fa,(sol la sib do re mi)
+    fa8 fa, do'
+    re\tr do fa
+
+    %31
+    mi16 sol do, sol' sib, sol'
+    la,8 sol fa
+    la16 do fa, do' mib, do'
+
+    %34
+    re,8 do sib
+    si'16 re sol, re' fa, re'\mbreak
+    mi,8 re do
+
+    %37
+    \tuplet 3/2 { mi'16(fa sol) } fa4
+    \tuplet 3/2 { sol16(la sib) } la4
+    do,16 sib la fa sol mi
+
+    %40
+    fa4.\fermata
+
+}
+
+IVvlIIn = \relative do'' {
+
+    la4 la8
+    sib\tr la la
+    sol4.
+
+    %4
+    fa8 sol la
+    fa' r16 la, do fa
+    mi8 r16 sol, do mi
+
+    %7
+    re si sol re si sol
+    sol4 mi''8
+    \tuplet 3/2 { re16 (mi fa) } mi4
+
+    %10
+    \tuplet 3/2 { re16 (mi fa) } mi4
+    \tuplet 3/2 { si16(do re) } do4
+    \tuplet 3/2 { re16(mi fa) } mi4\mbreak
+
+    %13
+    sol16 mi do mi fa re
+    mi8 mi,4
+    sol16 mi do mi fa re
+
+    %16
+    mi4.
+    sol'8 mi4\tr
+    re16 si sol re sol,8
+
+    %19
+    la''8 fa4\tr
+    mi16 do sol mi do8
+    sol''16 fa mi re dod si
+
+    %22
+    la sol fa mi re dod
+    re8 mi4
+    re8 fa'4\mbreak
+
+    %25
+    mi8 mi4
+    re8 fa4
+    sib8 dod,8. mi16
+
+    %28
+    fa8 r32 fa,(sol la sib do re mi)
+    fa8 la, la\noBeam
+    sib\tr la la
+
+    %31
+    sol4.
+    fa8 sol la
+    fa4.~
+
+    %34
+    fa
+    sol~\mbreak
+    sol
+
+    %37
+    \tuplet 3/2 { sol16(la sib) } la4
+    \tuplet 3/2 { mi'16(fa sol) } fa4
+    do16 sib la fa sol mi
+
+    %40
+    fa4.\fermata
+
+}
+
+IVvlan = \relative do' {
+
+    do4 fa8
+    fa4 do8
+    do sol' mi
+
+    %4
+    do4.
+    do
+    do4 mi8
+
+    %7
+    si4 sol8
+    mi4 sol'8
+    sol4 sol8
+
+    %10
+    sol4 sol8
+    sol4 mi8
+    la, do mi\mbreak
+
+    %13
+    mi8 sol[sol]
+    sol mi do
+    mi sol, sol
+
+    %16
+    sol4.
+    mi'16 re  mi fa sol mi
+    si4.
+
+    %19
+    si'16 la si do re si
+    sol4 sol,8
+    re'4 sol8
+
+    %22
+    mi la,4
+    la8 mi'16 re mi dod
+    la8 la'4\mbreak
+
+    %25
+    la8 dod4
+    la8 fa16 mi fa8
+    re la la'
+
+    %28
+    la4 r8
+    do,4 fa8
+    fa4 do8
+
+    %31
+    do sol' mi
+    do4.
+    la8 sib do
+
+    %34
+    re16 do re mib fa re
+    si8 do re\mbreak
+    mi16 re mi fa sol mi
+
+    %37
+    do4 do8
+    do4 do8
+    do4 do8
+
+    %40
+    la4.\fermata
+
+}
+
+IVbcn = \relative do {
+
+    fa16 mi fa sol la sol
+    fa mi fa sol la fa
+    do'8 mi, do
+
+    %4
+    fa do fa,
+    fa'16 sol la sol la fa
+    do sib do re mi do
+
+    %7
+    re8 sol sol,
+    do16 si do re mi do
+    sol8 do do,
+
+    %10
+    sol' do do,
+    sol' do do,
+    fa do' do,\mbreak
+
+    %13
+    do \once\stemDown sol'' sol,
+    do16 si do re mi re
+    do8 sol' sol,
+
+    %16
+    do,4.
+    do'16 si do re mi do
+    sol'8 sol, sol
+
+    %19
+    sol'16 fa sol la si sol
+    do8 do, do
+    sol4.
+
+    %22
+    la
+    re8 dod16 si dod la
+    re,8 re'16 dod re re,\mbreak
+
+    %25
+    la'8 la'16 sol la la,
+    re8 re'16 dod re re,
+    sol8 la la,
+
+    %28
+    re4 r8
+    fa16 mi fa sol la sol
+    fa mi fa sol la fa
+
+    %31
+    do'8 mi, do
+    fa do fa,
+    fa sol la
+
+    %34
+    sib16 la sib do re sib
+    sol8 la si\mbreak
+    do16 si do re mi re
+
+    %37
+    do8 fa fa,
+    do' fa fa,
+    fa do' do,
+
+    %40
+    fa4.\fermata
+
+}
+
+IVbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+
+
+}
+
+forma = {
+
+    \time 3/8
+    \override Staff.TimeSignature.style = #'single-digit
+    \key fa\major
+    \tempo 4. = 53
+    s4.*16
+    \bar":..:"%\break
+    s4.*24
+    \bar":|."
+
+}
+
+
+IVvlI = {
+    \global
+    %\notypeset
+    <<\IVvlIn \forma>>
+
+}
+
+IVvlII = {
+    \global
+    <<\IVvlIIn \forma>>
+
+}
+
+IVvla = {
+    \global
+    \clef alto
+    <<\IVvlan \forma>>
+
+}
+
+IVbc = {
+    \global
+    \clef bass
+    <<\IVbcn \forma \IVbfn>>
+    \typeset
+
+}
+#(set-global-staff-size 17.5)
+
+
+\pointAndClickOff
+
+\header {
+    subtitle = \markup"Concerto in Fa per Violino e Oboe [RV 543]"
+    composer = \markup {"A. Vivaldi (1678-1741)"}
+}
+
+\paper  {
+
+    systems-per-page = #4
+    print-first-page-number = ##t
+    first-page-number = #2
+
+}
+
+\markup \huge {[1.] All[egr]o}
+
+\score {
+
+    \new ChoirStaff <<
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \set Staff.instrumentName = \markup  \center-column{"Violi[no]"\vspace #-0.2"Oboe"}
+            \IvlI
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \set Staff.instrumentName = \markup  \center-column{"[Violino II]"}
+            \IvlII
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"viola"
+            \set Staff.instrumentName = \markup  \center-column{"[Viola]"}
+            \Ivla
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"cello"
+            \set Staff.instrumentName = \markup  \center-column{"[Basso]"}
+            \Ibc
+
+        >>
+    >>
+
+    \layout {
+
+        indent = 2\cm
+
+        \context	{
+            \Score
+            \override StaffGrouper.staff-staff-spacing.padding = #2
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+            \override BarLine #'hair-thickness = #1.2
+            \override SpacingSpanner.uniform-stretching = ##t
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak
+
+\markup \huge {[2.] All[egr]o alla Francese}
+
+\score {
+
+    \new ChoirStaff <<
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \IIvlI
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \IIvlII
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"viola"
+            \IIvla
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"cello"
+            \IIbc
+
+        >>
+    >>
+
+    \layout {
+
+        indent = 1\cm
+
+        \context	{
+            \Score
+            \override StaffGrouper.staff-staff-spacing.padding = #2
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+            \override BarLine #'hair-thickness = #1.2
+            \override SpacingSpanner.uniform-stretching = ##t
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak
+
+\markup \huge {[3.] All[egr]o}
+
+\score {
+
+    \new ChoirStaff <<
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \IIIvlI
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \IIIvlII
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"viola"
+            \IIIvla
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"cello"
+            \IIIbc
+
+        >>
+    >>
+
+    \layout {
+
+        indent = 1\cm
+
+        \context	{
+            \Score
+            \override StaffGrouper.staff-staff-spacing.padding = #2
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+            \override BarLine #'hair-thickness = #1.2
+            \override SpacingSpanner.uniform-stretching = ##t
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak
+
+\markup \huge {[4.] Minuet}
+
+\score {
+
+    \new ChoirStaff <<
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"oboe"
+            \IVvlI
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"violin"
+            \IVvlII
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"viola"
+            \IVvla
+        >>
+
+        \new Staff
+        <<
+            \set Staff.midiInstrument = #"cello"
+            \IVbc
+
+        >>
+    >>
+
+    \layout {
+
+        indent = 1\cm
+
+        \context	{
+            \Score
+            \override StaffGrouper.staff-staff-spacing.padding = #2
+            \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+            \override BarLine #'hair-thickness = #1.2
+            \override SpacingSpanner.uniform-stretching = ##t
+            skipBars = ##t
+        }
+
+    }
+
+    \midi {
+        \context {
+            \Voice
+            \remove "Dynamic_performer"
+        }
+    }
+
+}
+
+\pageBreak

@@ -1,0 +1,3818 @@
+\language "italiano"
+	%********************************** VARIABILI
+
+\version "2.24.0"
+
+MyCadenza = \relative do'' {
+
+\cadenzaOn
+
+    s4.^\markup\column\italic\center-align{"Cadenza"}
+    \bar "|"
+
+\cadenzaOff
+
+}
+
+salta = #(skip-of-length MyCadenza)
+
+acc = \once \override Flag.stroke-style = #"grace"
+
+su = \change Staff = up
+
+giu = \change Staff = down
+
+tasto = _\markup\italic"Tasto Solo"
+
+tr = \trill
+
+arco = _\markup \italic "con l'arco"
+
+noarco = _\markup \italic "senz'arco"
+
+pizz = _\markup \italic "pizz."
+
+soli = ^\markup \italic { Soli }
+
+dolce = _\markup \italic { dolce }
+
+solo = ^\markup \italic { Solo }
+
+tu = ^\markup \italic "Tutti"
+
+pad = \once \override TextScript.padding = #3
+
+padall = \override TextScript.padding = #1.2
+
+puntopz = -\parenthesize -.
+
+fermopz = -\parenthesize \fermata
+
+terzine = \tupletSpan 8
+
+terzinequarto = \tupletSpan 4
+
+sestine = \tupletSpan 2
+
+sestinequarto = \tupletSpan 4
+
+ds = _\markup \italic \center-align \center-column{"Da Capo""Dal Segno"}
+
+notypeset = \set Score.skipTypesetting = ##t
+
+typeset = \set Score.skipTypesetting = ##f
+
+senza = \override TupletNumber.transparent = ##t
+
+con = \override TupletNumber.transparent = ##f
+
+parentSlur =
+ -\tweak stencil
+ #(lambda (grob)
+   (let* ((cp (ly:grob-property grob 'control-points))
+          (lp (grob-interpret-markup grob (markup #:teeny "(")))
+          (rp (grob-interpret-markup grob (markup #:teeny ")"))))
+     (set! lp (ly:stencil-aligned-to lp Y CENTER))
+     (set! lp (ly:stencil-aligned-to lp X 0.2))
+     (set! lp (ly:stencil-translate lp (first cp)))
+     (set! rp (ly:stencil-aligned-to rp Y CENTER))
+     (set! rp (ly:stencil-aligned-to rp X -0.2))
+     (set! rp (ly:stencil-translate rp (last cp)))
+     (list-set! cp 0
+       (cons (cdr (ly:stencil-extent lp X))
+             (cdr (first cp))))
+     (list-set! cp (1- (length cp))
+       (cons (car (ly:stencil-extent rp X))
+             (cdr (last cp))))
+     (ly:grob-set-property! grob 'control-points cp)
+     (apply ly:stencil-add (list lp rp
+       (ly:slur::print grob)))))
+ \etc
+
+
+upl =
+#(let ((m (make-articulation 'stopped)))
+   (set! (ly:music-property m 'tweaks)
+         (acons 'font-size 3
+                (acons 'stencil (lambda (grob)
+                                  (grob-interpret-markup
+                                   grob
+                                   (make-draw-line-markup '(0 . 1))))
+                       (ly:music-property m 'tweaks))))
+   m)
+
+pratu = ^\markup \override #'(baseline-skip . 1) {
+    \halign #-0
+    \center-column {
+	  \musicglyph "scripts.turn"
+      \musicglyph "scripts.prall"}}
+mbreak = { }
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+IvlIn = \relative do'' {
+
+    la8-!
+    re-! re-! re-! re-! re8. dod32-+ si dod16(la) dod(mi)
+    fad8.-+ mi16 fad(sold) la(si) mi,8.-+ re16 mi(fad) sold(la)
+    re,8.-+ dod16 re (fad) mi(re) dod16.-+ re32 mi8-! r la\mbreak
+
+    %4
+    si si si si si la16.-+ sold32 la8 dod
+    red, mi r si' dod, dod4 la'8
+    la sold16.-+ fad32 sold16(la) si(dod) fad,8.-+ mi16 fad(sold) la(si)
+
+    %7
+    mi,8 la-! la-! la-! la sol!16.-+ fad32 sol8 sol\mbreak
+    sol fad16.-+ mi32 fad8-! fad-! fad mi16.-+ re32 mi16(fad) sol(si,)
+    la4 r8 re sol-! sol-! sol-! sol-!
+
+    %10
+    sol fad16.-+ mi32 fad16(re) fad(la) si8 si si si
+    mi, re16.-+ dod32 re16(la) re(fad)\mbreak mi(la,) mi'(sol) fad(re) fad(la)
+    dod,8 la'4 la la la8~
+
+    %13
+    la16 si sol fad sol4. fad16.-+ mi32 fad16(sol) la(si)
+    mi,8 mi mi mi mi8. fad32 mi fad8 si
+    fad4 mi8.-+ re16\mbreak re8 sold4 la16 sold
+
+    %16
+    la4. sol!8 fad2\p~
+    fad4 mi8.-+ re16 re2\fermata
+
+}
+
+IvlIIn = \relative do'' {
+
+    r8
+    r4 r8 re-! mi-! mi-! mi-! mi-!
+    mi re16.-+ dod32 re8 fad sold, la r mi'
+    fad, fad'4 sold8-+ la-! la-! la-! la-!
+
+    %4
+    la sold16.-+ fad32 sold16(mi) sold(si) dod,8.-+ si16  dod(red) mi(fad)
+    si,8._+ la16 si(dod) red(mi)\mbreak la,8._+ sold16 la(si) dod(red)
+    mi8 si4 sol'!8 lad, si r fad'
+
+    %7
+    sold,16._+ fad32 mi8~mi dod' si8._+ la16 si8 si'
+    la4. la,8 si-! si-! si-! mi-!
+    dod-! re-! re-! re-! re dod16.-+ si32 dod16(mi) dod(la)
+
+    %10
+    la'8-! la-! la-! la-! la sol16.-+ fad32 sol8 mi\mbreak
+    la, la'4 la la la8~
+    la16(mi) re(dod) re(la) re(fad) mi(la,) mi'(sol) fad(re) fad(la)
+
+    %13
+    si,4~si16 (si') sol(mi) dod8 re16.-+ dod32 re4~
+    re8 re re re dod8.-+ re32(dod) re4~
+    re8 si dod8.-+ re16 re2~
+
+    %16
+    re8 dod16.-+ si32 dod4 re2\p~
+    re4 dod8.-+ re16 re2\fermata
+
+}
+
+
+Ibcn = \relative do {
+
+    r8
+    re4 si la r8 la'
+    re re re re re dod16. si32 dod8 dod
+    dod si16. la32 si8 mi, la4 fad
+
+    %4
+    mi4 r8 mi la la la la
+    la sold16. fad32 sold8 sold\mbreak sold? fad16. mi32 fad8 si,
+    mi \clef tenor \key re\major mi' mi mi mi re16. dod32 re8 re
+
+    %7
+    re dod16. si32 dod8 fad red mi r mi
+    dod re\clef bass \key re\major r8 re, sol sol sol sol
+    sol fad16. mi32 fad8 si mi, mi, r8 la'
+
+    %10
+    re, re, r re' sol sol sol sol
+    sol fad16. mi32 fad8 re' dod la re re,
+    la la' fad re dod la re re,
+
+    %13
+    la' si' mi, sol la, la' re, fad
+    sol sol sold sold la la, re sold
+    la4 la, si2
+
+    %16
+    la r8 si' \p la sold
+    la2 re,\fermata
+
+}
+
+Ibfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s8 <7>8 <6+>4 <5 4>8 <3> s4
+    <9>8 <8> s4 <4+ 2>8 <6> s4
+    <4 2> s8 <_+> s <7>8 <6+>4
+    <5 4>8 <3> s4 <9>8 <8> s4
+    <4+ 2>8 <6> s4 <4 2> <5>8 <7 _+>
+    <4>8 <_+> s <_-> <4+ 2> <6> s <5>
+    <4+ 2> <6> s4 <6 5>8 <_!> s4
+    <6 5> s <7>8 <6> s4
+    <4 2>8 <6> s4 <7>8 <6> s <7>
+    <4> <3> s4 <9>8 <8> s <6>
+    <2> <6> s4 <6> s
+    s <6> <6> s
+    <9>8 <6> s <6> <7>4 s8 <6>
+    <6 5>1
+    <6 4>4 <5 3> <7> <6+>
+    <8> <7!> s8 <5> <6 4> s
+    <6 4>4 <5 3>
+
+}
+
+forma = {
+
+    \time 4/4
+    \key re\major
+    \tempo 4 = 40
+    \partial 8 s8
+    s1*17
+    \bar"|."
+
+}
+
+
+
+IvlI = {
+    \global
+    <<\IvlIn \forma>>
+
+}
+
+IvlII = {
+    \global
+    <<\IvlIIn \forma>>
+
+}
+
+Ibc = {
+    \global
+    \clef bass
+    <<\Ibcn \forma \Ibfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+IIvlIn = \relative do'' {
+
+    la'4
+    fad re dod
+    re8.-+[dod16 re8 fad mi sol]
+    fad8.-+[mi16 fad8 la dod, mi]
+
+    %4
+    re8.-+[dod16 re8 fad mi sol]
+    fad4-! sol-! la-!
+    si dod4.-+ si16 (dod)
+
+    %7
+    re8 la si la si fad\mbreak
+    sol mi la sol la mi
+    fad sold la4 la
+
+    %10
+    la sold2-+
+    la4 fad fad
+    mi mi2-+
+
+    %13
+    la,8 la' si la si fad
+    sol mi la sol la mi
+    fad re sol fad sol re
+
+    %16
+    mi dod fad mi fad dod\mbreak
+    re si mi re mi si
+    << <mi dod>4\\la,>> r mi'
+
+    %19
+    dod la sold
+    la8._+ sold16 la8[dod si re]
+    dod8.-+[si16 dod8 mi] sold, si
+
+    %22
+    la4-! r8 si la sold
+    la4-! r8 si la sold
+    la la' la,[sol' fad mi]
+
+    %25
+    fad la la,[sol' fad mi]\mbreak %% fine terzo sistema
+    fad si re,[la' sol fad]
+    sol si si,[la' sol fad]
+
+    %28
+    sol si la sol fad mi
+    red si mi si fad' si,
+    sol' si la sol fad mi
+
+    %31
+    red si fad' si, red si
+    mi si sol' si, mi si
+    fad' si, la' si, fad' si,
+
+    %34
+    sol' si la sol fad mi\mbreak
+    si si' la sol fad mi
+    red fad mi sol fad la
+
+    %37
+    sol8. fad16 fad4.-+ mi8
+    mi4 r si'
+    sol mi red
+
+    %40
+    mi8.-+[red16 mi8 sol fad la]
+    sol8.-+[fad16 sol8 si] red, fad
+    mi4 r r
+
+    %43
+    R2.
+    r8 si' do si do sol
+    la fad si la si fad\mbreak
+
+    %46
+    sold4 la la
+    la sold2-+
+    la4 dod? dod
+
+    %49
+    si si si
+    la fad fad
+    mi mi4.-+ re16 (mi)
+
+    %52
+    la,8 la' si la si fad
+    sol mi la sol la mi
+    fad re sol fad sol re
+
+    %55
+    mi dod fad mi fad dod
+    re [fad] fad, mi' re dod
+    re[fad]\mbreak fad, mi' re dod
+
+    %58
+    re fad mi re dod si
+    lad fad si fad dod' fad,
+    re' fad mi re dod si
+
+    %61
+    lad fad dod' fad, lad fad
+    si fad re' fad, si fad
+    dod' fad, mi' fad, dod' fad,
+
+    %64
+    re'8.-+[dod16 re8 fad] lad, dod
+    si8.[lad16 si8 re dod mi]\mbreak
+    re8.-+[dod16 re8 fad] lad, dod
+
+    %67
+    si8.-+[lad16 si8 re dod mi]
+    re4 mi fad
+    sol8 mi lad2-+
+
+    %70
+    si4 si, mi
+    re8. dod16 dod4.-+ si8
+    si fad' sol fad sol re
+
+    %73
+    mi dod fad mi fad dod
+    re4 si' si
+    si lad2-+
+
+    %76
+    si4 r r\mbreak
+    R2.
+    r8 si do si do sol
+
+    %79
+    la fad si la si fad
+    sol[si] si, la' sol fad
+    sol[si] si, la' sol fad
+
+    %82
+    sol4-! r8 si, la sold
+    la dod, si si' la sold
+    la la' la,[sol' fad mi]
+
+    %85
+    fad la la,[sol' fad mi]\mbreak
+    fad4 la dod,
+    re8.-+[dod16 re8 fad mi \parenthesize sol]
+
+    %88
+    fad8.-+[mi16 fad8 la] dod, mi
+    re8.-+[dod16 re8 fad mi sol]
+    fad la sol fad mi re
+
+    %91
+    dod la re la mi' la,
+    fad' la sol fad mi re
+    dod la mi' la, dod la
+
+    %94
+    re la fad' la, re la\mbreak
+    mi' la, sol' la, mi' la,
+    fad' la, la' la, fad' la,
+
+    %97
+    dod la mi' la, dod la
+    re la fad' la, re la
+    mi' la, sol' la, mi' la,
+
+    %100
+    fad' re' fad, re' fad, re'
+    mi, re' mi, dod' mi, dod'
+    re, dod' re, si' re, si'
+
+    %103
+    dod, si' dod, la' dod, la'\mbreak
+    si, la' si, sol' si, sol'
+    << <mi dod>4-!\\la,>> fad' fad
+
+    %106
+    mi mi, mi'
+    re8 mi fad mi fad dod
+    re si mi re mi si
+
+    %109
+    dod4 re re
+    re dod4.-+ (si16 dod)
+    re8 la' si la si fad
+
+    %112
+    sol mi la sol la mi
+    fad re sol fad sol re\mbreak  %% fine pagina
+    mi dod fad mi fad dod
+
+    %115
+    re si mi re mi si
+    dod[la'] la, sol' fad mi
+    fad[la] la, sol' fad mi
+
+    %118
+    fad re' re, do' si la
+    si re re, do' si la
+    si mi mi, re' dod! si
+
+    %121
+    dod mi mi, re' dod si\mbreak
+    dod fad fad, mi' re dod
+    re fad fad, mi' re dod
+
+    %124
+    re si re si re si
+    sol' si, sol' si, sol' si,
+    mid si mid si mid si
+
+    %127
+    fad' la, fad' la, fad' la,
+    red la red la red la
+    mi' sol, mi' sol, mi' sol,
+
+    %130
+    mi' fad, mi' fad, mi' fad,\mbreak
+    re' fad, re' fad, re' fad,
+    re' mi, re' mi, re' mi,
+
+    %133
+    do' mi, do' mi, do' mi,
+    do' re, do' re, do' re,
+    si' re, si' re, si' re,
+
+    %136
+    si' dod,! si' dod, si' dod,
+    la' dod,la' dod, la' dod,
+    la' si, la' si, la' si,\mbreak
+
+    %139
+    sol' si, sol' si, sol' si,
+    sol' la, sol' la, sol' la,
+    fad'8.-+[mi16 fad8 la dod, mi]
+
+    %142
+    re8.-+[dod16 re8 fad mi sol]
+    fad8.-+[mi16 fad8 la dod, mi]
+    re4-! r r
+
+    %145
+    R2.*3
+    r8 la' si la si fad\mbreak
+    sol mi la sol la mi
+
+    %150
+    fad[la] la, sol' fad mi
+    fad[la] la, sol' fad mi
+    fad re sol re la' re,
+
+    %153
+    si'4 dod2-+
+    re4 re, sol
+    fad8. mi16 mi2-+
+
+    %156
+    fad4 sol la
+    si dod2-+
+    re4 re, sol
+
+    %159
+    fad8. mi16 mi4.-+ re8
+    re4 r r\fermata
+
+}
+
+IIvlIIn = \relative do'' {
+
+    r4
+    r r la'4
+    fad re dod
+    re8.-+[dod16 re8 fad mi sol]
+
+    %4
+    fad8.-+[mi16 fad8 la dod, mi]
+    re la mi' la, fad' la,
+    sol'4 mi la
+
+    %7
+    fad re re
+    re dod2-+
+    re8 mi fad mi fad dod
+
+    %10
+    re si mi re mi si\mbreak
+    dod4 re re
+    re dod2-+
+
+    %13
+    re4 fad fad
+    mi mi, mi'
+    re re, re'
+
+    %16
+    dod dod, dod'
+    si si, mi'
+    dod la sold
+
+    %19
+    la8._+ sold16 la8 dod si re
+    dod8.-+[si16 dod8 mi] sold, si
+    la8._+  sold16 la8 dod si re\mbreak
+
+    %22
+    dod mi mi, re' dod si
+    dod mi mi, re' dod si
+    dod4-! r8 mi re dod
+
+    %25
+    re fad, mi mi' re dod
+    re fad fad, fad' mi red
+    mi sol, fad fad' mi red
+
+    %28
+    mi4 mi, do'
+    fad, sol si
+    si mi do
+
+    %31
+    fad, red' fad,\mbreak
+    sol mi' sol,
+    red' fad red
+
+    %34
+    mi mi, do'
+    fad,8 red' mi4 do
+    fad,8 red' si mi dod fad
+
+    %37
+    si,8 mi red4 si'
+    sol mi red
+    mi8.-+[red?16 mi8 sol fad la]
+
+    %40
+    sol8.-+[fad16 sol8 si red, fad]
+    mi8.-+[red16 mi8 sol fad la]
+    sol si do si do sol\mbreak
+
+    %43
+    la fad si la si fad
+    sol4 mi mi
+    mi red2-+
+
+    %46
+    mi4 dod dod
+    si si4.-+ la16 si
+    mi,8 mi' fad mi fad dod
+
+    %49
+    re si mi re mi si
+    dod4 re re
+    re dod2-+
+
+    %52
+    re4 fad fad
+    mi mi, mi'
+    re re, re'
+
+    %55
+    dod dod, dod'
+    si8 re, dod dod' si lad\mbreak
+    si re, dod dod' si lad
+
+    %58
+    si4 si, sol''
+    dod, re fad
+    fad, si sol'
+
+    %61
+    dod, mi dod
+    re fad re
+    lad dod lad
+
+    %64
+    si8.-+[lad16 si8 re dod mi]
+    re8.-+[dod16 re8 fad lad, dod]
+    si8.-+[lad16 si8 re dod mi]
+
+    %67
+    re8.-+[dod16 re8 fad lad, dod]
+    si fad dod' fad, re' fad,\mbreak
+    mi' sol dod, mi re dod
+
+    %70
+    re4 fad lad,
+    si lad4._+ si8
+    si4 r r
+
+    %73
+    R2.
+    r8 fad' sol fad sol re
+    mi dod fad mi fad dod
+
+    %76
+    red4 <<
+        {
+            mi sol
+            fad2.
+        }\\{
+            mi4 mi
+            mi red2^+
+        }
+    >>
+    mi4 sol sol
+
+    %79
+    fad fad4.-+ (mi16 fad)
+    mi8 sol, fad fad'mi red\mbreak
+    mi sol, fad fad' mi red
+
+    %82
+    r mi\f mi, re'? dod si
+    dod mi mi, re' dod si
+    dod4 r8 mi re dod
+
+    %85
+    re fad, mi mi' re dod
+    re8.-+[dod16 re8 fad mi sol]
+    fad4 la dod,
+
+    %88
+    re8.-+[dod16 re8 fad mi sol]
+    fad8.-+[mi16 fad8 la dod, mi]
+    re4 re, si'
+
+    %91
+    mi, fad la
+    la re si'\mbreak
+    mi, la mi
+
+    %94
+    fad la fad
+    dod mi dod
+    re fad re
+
+    %97
+    mi la mi
+    fad la fad
+    dod mi dod
+
+    %100
+    re fad si
+    r mi, la
+    r re, sol
+
+    %103
+    r dod, fad
+    r si, mi
+    la,8 la' si la si fad
+
+    %106
+    sol mi la sol la mi
+    fad sold la4 la
+    la sold4.-+ fad16 sold
+
+    %109
+    la4 fad fad\mbreak %% fine pagina
+    mi mi mi
+    la, fad fad'
+
+    %112
+    mi mi, mi'
+    re re, re'
+    dod dod, dod'
+
+    %115
+    si si, si'
+    mi, dod la
+    re dod la
+
+    %118
+    re fad re
+    sol fad re
+    sol sold mi
+
+    %121
+    la sold mi
+    la lad fad
+    si lad fad
+
+    %124
+    fad r r
+    re' r r
+    sold, r r
+
+    %127
+    la r r
+    fad' r r
+    mi r r\mbreak
+
+    %130
+    dod dod dod
+    si si si
+    si' si si
+
+    %133
+    la la, mi'
+    la la la
+    re, sol, re'
+
+    %136
+    sol sol sol
+    dod, fad, dod'
+    fad fad fad
+
+    %139
+    si, mi, si'
+    mi dod mi
+    re8.-+[dod16 re8 fad mi sol]
+
+    %142
+    fad8.[mi16 fad8 la dod, mi]
+    re8.-+[dod16 re8 fad mi sol]
+    fad la si la si fad
+
+    %145
+    sol mi la sol la mi\mbreak
+    fad sold la4 la
+    la sold4.-+ fad16 sold
+
+    %148
+    la4 fad fad
+    mi mi mi
+    re8 fad, mi mi' re dod
+
+    %151
+    re fad, mi mi' re dod
+    re4 mi fad
+    sol \grace fad8 mi2-+
+
+    %154
+    fad4 la dod,
+    re dod2-+
+    re8 la mi' la, fad 'la,
+
+    %157
+    sol'4\grace fad8 mi2-+
+    fad4 la dod,
+    re dod4.-+ re8
+
+    %160
+    re4 r r\fermata
+
+}
+
+
+IIbcn = \relative do {
+
+    r4
+    R2.
+    r4 r la'
+    re fad, la
+
+    %4
+    re, fad la
+    fad mi re
+    sol la la,
+
+    %7
+    re r r
+    R2.*3
+    r8 la' si la si fad
+
+    %12
+    sol mi la sol la mi
+    fad4 re' re
+    re dod dod
+
+    %15
+    dod si si\mbreak
+    si la la
+    la sold sold
+
+    %18
+    la8 si dod la mi' mi,
+    la si dod la mi' mi,
+    la4 dod, mi
+
+    %21
+    la, dod mi
+    la sold mi
+    la sold mi
+
+    %24
+    la dod, la
+    re dod la
+    re red si
+
+    %27
+    mi red si\mbreak
+    mi do' la
+    si sol red
+
+    %30
+    mi do' la
+    si si, si
+    si si si
+
+    %33
+    si si si
+    mi do' la
+    si do la
+
+    %36
+    si sol red
+    mi si' si,
+    mi8 fad sol mi si' si,
+
+    %39
+    mi fad sol mi si' si,
+    mi4 sol si
+    mi, sol si
+
+    %42
+    mi, \clef tenor \key re\major mi' mi
+    mi red red
+    mi r r
+
+    %45
+    R2.
+    r8 mi fad mi fad dod
+    re si mi re mi si
+
+    %48
+    dod4 la la
+    la sold2
+    \clef bass \key re\major r8 la si la si fad\mbreak
+
+    %51
+    sol mi la sol la mi
+    fad4 re' re
+    re dod dod
+
+    %54
+    dod si si
+    si lad lad
+    si lad fad
+
+    %57
+    si lad fad
+    si sol mi
+    fad re lad
+
+    %60
+    si sol' mi
+    fad fad fad
+    fad fad fad\mbreak
+
+    %63
+    fad fad fad
+    si, re fad
+    si re, fad
+
+    %66
+    si, re fad
+    si re, fad
+    re dod si
+
+    %69
+    mi fad fad,
+    si re' dod
+    si fad fad,
+
+    %72
+    si si' si
+    si lad2
+    si4 r r
+
+    %75
+    R2.
+    r8 si do si do sol\mbreak %% fine pagina
+    la fad si la si fad
+
+    %78
+    sol4\clef tenor \key re\major  mi' mi
+    mi red2
+    mi4 red si
+
+    %81
+    mi red si
+    mi \clef bass \key re\major sol, mi
+    la sold mi
+
+    %84
+    la dod la
+    re  dod la
+    re,8 mi fad re la' la,
+
+    %87
+    re mi fad re la' la,\mbreak
+    re4 fad la
+    re, fad la
+
+    %90
+    re, si' sol
+    la fad dod
+    re si' sol
+
+    %93
+    la la, la
+    la la la
+    la la la
+
+    %96
+    la la la
+    la la la
+    la la la
+
+    %99
+    la la la
+    re8 fad si la si fad\mbreak
+    sol mi la sol la mi
+
+    %102
+    fad re sol fad sol re
+    mi dod fad mi fad dod
+    re si mi re mi si
+
+    %105
+    dod4 re re'
+    re dod dod
+    re r r
+
+    %108
+    R2.
+    r8 la si la si fad
+    sol mi la sol la mi\mbreak
+
+    %111
+    fad4 re' re
+    re dod dod
+    dod si si
+
+    %114
+    si la la
+    la sold sold
+    la r r
+
+    %117
+    R2.*7
+    si,4 r r
+    si r r
+
+    %126
+    dod r r
+    fad r r
+    si, r r
+
+    %129
+    mi r r
+    lad fad lad
+    si re si\mbreak
+
+    %132
+    sold mi sold
+    la do la
+    fad re fad
+
+    %135
+    sol si sol
+    mi dod! mi
+    fad la fad
+
+    %138
+    re si re
+    mi sol mi
+    dod la dod
+
+    %141
+    re fad la
+    re, fad la
+    re, fad la\mbreak
+
+    %144
+    re,4 \clef tenor \key re\major re' re
+    re dod dod
+    re8 mi fad mi fad dod
+
+    %147
+    re si mi re mi si
+    dod4 re re
+    re dod dod
+
+    %150
+    re dod la
+    re dod la
+    \clef bass \key re\major fad mi re
+
+    %153
+    sol8 mi la sol fad mi\mbreak
+    re4 fad mi
+    re la' sol
+
+    %156
+    fad mi re
+    sol8 mi la sol fad mi
+    re4 fad mi
+
+    %159
+    re la' la,
+    re r r\fermata
+
+}
+
+IIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s4
+    s2.
+    s
+    s4 <6>2
+    s4 <6>2
+    <6>4 <6>2
+    s2.*5
+    s4 <5>2
+    <6 5>2.
+    <6>4 <6>2
+    <2>4 <6>2
+    <2>4 <6>2
+    <2>4 <6>2
+    <2>4 <6>2
+    s2 <_+>4
+    s2 <_+>4
+    s <6> <_+>
+    s2 <_+>4
+    s <6> s
+    s <6> s
+    s <6> s
+    s <6> s
+    s <6> s
+    s <6> s
+    s <6> <6>
+    <_+> <6> <6>
+    s <6> <6>
+    <_+>2.
+    <6 4>
+    <_+>4 <7> s
+    s <6> <6>
+    <_+> <6> <6>
+    <_+> <6> <6>
+    s <_+> s
+    s <6> <_+>
+    s <6> <_+>\mbreak
+    s <6> <_+>
+    s <6> <_+>
+    s <6-> s
+    <2> <6> s
+    s2.*2
+    s8 <_+> <5>2
+    <5>4 <_+>2
+    <6>4 <6>2
+    <2>4 <6>2
+    s4 <5>2\mbreak
+    <6 5>2.
+    s4 <6> s
+    <4 2> <6> s
+    <2> <6> s
+    <2> <6> s
+    s <6> s
+    s <6> s
+    s <6> <6>
+    <_+> <6> <6>
+    s <6> <6>
+    <_+> <7> s
+    <6 4>2.\mbreak
+    <_+>4 <7> s
+    s <6> <_+>
+    s <6> <_+>
+    s <6> <_+>
+    s <6> <_+>
+    <6> <6+> s
+    s <_+> s
+    s <6> <6+>
+    s <_+> s
+    s <6> s
+    <2> <6> s
+    s2.*2
+    s8 <_+> s2\mbreak
+    <6 5 _->4 <_+> s
+    <6> <6-> s
+    <2> <6> s
+    s <6> <_+>
+    s <6> <_+>
+    <_!> <6+> s
+    <_+>2.
+    s
+    s4 <6> s
+    s <6> s
+    s <6> s\mbreak
+    s <6> s
+    s <6> s
+    s <6> <6>
+    s <6> <6>
+    s <6> <6>
+    s2.
+    <6 4>
+    <7>
+    <6 4>
+    <5 3>
+    <6 4>
+    <5 3>4 <7>2
+    s4 <5>2\mbreak
+    <6 5>2.
+    <6 5>
+    <6 5>
+    <6 5>
+    <6>4 <6> s
+    <2> <6> s
+    s2.
+    s
+    s4 <5>2
+    <6 5>2.\mbreak
+    <6>4 <6> s
+    <2> <6> s
+    <2> <6> s
+    <2> <6> s
+    <2> <6> s
+    s2.*9
+    <6>2.
+    <7 _+>
+    s
+    <7 _+>
+    s
+    <6 5>
+    s\mbreak
+    <6 5>
+    <_->
+    <6 5->
+    s
+    <6+ 5>
+    s
+    <6 3>
+    <_!>
+    <6 5>
+    s4 <6> s
+    s <6> s
+    s <6> s
+    s <6> s
+    <2> <6> s
+    s8 <_+> <5>2
+    <6 5>4 <_+>2
+    <6>4 <6> s
+    <2> <6> s
+    s <6> s
+    s <6> s
+    <6> <6> s
+    <6 5>2.
+    s4 <6> <6>
+    s s <6 4>
+    <6> <6> s
+    <6 5>2.
+    s4 <6> <6>
+
+}
+
+forma = {
+
+    \time 3/4
+    \key re\major
+    \tempo 2. = 60
+    \partial 4 s4
+    s2.*160
+    \bar"|."
+
+}
+
+
+
+IIvlI = {
+    \global
+    <<\IIvlIn \forma>>
+
+}
+
+IIvlII = {
+    \global
+    <<\IIvlIIn \forma>>
+
+}
+
+IIbc = {
+    \global
+    \clef bass
+    <<\IIbcn \forma \IIbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+IIIvlIn = \relative do'' {
+
+    fad8
+    fad(re) si si'(sol) fad mi8.-+(red16) mi8~mi16 sol(fad mi re? dod)
+    re8(fad) si sol(mi) re re4-+ dod8~dod16\p sol'(fad mi re dod)
+    re8(fad) si sol(mi) re re4-+ dod8 fad4.\f~\mbreak
+
+    %4
+    fad8 mi16 red dod si la'8(sol) fad  sol4.(sold\tr)
+    la8. mi32(re dod si la16) sol'8(fad) mi fad4 la8 la4.~
+    la8(fad) sol sol4.~sol8(la,) sol' fad la, (fad')
+
+    %7
+    \grace re8 dod4. re\tr\mbreak mi8(la,) mi' fad(la,) fad'
+    sol4 la8 si dod4-+ re8. dod16(si la) si4 re,8
+    re4~re32 dod(si la) mi'4.-+ re~re16 fa(mi re do si)
+
+    %10
+    do4. fad!~\mbreak fad8(red) mi8~mi16 sol(fad  mi re? dod)
+    re4 fad8 fad4 fad8 sol4.~sol8(mi) dod
+    \appoggiatura si8 lad4. si-+ dod8(fad,) dod' re(fad,) red'
+
+    %13
+    \appoggiatura si8 lad4. si-+\mbreak dod8(fad,) dod' re(fad,) red'
+    mi4.~mi16 sol(fad mi re? dod) re8(fad) si si,4.~
+    si4 mi8 re8.(mi16) dod8 si(si') red, mi4.~
+
+    %16
+    mi4 sol8 fad4 si8\mbreak si,4-+~si32 la(sol fad) dod'4.-+
+    si4 fad'8 sol4.~sol8(fad) mid fad4.~
+    fad8 si red, mi2.(mid4._\fermata-+)
+
+    %19
+    fad2. r\fermata
+
+}
+
+IIIvlIIn = \relative do'' {
+
+    re8
+    re2. dod
+    fad,8(si) re~re(dod) si si4-+ lad8 lad\p(dod) fad,
+    fad(si) re~ re(dod) si si4-+ lad8 lad4\f lad8
+
+    %4
+    si4 si8 <<
+        {
+            fad'4.~fad8(red) mi~mi4.
+            \grace re8 mi4
+        }\\{
+            s4. s
+            si8 dod re?
+            dod4.
+        }
+    >> mi4.~mi8 re16(dod re8) re,(la') do
+    si4 si'8~si(sol) mi \grace re8 dod4. re-+\mbreak
+
+    %7
+    mi8(la,) mi' fad(la,) fad' \grace re8 dod4. re-+
+    mi4 fad8 sol \grace fad mi4-+ fad8(la) re, re re, si'
+    fad(la) re dod4.-+ si si'~
+
+    %10
+    si8 sold la~la16 do(si la sol? fad) sol4. dod,!~
+    dod8 lad si si'4.~si8(sol) mi dod4.~
+    dod8(fad,) dod' re(fad,) re' \grace si lad4. si-+\mbreak
+
+    %13
+    dod8(fad,) dod' re(fad,) re' \grace si lad4. si-+~
+    si4 si8 dod4 fad,8 fad4.~fad8(re') fad
+    sol,4 si8 si4 lad8 si4.~si8(mi) dod
+
+    %16
+    \grace si lad4. si4 sol'8 re(fad,) si \grace si lad4._+
+    si4-! re8-! re4-! re8-! dod4 dod,8 dod4 dod'8
+    si4 si,8 si4 si'8 si2.\fermata
+
+    %19
+    lad r\fermata
+
+}
+
+
+IIIbcn = \relative do {
+    si'8
+    si4 si,8 si4 si'8 si4 lad8 lad4 lad8
+    si4 si8 mi,4 mid8 fad4 fad8 fad4\p lad,8
+    si4 si8 mi4 mid8 fad4 fad8 fad4\f mid8
+
+    %4
+    red4 red8 red4 red8 mi?4 mi8 mi4 mi8
+    la,4 la8 la4 dod8 re4 re8 fad4 fad8\mbreak
+    sol4 sol8 mi4 mi8 la,4 la8 la4 la8
+
+    %7
+    la2.~la4. r4 re'8
+    sol,4 fad8 mi4 la8 re,4 fad8 sol4 sold8
+    la4 la8 la4 la8 la4 sold8 sold4 sold8
+
+    %10
+    la4 la8 red,4 red8 mi4 mi8 lad,4 lad8
+    si4 si8 red4 red8\mbreak mi4 mi8 mi4 mid8
+    fad2.~fad~
+
+    %13
+    fad~fad4 fad8 si4 la8
+    sol4 sol8 lad,4 lad8 si4 si8 re4 re8
+    mi4 mi8 fad4 fad8 sol4 sol8 sol4 sol8
+
+    %16
+    fad4 mi8 re4 mi8 fad4 fad8 fad,4 fad8\mbreak
+    si4 si'8 si4 si8 lad4 lad8 la4 la8
+    sold4 sold8 sold4 sold8 sol2.\fermata
+
+    %19
+    fad r\fermata
+
+}
+
+IIIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s4. <6>4 <5>8 <2>4 <5->8 s4 <6>8
+    s4 s8 <7> <6> <7> <6 4>4 <_+>8 s4.
+    s <7>8 <6> <7 5-> <6 4>4 <_+>8 s4 <6 4>8
+    <6>4. <5-> <9>4 <8>8 <_+>4 <7>8
+    s4. <7> <9>4 <8>8 <6 4>4 <5->8\mbreak
+    <9>4 <8>8 s4. <7> <6 4>
+    <5 3> <6 4> <5 3> s
+    <6>4 <6>8 <7>4. s4 <6>8 s4 <5->8
+    <6 4>4. <5 3> <4 2>4 <5->8 s4.
+    <_- 9>8 <_- 8>8 s <5->4. <9>8 <8> s <5->4.
+    <9> <6>\mbreak <9>4 <8>8 <6>4.
+    <5 3+> <6 4> <5 3+> <6 4>
+    <5 3+> <6 4> <_+> s4 <6 4+>8
+    <6>4.
+    <6 5> <9>4 <8>8 <6>4.
+    s <6 4>4 <_+>8 <7>4. <6>
+    <7 _+>4 <6 4+>8 <6>4. <6 4> <_+>\mbreak
+    s4. <6> <7> <6>
+    <7> <6> s <6+>
+    <_+>
+
+}
+
+forma = {
+
+    \time 12/8
+    \key re\major
+    \tempo 4. = 45
+    \partial 8 s8
+    s1.*19
+    \bar"|."
+
+}
+
+
+
+IIIvlI = {
+    \global
+    <<\IIIvlIn \forma>>
+
+}
+
+IIIvlII = {
+    \global
+    <<\IIIvlIIn \forma>>
+
+}
+
+IIIbc = {
+    \global
+    \clef bass
+    <<\IIIbcn \forma \IIIbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+IVvlIn = \relative do'' {
+
+    fad4 la
+    re,2-+ fad4 la
+    re,2-+ la'4 re
+    si sol mi la
+
+    %4
+    re,2-+ la'4 re
+    si sol mi dod'
+    re re, fad\p la\mbreak
+
+    %7
+    re,2-+ fad4 la
+    re,2-+ la'4 re
+    si sol mi la
+
+    %10
+    re,2-+ la'4 re
+    si sol mi dod'
+    re re, fad8\f la re, fad\mbreak
+
+    %13
+    mi la dod, mi re si' si, re
+    dod la mi' la, fad' la re, fad
+    mi la dod, mi re si' si, re
+
+    %16
+    dod la mi' la, fad' la, sold' la,
+    la' la, mi' la,\mbreak fad' la, sold' la,
+    la' la, re si \grace dod si4.-+ la8
+
+    %19
+    la4-! mi'8 la, fad' la, sold' la,
+    la' la, mi' la, fad' la, sold' la,
+    la' la, si' la, dod' la, re' la,
+
+    %22
+    re'4 la si, sold'
+    la la,8 si\mbreak si4.-+ la8
+    la2-! dod4 mi
+
+    %25
+    la,2-+ dod4 mi
+    la,2-+ fad'4 la
+    re,2-+ fad4 la
+
+    %28
+    re,2-+ si'8 re sol, si
+    la re fad, la\mbreak sol si mi, sol
+    fad la re,4-! si'8 re sol, si
+
+    %31
+    la re fad, la sol si mi, sol
+    fad la re, fad mi sol dod, mi
+    re fad si, re dod mi lad, dod\mbreak
+
+    %34
+    si fad re' fad, dod' fad, mi' fad,
+    re' fad, si fad dod' fad, mi' fad,
+    red' si mi si fad' si, la' si,
+
+    %37
+    sol' si, mi si fad' si, la' si,
+    sold' mi la mi\mbreak si' mi, re' mi,
+    dod' mi, la mi si' mi, re' mi,
+
+    %40
+    dod' la re la si re sol, si
+    la re fad, la sol si mi, si'
+    fad la, re la mi'  la, sol' la,
+
+    %43
+    fad' la, re la\mbreak mi' la, sol' la,
+    <fad' la, re,>2 re'4 la
+    re,2-+ re'4 la
+
+    %46
+    re,2-+ la'4 re
+    si sol mi dod'
+    re re, la' re
+
+    %49
+    si sol mi dod'
+    re8 re, la' re, si' re, dod' re,\mbreak
+    re' re, la' re, si' re, dod' re,
+
+    %52
+    re'4 re, mi4.-+ re16(mi)
+    fad8 la re, mi mi4.-+ re16(mi)
+    re8 re, la' re, si' re, dod' re,
+
+    %55
+    re' re, la'' la, si' la, dod' la,\mbreak
+    re'4 re,  mi4.-+ re16(mi)
+    fad8 la re, mi mi4.-+ re8
+
+    %58
+    re2-!_\fermata
+
+}
+
+IVvlIIn = \relative do'' {
+
+    fad4 la
+    re,2-+ fad4 la
+    re,2-+ la'4 re
+    si sol mi la
+
+    %4
+    re,2-+ la'4 re
+    si sol mi dod'
+    re re, re,8\p dod re mi
+
+    %7
+    fad sol fad mi re dod re mi
+    fad sol fad mi re mi fad re
+    sol fad sol mi la sol la la,
+
+    %10
+    si si' la sol fad mi fad re\mbreak
+    sol fad sol mi la4 la,
+    re2-! fad'8\f la re, fad
+
+    %13
+    mi la dod, mi re si' si, re
+    dod la mi' la, fad' la re, fad
+    mi la dod, mi re si' si, re
+
+    %16
+    dod la mi' la, fad' la, sold' la,
+    la' la, mi' la, fad' la, sold' la,
+    la' la, re si \grace dod si4.-+ la8
+
+    %19
+    la4-! dod, re mi\mbreak
+    fad dod re mi
+    fad sold la si
+
+    %22
+    dod-! la' si, sold'
+    la la,8 si si4.-+ la8
+    la2 dod4 mi
+
+    %25
+    la,2_+ dod4 mi
+    la,2_+ fad'4 la
+    re,2-+ fad4 la
+
+    %28
+    re,2-+ si'8 re sol, si
+    la re fad, la sol si mi, sol
+    fad la si,4-! si'8 re sol, si
+
+    %31
+    la re fad, la\mbreak sol si mi, sol
+    fad la re, fad mi sol dod, mi
+    re fad si, re dod mi lad, dod
+
+    %34
+    si fad re' fad, dod' fad, mi' fad,
+    re' fad, si fad dod' fad, mi' fad,
+    red' si mi si fad' si, la' si,
+
+    %37
+    sol' si, mi si fad' si, la' si,
+    sold' mi la mi si' mi, re' mi,
+    dod' mi, la mi\mbreak si' mi, re' mi,
+
+    %40
+    dod' la re la si re sol, si
+    la re fad, la sol si mi, sol
+    fad la, re la mi' la, sol' la,
+
+    %43
+    fad' la, re la mi' la,  sol' la,
+    <fad' la, re,>2 re'4 la
+    re,2-+ re'4 la
+
+    %46
+    re,2-+ la'4 re
+    si sol mi dod'
+    re re, la' re
+
+    %49
+    si sol mi la
+    <fad la, re,>4 fad,-! sol-! la-!\mbreak
+    si fad sol la
+
+    %52
+    si fad sol la
+    re,8 la'' re, mi mi4.-+ re16(mi)
+    re8 re, la' re, si' re, dod' re,
+
+    %55
+    re' re, la'' la, si' la, dod' la,\mbreak
+    re'4 re,  mi4.-+ re16(mi)
+    fad8 la re, mi mi4.-+ re8
+
+    %58
+    re2-!_\fermata
+
+}
+
+
+IVbcn = \relative do {
+
+    re8 dod re mi
+    fad sol fad mi re dod re mi
+    fad mi fad mi re mi fad re
+    sol fad sol mi la sol la la,
+
+    %4
+    si si' la sol fad mi fad re
+    sol fad sol mi la4 la,
+    re2 r
+
+    %7
+    R1*5
+    r2 re'4\f si
+    dod la si mi,
+
+    %14
+    la dod, re si'
+    dod, la' si, sold'
+    la dod, re mi
+
+    %17
+    fad dod re mi
+    fad re mi mi,
+    la2 r
+
+    %20
+    R1*2
+    la'8 si dod re mi4 mi,
+    la dod,8 re mi4 mi,
+
+    %24
+    la2-! la'8 sold la si
+    dod re dod si la si la sol?
+    fad sol fad mi re dod re mi
+
+    %27
+    fad sol fad mi re dod re mi
+    fad re mi fad sol4 mi'
+    fad, re' mi, dod'
+
+    %30
+    re fad, sol mi'
+    fad, re' mi, dod'\mbreak
+    re, si' dod, lad'
+
+    %33
+    si re, mi fad
+    re si' lad fad
+    si re lad fad
+
+    %36
+    si sol red si
+    mi sol red si
+    mi dod' sold mi
+
+    %39
+    la dod sold mi
+    la fad sol? mi'
+    fad, re' mi, dod'
+
+    %42
+    re, fad\mbreak dod la
+    re fad dod la
+    re8 dod\f re mi fad sol fad mi
+
+    %45
+    re dod re mi fad sol fad mi
+    re dod re mi fad mi fad re
+    sol fad sol mi la sol la la,
+
+    %48
+    si si' la sol fad mi fad re
+    sol fad sol mi\mbreak la sol la la,
+    re4-! r r2
+
+    %51
+    R1*2
+    r4 si' sol la
+    re, fad sol la
+
+    %55
+    si fad sol la
+    si fad sol la
+    re, si' sol la
+
+    %58
+    re,2\fermata
+
+}
+
+IVbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s2
+    <6>1
+    <6>
+    s
+    s2 <6>
+    <6 5>1
+    s1*7
+    <6>2 <7>4 <_+>
+    s <6> s2
+    s1
+    s4 <6> s <_+>
+    <5> <6> s <_+>
+    s2 <_+>
+    s1*3
+    s4 <6> <_+> s
+    s <6> <_+> s
+    s1
+    <6>
+    <6>
+    <6>
+    s
+    <6>2 <6> s4 <6> s2
+    <6> <6>
+    <5>4 <5> <6+> s
+    s <6> <6> <_+>
+    <6> s <6> <7>
+    s <6> <6> <7>
+    <_+> <6> <6> <7>
+    s2 <6>4 <7 _+>
+    <_+> <6> <6> <7 _+>
+    s <6> <6> <7>
+    s <6> s2
+    <6>1
+    s4 <6> <6> <7>
+    s <6> <6> <7>
+    s2 <6>
+    s <6>
+    s <6>
+    <6 5>1
+    <5>2 <6>
+    <6 5>1
+    s1*3
+    s4 <5> <6 5> s
+    s <6> <6 5> s
+    <5> <6> <6 5> s
+    <5> <6> <6 5> s
+    s <5> <6 5> s
+
+}
+
+forma = {
+
+    \time 2/2
+    \key re\major
+    \tempo 1 = 55
+    \partial 2 s2
+    s1*23
+    s2 \bar":..:"\break s
+    s1*33
+    s2
+    \bar":|."
+
+}
+
+
+
+IVvlI = {
+    \global
+    <<\IVvlIn \forma>>
+
+}
+
+IVvlII = {
+    \global
+    <<\IVvlIIn \forma>>
+
+}
+
+IVbc = {
+    \global
+    \clef bass
+    <<\IVbcn \forma \IVbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+VvlIn = \relative do'' {
+
+    mi4
+    \grace mi8 red2-+ mi4
+    si2 sol'4
+    \grace sol8 fad2-+ sol4
+
+    %4
+    \grace mi8 red2-+ mi4
+    fad(sol) la
+    sol fad mi\mbreak
+
+    %7
+    do'2.~
+    do4 si lad
+    si2.~
+
+    %10
+    si4 la sold
+    la2.~
+    la4 sol? fad
+
+    %13
+    sol2.~
+    sol4 fad mi
+    re8(dod) re (mi) fad(re)
+
+    %16
+    dod(si) dod(re) mi(fad)\mbreak
+    si,(lad) si(re) dod(si)
+    \grace si lad4._+ sol'8 fad(mi)
+
+    %19
+    re(fad) si2~
+    si4 lad2-+
+    si\fermata sol4
+
+    %22
+    \grace sol8 fad2-+ sol4
+    re2 si'4
+    \grace si8 la2 sol4
+
+    %25
+    \grace sol8 fad2-+ sol4\mbreak
+    la8.(si16) do4 si
+    \grace sol8 fad2 sol4
+
+    %28
+    la2 si4-+
+    do2.~
+    do4 si la
+
+    %31
+    sol8(si) la(sol) fad(mi)
+    do'2.~
+    do4 si lad
+
+    %34
+    si2.~
+    si4 la sold
+    la2.~
+
+    %37
+    la4 sol fad\mbreak
+    sol8(fad) sol(la) si(sol)
+    fad(mi) fad(sol) la(si)
+
+    %40
+    mi,(red) mi(sol) fad(mi)
+    \grace mi red2-+ mi4
+    si'(fad) sol
+
+    %43
+    \grace mi8 red2-+ mi4
+    fad8(sol) la(do) si(la)
+    sol si mi,2~
+
+    %46
+    mi4 red2-+
+    mi4 fad sold-+
+    la2.~
+
+    %49
+    la2\fermata sol4\p~
+    sol fad2-+
+    mi r4\fermata
+
+}
+
+VvlIIn = \relative do'' {
+
+    r4
+    R2.
+    r4 r mi
+    \grace mi8 red2-+ mi4
+
+    %4
+    \grace sol8 fad2-+ sol4
+    la(si) do
+    si2.~
+
+    %7
+    si4 la sol
+    fad2.~
+    fad4 mi red
+
+    %10
+    mi2.~
+    mi4 red dod
+    red2.
+
+    %13
+    mi~\mbreak
+    mi4 re? dod
+    fad,2.
+
+    %16
+    fad'~
+    fad4 mi2~
+    mi8 sol fad(mi) re (dod)
+
+    %19
+    re4. red8 mi(fad)
+    sol (mi) \grace re8 dod2-+
+    si\fermata r4
+
+    %22
+    r r sol'
+    \grace sol8 fad2-+ sol4
+    re2 si'4
+
+    %25
+    \grace si8 la2 sol4
+    \grace sol8 fad2-+ sol4
+    \grace si8 la2 si4
+
+    %28
+    \grace sol8 fad2-+ sold4
+    la2.~\mbreak
+    la4 sol fad
+
+    %31
+    sol2.~
+    sol8 si la(sol) fad(mi)
+    fad2.~
+
+    %34
+    fad4 mi red
+    mi2.~
+    mi4 red dod
+
+    %37
+    red2.
+    mi4 si2
+    si'2.~
+
+    %40
+    si4 la2-+
+    si4(fad) sol
+    \grace mi8 red2-+ mi4
+
+    %43
+    si' fad sol
+    red8(mi) fad(red) mi(fad)\mbreak
+    sol4. sold8 la(si)
+
+    %46
+    do la \grace sol8 fad2-+
+    mi2.~
+    mi4 red dod
+
+    %49
+    red2\fermata mi4\p~
+    mi red2-+
+    mi r4\fermata
+
+}
+
+
+Vbcn = \relative do {
+
+    r4
+    r r mi'
+    \grace mi8 red2-+ mi4
+    si2.~
+
+    %4
+    si4 la sol
+    fad mi red
+    mi fad sol
+
+    %7
+    la si do
+    re2.~
+    re4 do si\mbreak
+
+    %10
+    do2.~
+    do4 si la
+    si2.
+
+    %13
+    mi,4 do' si
+    lad2.
+    si4 si, si'
+
+    %16
+    la la, la'
+    sol sol, sol'
+    fad2.
+
+    %19
+    si8(la) sol(fad) mi(red)
+    mi4 fad fad,
+    si2\fermata r4
+
+    %22
+    R2.
+    r4 r sol'\mbreak
+    \grace sol8 fad2 sol4
+
+    %25
+    re2 si'4
+    la2 sol4
+    re'2.~
+
+    %28
+    re4 do si
+    la8(si) la(sol) fad(mi)
+    red2.
+
+    %31
+    mi4 fad sol
+    la si do
+    re, mi fad
+
+    %34
+    sol la si
+    do, re mi
+    fad sol la
+
+    %37
+    si,2.\mbreak
+    mi4 mi' mi,
+    re re' re,
+
+    %40
+    do do' do,
+    si2.~
+    si~
+
+    %43
+    si~
+    si4. la'8 sol(fad)
+    mi(re') do(si) la(sold)
+
+    %46
+    la do si4 si,
+    do2.~
+    do4 si la
+
+    %49
+    si2\fermata mi4\p~
+    mi si2
+    mi, r4 \fermata
+
+}
+
+Vbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s4
+    s2.
+    <6>
+    <5 3+>2 <6 4>4
+    <_+> <6 4+> <6>
+    <6+> <5> <7 5>
+    s2.
+    <9>
+    <7>4 <6> <5+>
+    <6> <3> <_+>\mbreak
+    <7> <6> <5+>
+    <6> <_+> <_+>
+    <7> <6> <5>
+    s <5> <6 4>
+    <7>2.
+    s
+    <6>
+    <7>4 <6> s
+    <7 _+>2.
+    s4 s8 <6+> s <6>
+    s4 <_+> s
+    s2.*3
+    <6>2.
+    s2 <6>4
+    <6>2.
+    <5 3>2 <6 4>4
+    <5> <6 4> <6+>
+    s2.
+    <7>
+    s
+    <7>
+    <7>2 <_+>4
+    <7>2 <_+>4
+    <7>2 <_+>4
+    s2 <_+>4
+    <7 _+> <6> <5>\mbreak
+    s2.
+    <6>
+    s4 <6>2
+    <5 3+>2 <6 4>4
+    <5 3+>2 <6 4>4
+    <5 3+>2 <6 4>4
+    <_+>4. <6 4+>8 <6> <6+>
+    s4 s8 <6+> s <6>
+    s <6> <_+>2
+    <7>4 <6> <5+>
+    <6> <_+> <_+>
+    <7+>2.
+    s4 <_+>
+
+}
+
+forma = {
+
+    \time 3/4
+    \key mi\minor
+    \tempo 2 = 60
+    \partial 4 s4
+    s2.*51
+    \bar"|."
+
+}
+
+
+
+VvlI = {
+    \global
+    <<\VvlIn \forma>>
+
+}
+
+VvlII = {
+    \global
+    <<\VvlIIn \forma>>
+
+}
+
+Vbc = {
+    \global
+    \clef bass
+    <<\Vbcn \forma \Vbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+VIvlIn = \relative do'' {
+
+    si'16 la
+    sol8 si si, mi \grace mi red4 r8 si'16 si,
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol8 mi sol'4~\mbreak
+
+    %4
+    sol fad2 mi4~
+    mi red-+ mi16-! si do si fad si fad si
+    sol si do si fad si fad si sol si mi sol la, re fad la
+
+    %7
+    si, re mi re la re la re\mbreak si re mi re la re la re
+    si sol' si, sol' si, sol' si, sol' si, sol' si, sol' si, sol' si, sol'
+    mi la, fad' la, sol' la, fad' la, mi' la, fad' la, sol' la, mi' la,
+
+    %10
+    fad' la, fad' la, fad' la, fad' la,\mbreak fad' re' fad, re' fad, re' fad, re'
+    si mi, do' mi, re' mi, do' mi, si' mi, do' mi, re' mi, si' mi,
+    do' mi, do' mi, do' mi, do' mi, la re, si' re, do' re, la' re,
+
+    %13
+    si' re, do' re, re' re, si' re,\mbreak fad re sol re la' re, fad re
+    sol re la' re, si' re, sol re la' re, si' re, do' re, la' re,
+    si' do re8 re, sol fad16 sol la8 r re16 do
+
+    %16
+    si8 re re, sol \grace sol fad4 r8 re'16 re,\mbreak
+    mi16.-+(re32 mi16) do' do, mi re do re16.-+(do32 re16) si' si, re do si
+    do16.-+(si32 do16) la' la, do si la si8 sol-! si'4~
+
+    %19
+    si la~la sol~
+    sol fad-+ sol16 si (la16.-+ sol32) \once\stemUp sol,16 si' (la16.-+ sol32)\mbreak
+    \once\stemUp sol,16 si' (la16.-+ sol32) \once\stemUp sol,16 si' (la16.-+ sol32) mi8 do' la re
+
+    %22
+    si16 sol si do re8 re, si'4 la-+
+    sol16\p si (la16.-+ sol32) \once\stemUp sol,16 si' (la16.-+ sol32) \once\stemUp sol,16 si' (la16.-+ sol32) \once\stemUp sol,16 si' (la16.-+ sol32)
+    do,8-!\f do' la re si16 sol si do re8 re,\mbreak
+
+    %25
+    si'4 la-+ sol r8 si4 la-+ sol r8 si16 la
+    sold8 la mi sold la16 si do8 r la16 sol?
+    fad8 la re, fad sol16 la si8 r si16 si,
+
+    %28
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol16.-+(fad32 sol16) mi' mi, sol fad mi
+    fad16._+(mi32 fad16) la red, fad mi red mi4-! r
+
+    %31
+    r16 si' do si fad si fad si sol4-! r\mbreak
+    r16 mi' fa mi si mi si mi do si' la sold la do, la' do,
+    si la' sol fad sol si, sol' si, la sol' fad mi fad la, fad' la,
+
+    %34
+    sol si sol si sol si sol si <<{si mi si mi si mi si mi}\\{sol, s sol s sol s sol s}>>
+    dod fad, re' fad, mi' fad, re' fad, dod' fad, re' fad, mi' fad, dod' fad,
+    re' fad re fad re fad re fad re si' re, si' re, si' re, si'
+
+    %27
+    <<{mi, s mi s mi s mi s mi s mi s mi s mi s}\\{si mi, do' mi, re' mi, do' mi, si' mi, do' mi, re' mi, si' mi,}>>\mbreak
+    do' mi do mi do mi do mi do la' do, la' do, la' do, la'
+    fad si, sol' si, la' si, sol' si, fad' si, sol' si, la' si, fad' si,
+
+    %40
+    sol' si, la' si, si' si, sol' si, red si mi si fad' si, red si
+    mi si fad' si, sol' si, mi si\mbreak fad' si, sol' si, la' si, sol' si,
+    sol'8 si si, mi red16 mi fad8 r si16 la
+
+    %43
+    sol8 si si, mi \grace mi red4 r8 si'16 si,
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol8 mi-! mi'[sol]
+
+    %46
+    la do-+ re re, sol si-+ do do,
+    fad la-+ si si, <mi si mi,>4-! r
+    r16 si do si fad si fad si <<{si mi si mi si mi si mi}\\{sol, s sol s sol s sol s}>>
+
+    %49
+    <<{si mi si mi si mi si mi}\\{sold, s sold s sold s sold s}>> <<{do mi do mi do mi do mi}\\{la, s la s la s la s}>>
+    <<{si mi si mi si mi si mi}\\{sold, s sold s sold s sold s}>> <<{do mi do mi do mi do mi}\\{la, s la s la s la s}>>
+
+    %51
+    <<{mi' s mi s mi s mi s fad s fad s fad s fad s}\\{dod la dod la dod la dod  la re la re la re la re la}>>\mbreak
+    <<{mi' s mi s mi s mi s fad s fad s fad s fad s}\\{dod la dod la dod la dod  la re la re la re la re la}>>
+    <<{fad' s fad s fad s fad s sol s sol s sol s sol s}\\{red si red si red si red si mi si mi si mi si mi si}>>
+
+    %54
+    <<{fad' s fad s fad s fad s sol s sol s sol s sol s}\\{red si red si red si red si mi si mi si mi si mi si}>>
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol8 si sol'4~\mbreak
+
+    %57
+    sol fad2 mi4~
+    mi red-+ mi16 sol(fad16.-+ mi32) \once\stemUp mi,16 sol'(fad16.-+ mi32) \once\stemUp mi,16 sol'(fad16.-+ mi32)\mbreak
+    \once\stemUp mi,16 sol'(fad16.-+ mi32) do8\f la' fad si
+
+    %60
+    sol16 mi sol la si8 mi, sol4 fad-+
+    mi16\p sol(fad16.-+ mi32) \once\stemUp mi,16 sol'(fad16.-+ mi32) \once\stemUp mi,16 sol'(fad16.-+ mi32)\mbreak \once\stemUp mi,16 sol'(fad16.-+ mi32)
+    do8\f la' fad si\mbreak sol16 mi sol la si8 si,
+
+    %63
+    sol'4 fad-+ mi-! r8 si'16 la sol4 fad-+ mi-! r\fermata
+
+}
+
+VIvlIIn = \relative do'' {
+
+    r8
+    r2 r8 fad sol4~
+    sol fad2 mi4~
+    mi red-+ mi8 si-! r si'16 si,
+
+    %4
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol8 mi-! r red'
+    mi mi, r red'\mbreak mi mi, re'? re,
+
+    %7
+    sol,4 r8 fad'' sol sol, r fad'
+    sol,16 si sol si sol si sol si sol si sol si sol si sol si
+    dod8 re mi re dod re mi dod
+
+    %10
+    re16 fad, re' fad, re' fad, re' fad, re' si' re, si' re, si' re, si'
+    sold8 la si la\mbreak sold la si sold
+    la16 do, la' do, la' do, la' do, fad8-!  sol-! la-! fad-!
+
+    %13
+    sol la si sol la si do la
+    si do re si fad sol la fad
+    sol si sol, mi' la, fad'16 sol la8 fad
+
+    %16
+    sol si sol, mi' la, la' si4~
+    si la2 sol4~\mbreak
+    sol fad-+ sol8 re-! r re'16 re,
+
+    %19
+    mi16.-+(re32 mi16) do' do, mi re do re16.-+(do32 re16) si' si, re do si
+    do16.-+(si32 do16) la' la, do si la si sol' fad sol si, sol' fad sol
+    si, sol' fad sol si, sol' fad sol <mi do sol>4-! <fad la, re,>-!\mbreak
+
+    %22
+    sol16 re sol la si8 sol sol4 fad-+
+    r16 sol\p (fad sol) si, sol'(fad sol) si, sol'(fad sol) si, sol'(fad sol)
+    <<{<mi do>8\f s la,}\\{sol8 la' fad,[fad']}>> sol16 mi sol la si8 sol
+
+    %25 OOKK
+    sol4 fad-+ sol r8 sol4 fad-+ sol r
+    r4 r8 mi16 re do8 mi la, do\mbreak
+    re16 mi fad8 r re16 do si8 re si, sol
+
+    %28
+    r2 r4 r8 si''16 si,
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol si do si fad si fad si\mbreak
+
+    %31
+    sol4-! r r16 mi' fa mi si mi si mi
+    do4 r r8 mi fad4~
+    fad mi2 red4-+
+
+    %34
+    si16 mi si mi si mi si mi si sol' si, sol' si, sol' si, sol'
+    lad,8 si dod si lad si dod lad\mbreak
+    fad16 re' fad, re' fad,16 re' fad, re' fad,16 re' fad, re' fad,16 re' fad, re'
+
+    %37
+    sold8 la si la sold la si sold
+    la16 do, la' do,  la' do, la' do, mi do' mi, do' mi, do' mi, do'
+    red,8 mi fad mi\mbreak red mi fad red
+
+    %40
+    mi fad sol mi fad sol la fad
+    sol la si sol red mi fad red
+    mi sol mi, do' fad, red'16 mi fad8 red
+
+    %43
+    mi sol mi, do' fad, fad' sol4~
+    sol fad2 mi4~\mbreak
+    mi red mi8 si-! r si'16 si,
+
+    %46
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+    la16.-+(sol32 la16) fad' fad, la sol fad sol si do si fad si fad si
+    << <mi si>4-!\\ sol,>> r mi16 si' mi, si' mi, si' mi, si'\mbreak
+
+    %49
+    mi, si' mi, si' mi, si' mi, si' mi, do' mi, do' mi, do' mi, do'
+    mi, si' mi, si' mi, si' mi, si' mi, do' mi, do' mi, do' mi, do'
+    la la' la, la' la, la' la, la' la, la' la, la' la, la' la, la'\mbreak
+
+    %52
+    la, la' la, la' la, la' la, la' la, la' la, la' la, la' la, la'
+    si, si' si, si' si, si' si, si' si, si' si, si' si, si' si, si'
+    si, si' si, si' si, si' si, si'  <sol si, mi,>4-! r8 sol
+
+    %55
+    la do-! re re, sol si-+ do do,\mbreak
+    fad la-+ si si, mi mi, r si''16 re,
+    do16.-+(si32 do16) la' la, do si la si16.-+(la32 si16) sol' sol, si la sol
+
+    %58
+    la16.-+(sol32 la16) fad' fad, la sol fad sol mi'(red mi) sol, mi'(red mi)
+    sol, mi'(red mi) sol, mi'(red mi)\mbreak <<
+        {
+            s4 s8 fad
+            <mi si>
+        }\\{
+            mi,8 mi' red red
+            mi, mi'16 fad
+        }
+    >> sol8 mi mi4 red
+
+    %61
+    mi,16\p mi'(red mi) sol, mi'(red mi) sol, mi'(red mi) sol, mi'(red mi)
+    <<{s4\f s8 fad}\\{mi, mi' red red}>> mi16 si mi fad sol8 mi
+    mi4 red mi r mi4 red mi r\fermata
+
+}
+
+
+VIbcn = \relative do {
+
+    r8
+    r mi16 fad sol8 la si si, mi' mi,
+    la do re re, sol si do do,
+    fad la si si, r mi16 fad sol8 mi
+
+    %4
+    la do re re, sol si do do,
+    fad la si si, r mi red si
+    r mi red si mi do' fad, re'\mbreak
+
+    %7
+    r8 sol, fad re r sol fad re
+    sol la si sol mi fad sol mi
+    la,-!(la-! la-! la-!)  la-! (la-!  la-! la-!)
+
+    %10
+    re-! mi-! fad-! re-! si dod re si
+    mi-!(mi-! mi-! mi-!) mi-!(mi-! mi-! mi-!)
+    la si do la re,-! (re-! re-!re-!)
+
+    %13
+    re re re re\mbreak re re re re
+    re re re re  re re re re
+    sol, sol'16 la si8 do re re,16 mi fad8 re
+
+    %16
+    sol sol,16 la si8 dod re re' sol, si
+    do do, fad la si si, mi sol
+    la la, re' re, sol si16 la sol8 si
+
+    %19
+    do do, fad la\mbreak si si, mi sol
+    la la, re' re, sol sol fad fad
+    mi mi re re do la re re,
+
+    %22
+    sol' [sol, sol si'16 do] re4 re,
+    sol8\p sol fad fad mi mi re re
+    do\f la re re, sol' [sol, sol si16 do]
+
+    %25
+    re4 re, sol'8 re sol,\noBeam re'4 re, sol'8 si16 la sold8 si
+    mi, mi16 fad sold8 mi r la16 si do8 la
+    r re,16 mi fad8 [re sol sol,] \clef tenor \key mi\minor sol''4~
+
+    %28
+    sol fad2 mi8 \clef bass \key mi\minor mi,
+    la do re re, sol si do do,
+    fad la si si, r mi red si\mbreak
+
+    %31
+    r mi red si mi la sold mi
+    r la sold mi la do re, re'
+    sol, si do, do' fad, la si, si'
+
+    %34
+    mi, fad sol fad mi fad sol mi
+    fad-!(fad-! fad-! fad-!) fad-!(fad-! fad-! fad-!)
+    si dod re dod si dod re si\mbreak
+
+    %37
+    mi,-!(mi-! mi-! mi-!) mi-!(mi-! mi-! mi-!)
+    la si do si la si do la
+    si,-!(si-! si-! si-!) si-!(si-! si-! si-!)
+
+    %40
+    si si si si si si si si
+    si si si si si si si si
+    mi mi16 fad sol8 la si si,16 dod red8 si\mbreak
+
+    %43
+    r mi16 fad sol8 la si si, mi' mi,
+    la do re re, sol si do do,
+    fad la si si, mi mi, \clef tenor \key mi\minor sol''4~
+
+    %46
+    sol fad2 mi4~
+    mi red mi8 \clef bass \key mi\minor mi, red si
+    r mi red si mi fad sol fad\mbreak
+
+    %49
+    mi fad sold mi la si do la
+    mi fad sold mi la si do si
+    la si dod la re, mi fad re
+
+    %52
+    la si dod la re mi fad re
+    si dod red si mi fad sol mi
+    si dod red si\mbreak mi mi, \clef tenor \key mi\minor sol''4~
+
+    %55
+    sol fad2 mi4~
+    mi red mi8 \clef bass \key mi\minor mi,16 fad sol8 mi
+    la do re re, sol si do do,
+
+    %58
+    fad la si si, mi mi re re
+    do do si si la fad si' si,
+    mi [mi, mi sol'16 la] si4 si,\mbreak
+
+    %61
+    mi8\p mi' re re do do si si
+    la\f fad si si, mi [mi, mi sol'16 la]
+    si4 si, mi8 si'16 la sold8 si si4 si, mi r\fermata
+
+}
+
+VIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s4 <6> <_+> s
+    <7> <7> <7> <7>
+    <7> <7 _+> s s
+    <7> <7> <7> <7>
+    <7> <7 _+> s2
+    s s4 <6>
+    s1
+    s2 <5>
+    <_+>1
+    s2 <5>
+    <_+>1
+    <_!>2 <_+>
+    <6 4> <5>
+    <6 4> <5>
+    s1*2
+    <7>4 <7> <7> <7>
+    <7> <7> s2
+    <7>4 <7> <7> <7>
+    <7> <7> s <4 2>
+    <5> <6 4> <6 5> s
+    s s8 <6> <6 4>4 <5 3>
+    s <4 2> <5 3> <6 4>
+    <6 5>2 s4 s8 <6>
+    <6 4>4 <5 3> s4 s8 <6 4>4 <5 3> s2
+    <_+>1
+    s2 s4 <6>
+    <2> <6> <2> <5>
+    <7> <7> <7> <7>
+    <7> <7 _+> s2
+    s <_!>4 <6>
+    s2 s4 <7>
+    <7> <7> <7> <_+>
+    s1
+    <_+>
+    s1
+    <_+>
+    s
+    <_+>2 <_+>
+    <6 4> <_+>
+    <6 4> <_+>
+    s <_+>
+    s <_+>
+    <7>4 <7> <7> <7>
+    <7> <7 _+> s2
+    <2>4 <6> <2> <6>
+    <2>1
+    s
+    <_+>
+    <_+>
+    <_+>
+    <_+>
+    <_+>
+    <_+>2 s4 <6>
+    <4 2> <6> <4 2> <6>
+    <4 2> <6> s <6>
+    <7> <7> <7> <7>
+    <7> <7 _+> s <6 4>
+    <5> <6 4> s <_+>
+    s s8 <6> <6 4>4 <_+>
+    s1
+    <6 5>4 <_+> s s8 <6>
+    <6 4>4 <_+> s s <6 4>4 <_+> s s
+
+}
+
+forma = {
+
+    \time 4/4
+    \key mi\minor
+    \tempo 2 = 50
+    \repeat volta 2 {
+        \partial 8 s8
+        s1*24
+    }
+    \alternative {{s2. s8}{s1}}\break
+    \set Score.currentBarNumber = #26
+    \repeat volta 2{s1*37}
+    \alternative {{s1}{s}}
+    \bar"|."
+
+}
+
+
+
+VIvlI = {
+    \global
+    <<\VIvlIn \forma>>
+
+}
+
+VIvlII = {
+    \global
+    <<\VIvlIIn \forma>>
+
+}
+
+VIbc = {
+    \global
+    \clef bass
+    <<\VIbcn \forma \VIbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+VIIvlIn = \relative do'' {
+
+    sol'8(fad) sol(la) si(sol)
+    la(sol) la(si) do(la)
+    si4 re sol,~
+
+    %4
+    sol fad2-+
+    sol r4
+    R2.
+
+    %7
+    re8(dod) re(mi) fad(re)
+    mi(re) mi(fad) sol(mi)
+    fad(mi) fad(sol) la(fad)
+
+    %10
+    sol(fad) sol(la) si(sol)\mbreak
+    la(sol) la(si) do(la)
+    si2.
+
+    %13
+    la2 re4
+    sol,8(fad) sol(la) si(do)
+    fad,2 si4
+
+    %16
+    mi,8(re) mi(fad) sol(la)
+    re,2 sol4~
+    sol fad8 sol la4~
+
+    %19
+    la sol8 la si4~
+    si la8 si do4~\mbreak
+    do si2
+
+    %22
+    la2.
+    re,2 r4
+    R2.
+
+    %25
+    re8(dod) re(mi) fad(re)
+    mi(re) mi(fad) sol(mi)
+    fad(mi) fad(sol) la4~
+
+    %28
+    la sol8 (fad) sol(mi)
+    \grace re dod4.-+ re8 mi4~
+    mi4 re8(dod) re (la')
+
+    %31
+    sold4. la8 si4~
+    si la sol
+    fad4. sol8 la4~
+
+    %34
+    la sol2~
+    sol4 fad2-+
+    sol4. fad8 mi(sol)
+
+    %37
+    fad(mi) fad(sol) la(fad)
+    sol(fad) sol(la) si(sol)
+    la(sol) la(si) do(la)
+
+    %40
+    si4 re sol,~
+    sol8 do \grace si la2-+\mbreak
+    sol4 re\p sol,~
+
+    %43
+    sol8.\fermata mi'16 \appoggiatura si8 la2_+
+    sol r4\fermata
+
+}
+
+VIIvlIIn = \relative do'' {
+
+    r4 sol sol'~
+    sol fad2-+
+    sol4 r r
+
+    %4
+    R2.
+    re8(do) re(mi) fad(re)
+    mi(re) mi(fad) sol(mi)
+
+    %7
+    fad4 la re,~
+    re dod2-+
+    re do!4
+
+    %10
+    si8(la) si(do) re(si)\mbreak
+    do(si) do(re) mi(fad)
+    sol4 re sol~
+
+    %13
+    sol fad2~
+    fad4 mi2~
+    mi4 re2~
+
+    %16
+    re4 do2~
+    do4 si2
+    la8(sol) la(si) do(la)
+
+    %19
+    si8(la) si(do) re(si)
+    do(si) do(re) mi(fad)\mbreak
+    sol4 re sol~
+
+    %22
+    sol fad2-+
+    sol8(fad) sol(la) si(sol)
+    la(sol) la(si) do(la)
+
+    %25
+    si(la) si(dod) re4~
+    re dod2
+    re do!4
+
+    %28
+    sib2.~
+    sib4 la sol
+    fa2.~
+
+    %31
+    fa4 mi re\mbreak
+    do8(si) do(re) mi(do)
+    la4 re do
+
+    %34
+    si8(la) si(do) re(si)
+    la2 re4~
+    re dod2-+
+
+    %37
+    re4 la8(si) do?(la)
+    si(la) si(do) re(mi)
+    fad(mi) fad(sol) la(fad)
+
+    %40
+    sol4 si re,\mbreak
+    mi8(la) \grace sol fad2-+
+    sol4 si,2\p
+
+    %43
+    mi,8.\fermata sol16 \appoggiatura sol8 fad2_+
+    sol r4\fermata
+
+}
+
+
+VIIbcn = \relative do {
+
+    R2.*2
+    sol'8(fad) sol(la) si(sol)
+    la(sol) la(si) do(la)
+
+    %5
+    si(la) si(dod) re4~
+    re dod2
+    re8(mi) re(dod) si(la)
+
+    %8
+    sol4 mi la
+    re,8 dod re mi fad re
+    sol4 sol, r
+
+    %11
+    R2.\mbreak
+    sol'8(fad) sol(la) si(dod)
+    re(dod) re(re,) fad(re)
+
+    %14
+    mi(re) mi(fad) sol(la)
+    si(la) si(do?) re(si)
+    do,(si) do(re) mi(fad)
+
+    %17
+    sol(fad) sol(la) si(dod)
+    re4 re, r
+    R2.*2
+
+    %21
+    sol8(fad) sol(la) si(sol)\mbreak
+    la(sol) la(si) do(la)
+    si(do) si(la) sol4~
+
+    %24
+    sol fad2
+    sol fad4
+    mi la la,
+
+    %27
+    re8(dod) re(mi) fad(re)
+    sol(fad) sol(la) sib(sol)
+    la(sol) la(si) dod(la)
+
+    %30
+    re,(dod) re(mi) fa(re)\mbreak
+    mi(re) mi(fad!) sold(mi)
+    la(sol) la(si)  do(la)
+
+    %33
+    re,8(dod) re(mi) fad(re)
+    sol(fad) sol(la) si(sol)
+    do(la) re(do) re(re,)
+
+    %36
+    mi(re) mi(fad) sol(la)
+    re,2.~
+    re~
+
+    %39
+    re\mbreak
+    sol8(fad) sol(la) si(sol)
+    do(la) re(do) re(re,)
+
+    %42
+    sol(la) sol(fad) mi(re)
+    do4\fermata re2
+    sol, r4\fermata
+
+}
+
+VIIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s2.*3
+    <7>4 <6> s
+    <6>2.
+    <4 2>4 <6> <5>
+    s2.
+    <6 5>4 <6+> <_+>
+    s s <5->
+    s2.*3
+    <5 4>4 <3> s
+    <9> <8> s
+    <5 4> <3> s
+    <9> <8> s
+    <5 4> <3> s
+    <5 4>4 <3> s
+    s2.*2
+    <4>4 <3> s
+    <7> <6> s
+    <6>2.
+    <2>4 <6> <5->
+    s s <6>
+    <7> <7 _+> s
+    <_+> s <5->
+    <_- 9> <8> s
+    <3+ 9> <8> <5->
+    <3- 9> <8> s
+    <9 _+> <8> <5->
+    <9> <8> s
+    <_+> s <5->
+    <_! 9>2.
+    <6 5>
+    <7>4 <6+> s
+    s s <7>
+    <6 4>2.
+    <5>4 s <7>
+    s2.
+    <6 5>
+
+}
+
+forma = {
+
+    \time 3/4
+    \key sol\major
+    \tempo 2 = 42
+    s2.*44
+    \bar"|."
+
+}
+
+
+
+VIIvlI = {
+    \global
+    <<\VIIvlIn \forma>>
+
+}
+
+VIIvlII = {
+    \global
+    <<\VIIvlIIn \forma>>
+
+}
+
+VIIbc = {
+    \global
+    \clef bass
+    <<\VIIbcn \forma \VIIbfn>>
+
+}
+
+
+global = {
+    \override Score.MetronomeMark.transparent = ##t
+    \override Score.BarNumber.font-size = #0.5
+    \override Score.BarNumber.padding = #1.3
+    \override TupletBracket.bracket-visibility = ##f
+}
+
+VIIIvlIn = \relative do'' {
+
+    si8
+    sol(si) mi si(mi) sol \grace sol fad4. r8 si si,
+    do fad do la la' la, si re si sol sol' sol,
+    la do la fad fad' fad, sol si mi la, red mi
+
+    %4
+    si(red) mi do(red) mi si(red) mi la, red mi
+    sol,\p si mi la, red mi si red mi do red mi
+    si red mi la, red mi sol,\f sol' mi dod mi dod\mbreak
+
+    %7
+    lad dod fad lad, dod fad si, re? fad si, re fad
+    dod fad16(mi fad8) dod fad16 (mi fad8) re si16(dod si8) mi si16(dod si8)
+    fad' si,16(dod si8) sol' si,16(dod si8)si'4.-+~si8 la sol
+
+    %10
+    fad re fad mi dod mi re si fad' si4.~
+    si lad-+\mbreak si8 fad re dod fad dod
+    re fad re dod fad dod re re' dod si la sol
+
+    %13
+    fad si la sol fad mi re4. dod-+
+    si8\p fad' re dod fad dod re fad re dod fad dod
+    re\f si' la sol fad mi re4. dod-+
+
+    %16
+    si4.~si4 si8 si4. \mbreak r8 si' fad red fad red si fad' la
+    sol si16(la sol fad) mi8 sol16(fad mi re) dod8 mi16(re dod si) la8 mi' sol
+    \grace sol fad4.~fad8 la16(sol fad mi) re8 fad la re, fad la
+
+    %19
+    do,? fad la do, fad la si, sol'16(fad) sol8 sol, sol' re\mbreak
+    mi-! fad sol re fad sol do, fad(sol) si, fad'(sol)
+    mi(fad) sol re (fad) sol do, (fad) sol si, (fad') sol
+
+    %22
+    la,(dod) re sol,(dod) mi fad,16(mi re4) r8 re'' re,
+    mi sol mi do? do' do, re fad re si si' si,
+    do mi do la la' la,\mbreak si16 la sol4 r8 re'' re,
+
+    %25
+    mi sol mi do do' do, re fad re si si' si,
+    do mi do la la' la, si sol16(fad sol8) do sol16(fad sol8)
+    re' sol,16(fad sol8) mi' sol,16(fad sol8) sol'4.-+~sol8 fad mi\mbreak
+
+    %28
+    re si' si, do la' la, si sol re' sol4.~
+    sol fad-+ sol8 re si la re la
+    si re si la re la si sol' fad mi re do
+
+    %31
+    si4. la_+  sol8\p re' si la re la\mbreak
+    si re si la re la si\f si' la sol fad mi
+    re sol fad mi re do si4. la_+
+
+    %34
+    sol r4 si8 sol si mi si mi sol
+    \grace sol fad4.~fad8 si red, mi4.~mi8 do' mi,\mbreak
+    red fad red si si' si, do mi do la la' la,
+
+    %37
+    si re si sol sol' sol, la do la fad fad' fad,
+    sol16(fad mi4) r8 si'' si, do mi do la la' la,
+    si re si sol sol' sol, la do la fad fad' fad,\mbreak
+
+    %40
+    sol si mi la, red mi si red mi do red mi
+    si red mi la, red mi sol, si mi do\p red (mi)
+    si red(mi) la, red(mi) << {<mi si>4.-+~\stemDown mi8\f red do}\\sol8>>
+
+    %43
+    si sol' sol, la fad' fad, sol mi si' mi4.~
+    mi red-+ mi8 si' sol fad si fad
+    sol si sol fad si fad\mbreak sol si, mi red si red
+
+    %46
+    mi si mi red si red <<mi2.\\mi>>
+    <<{mi2.~\stemDown mi8 sol fad}\\mi2.>> mi8 re do
+    si mi re do si la sol4. fad_+
+
+    %49
+    mi8\p sol'(fad) mi re(do) si mi(re) do si(la)
+    sol-!\noBeam mi'16(fad sol la) si8 sol mi si4. fad'-+
+    mi4.-+ r8 si' fad red fad red si fad' la mi4._\fermata^\markup\italic "Fine" r r2.
+
+}
+
+VIIIvlIIn = \relative do'' {
+
+    r8
+    r4 si8 sol(si) mi red(si) red mi4.~
+    mi8 do la fad re' fad, sol si sol mi do' mi,
+    fad la fad red si' red, mi4.-! fad-!
+
+    %4
+    sol la sol fad
+    mi\p fad sol la\mbreak
+    sol fad mi\f mi'
+
+    %7
+    dod dod fad, fad
+    fad lad si si'
+    si, si' si,8 re fad si4.~
+
+    %10
+    si lad -+si~si8 lad sol
+    fad re fad mi dod mi re fad, si lad fad lad\mbreak
+    si8 fad si lad si lad si si' la sol fad mi
+
+    %13
+    re mi fad si,2. lad4.
+    si8\p re si lad fad lad si fad si lad fad lad
+    si4.\f si'4 si,8 si4. lad_+
+
+    %16
+    si4.~si4 r8 si4. red8 fad red si red si fad4 fad'8
+    si,4. r8 si'16 (la sol fad) mi4. mi,
+    \once\stemUp re8 la''16(sol fad mi) re8(fad) re fad,(la) re fad,(la) re
+
+    %19
+    la do fad la, do fad sol,4.-! si,
+    do si la sol
+    do' si\mbreak la sol
+
+    %22
+    fad mi re8 la' fad' sol16 la si4~
+    si4. la2. sol4.~
+    sol fad-+ sol8-! re si sol si sol
+
+    %25
+    do do, do' la fad la si si, si' sol mi sol
+    la la, la' fad re fad\mbreak sol, sol' fad mi re do
+    si la sol do si la \once\stemUp sol si' re sol4.~
+
+    %28
+    sol fad-+ sol~sol8  fad mi
+    re si' si, do la' la, si re, sol fad re fad
+    sol re sol fad re fad sol4. sol'4 sol,8
+
+    %31
+    sol4. fad\mbreak sol8\p si sol fad re fad
+    sol re sol fad re fad sol\f sol' fad mi re do
+    si do re sol,2. fad4._+
+
+    %34
+    sol r4 r8 r4 si8 sol si mi
+    si red fad si4. ~si8 la sold la(mi) do\mbreak
+    <<si\\{fad red' fad}>> sol2. fad4.~
+
+    %37
+    fad mi2. red4.-+
+    mi8-! si sol mi sol mi la do, la' fad re fad
+    sol si, sol' mi do mi fad la, fad' red si red
+
+    %40
+    mi4.-! fad-! sol-! la-!
+    sol-! fad-! mi-! la\p\mbreak
+    sol fad mi8\f sol si mi4.~
+
+    %43
+    mi red mi-+~mi8 red do
+    si fad' sol, la fad' fad, sol si mi red si red
+    mi si mi red si red mi si' sol fad si fad
+
+    %46
+    sol si sol fad si fad\mbreak sol, sol' fad mi re? do
+    si mi re do si la sol mi' re do si la
+    sol la si mi,2. red4 red'8
+
+    %49
+    <<
+        {
+            mi2.\p mi~\stemNeutral
+            mi8\f si' la
+        }\\{mi2. mi}
+    >> sol8 mi do sol si mi red4.-+
+    mi red8 fad red si red si fad4 fad'8 mi4.\fermata r r2.
+
+}
+
+
+VIIIbcn = \relative do {
+
+    r8
+    mi4. mi, si'' sol
+    la re sol, do
+    fad, si mi, r4 r8
+
+    %4
+    R1.*2
+    r2. mi4.\f sol
+    fad mi re si'
+
+    %8
+    lad fad si, sol'
+    re mi r8 si' la sol fad mi
+    re4. dod si8 si' la sol fad mi
+
+    %11
+    re4. dod si fad'
+    si, fad' si, r4 r8
+    si dod re mi fad sol fad4. fad,
+
+    %14
+    si\p fad' si, fad'
+    si,8\f dod re mi fad sol fad4. fad,\mbreak
+    si'8 fad red si4 red8 si' fad red si4. si' red,
+
+    %17
+    mi sol la dod,
+    re re, re' re,
+    re' re, sol r4 r8
+
+    %20
+    R1.*2
+    r2. r8 re'' do? si sol si
+    do4. fad, si mi,\mbreak
+
+    %24
+    la re, sol r4 r8
+    R1.*2
+    r2. r8 sol fad mi re do
+
+    %28
+    si4. la r8 sol' fad mi re do
+    si4. la sol re'
+    sol, re' sol8 la si do re mi
+
+    %31
+    re4. re, sol\p re
+    sol re sol2.~\mbreak
+    sol8\f la si do re mi re4. re,
+
+    %34
+    sol8 la si si, dod red mi4. mi'
+    red si do la
+    si mi la, re
+
+    %37
+    sol, do fad, si
+    mi, r4 r8 r2.
+    R1.*3\mbreak
+
+    %42
+    r2. r8 mi'\f re do si la
+    sol4. fad mi8 mi' re do si la
+    sol4. fad mi si
+
+    %45
+    mi si mi si
+    mi si r8 mi' re do si la
+    sol do si la sol fad mi2.~
+
+    %48
+    mi8 fad sol la si do\mbreak si4. si,
+    mi8\p mi'(re) do si(la) sol do(si) la sol(fad)
+    mi4\f fad8 sol4 la8 si4. si,
+
+    %51
+    mi4. si si' red, mi\fermata r4 r8 r2.
+
+}
+
+VIIIbfn = \figuremode {
+
+    \bassFigureExtendersOff
+    \bassFigureStaffAlignmentDown
+
+    s8
+    s4. s <_+> <6>
+    s1.
+    s4. <_+> s s
+    s1.*2
+    s2. s4. <6 4+>
+    <_+> <6 4+> <6> s
+    <6> <_+> s <6>
+    <6>1.
+    <6>4. <6+> s s
+    <6> <6+> s <_+>
+    s <_+> s s
+    s s <6 4> <_+>
+    s <_+> s <_+>
+    s s <6 4> <_+>
+    <_+> s s <_+> <_+> <6>
+    s <6> <_+> <6>
+    s1.
+    <7>
+    s s
+    s2. s4. <6>
+    <7> <7> <7> <7>
+    <7> <7> s s
+    s1.*3
+    <6>4. <6> s s
+    <6> <6> s s
+    s1.
+    <6 4>4. <5 3> s s
+    s1.
+    s2. <6 4>4. <5 3>
+    s <_+> s s
+    <6> <_+> <7>8 <6> s s4.
+    <_+> s <7> <7>
+    <7> <7> <7> <7>
+    s1.*5
+    <6>4. <6+> <_+> s
+    <6> <6+> s <_+>
+    s <_+> s <_+>
+    s <_+> s s
+    <6>1.
+    s4. s <6 4> <_+>
+    s s <6> s
+    s s <6 4> <_+>
+    s <_+> <_+> <6>
+
+}
+
+forma = {
+
+    \time 12/8
+    \key mi\minor
+    \tempo 2. = 57
+    \partial 8 s8
+    \repeat volta 2 {s1.*15}
+    \alternative {{ \time 6/8 s2.}{\time 12/8 s1.}}\break
+    \set Score.currentBarNumber = #17
+    \repeat volta 2{s1.*34}
+    \alternative {{ s1.}{s1.}}
+    \bar"|."
+
+}
+
+
+
+VIIIvlI = {
+    \global
+    <<\VIIIvlIn \forma>>
+
+}
+
+VIIIvlII = {
+    \global
+    <<\VIIIvlIIn \forma>>
+
+}
+
+VIIIbc = {
+    \global
+    \clef bass
+    <<\VIIIbcn \forma \VIIIbfn>>
+
+}
+#(set-global-staff-size 18)
+
+
+\pointAndClickOff
+
+\paper  {
+
+    print-first-page-number = ##t
+    first-page-number = #2
+
+}
+
+\bookpart {
+
+    \paper  {
+
+        systems-per-page = #5
+
+    }
+
+    \header {
+        subtitle = \markup \larger\center-column{"Concerto quarto in trio Op II"}
+        composer = \markup \center-column{"N. Porpora (1686-1768)"}
+    }
+
+    \markup \huge {[I.1] Adagio }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \IvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \IvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \Ibc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    %\pageBreak
+
+    \markup \huge {[I.2] Allegro }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \IIvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \IIvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \IIbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    %\pageBreak
+
+    \markup \huge {[I.3] Adagio }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \IIIvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \IIIvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \IIIbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    %\pageBreak
+
+    \markup \huge {[I.4] Allegro }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \IVvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \IVvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \IVbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+}
+
+
+\bookpart {
+
+    \paper  {
+
+        systems-per-page = #5
+
+    }
+
+    \header {
+        subtitle = \markup \larger\center-column{"Concerto quinto in trio Op II"}
+        composer = \markup \center-column{"N. Porpora (1686-1768)"}
+    }
+
+    \markup \huge {[II.1] Affettuoso }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \VvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \VvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \Vbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    %\pageBreak
+
+    \markup \huge {[II.2] Allegro }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \VIvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \VIvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \VIbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    \pageBreak
+
+    \markup \huge {[II.3] Adagio }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \VIIvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \VIIvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \VIIbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+    %\pageBreak
+
+    \markup \huge {[II.4] Giga Allegro }
+
+    \score {
+
+        \new ChoirStaff <<
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Primo"}
+                \set Staff.shortInstrumentName = "vl1"
+                \VIIIvlI
+            >>
+
+            \new Staff <<
+                \set Staff.midiInstrument = #"violin"
+                \set Staff.instrumentName = \markup  \center-column{"Violino Secondo"}
+                \set Staff.shortInstrumentName = "vl2"
+                \VIIIvlII
+            >>
+
+            \new Staff
+            <<
+                \set Staff.midiInstrument = #"cello"
+                \set Staff.instrumentName = \markup  \center-column{"Basso continuo"}
+                \set Staff.shortInstrumentName = "bc"
+                \VIIIbc
+            >>
+        >>
+
+        \layout {
+
+            indent = 2\cm
+
+            \context	{
+                \Score
+                \override StaffGrouper.staff-staff-spacing.padding = #1.5
+                \override StaffGrouper.staff-staff-spacing.basic-distance = #8
+                \override BarLine.hair-thickness = #1.2
+                skipBars = ##t
+            }
+
+        }
+
+        \midi {
+            \context {
+                \Voice
+                \remove "Dynamic_performer"
+            }
+        }
+
+    }
+
+}
