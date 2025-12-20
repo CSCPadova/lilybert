@@ -1,15 +1,15 @@
 """Basic tests for MaestroGPT functionality."""
-
+import sys
 import pytest
 import tempfile
 import json
 from pathlib import Path
+import os
 
 from maestrogpt.data import LilyPondParser, LilyPondPreprocessor
 from maestrogpt.models import LoRAConfig
 from maestrogpt.training import TrainingConfig
 from maestrogpt.evaluation import MusicMetrics
-
 
 class TestLilyPondParser:
     """Test LilyPond parser functionality."""
@@ -17,23 +17,33 @@ class TestLilyPondParser:
     def test_parse_simple_content(self):
         """Test parsing simple LilyPond content."""
         parser = LilyPondParser()
-        content = """\\version "2.24.0" 
-        \\relative c' { 
-            \\time 4/4 \\key c \\major 
-            c4 d e f | g2 a2 | b4 c d e | c1 
-        }"""
+        content = r'''
+        \version "2.24.0" 
+        \header {
+            title = \markup\smaller\center-column {"Concerto Sacro V Op. II"}
+            composer = \markup \center-column{"A. Scarlatti (1660 - 1725)"}
+        }
+        \relative do {
+        \repeat unfold 9 {<mi la,>16}
+        }
+       
+        '''
         
         elements = parser.parse_content(content)
         assert len(elements) > 0
         
         # Check for notes
         notes = [e for e in elements if e.type == "note"]
-        assert len(notes) > 0
-        
+        for e in elements:
+            print((e.content + " " + e.type + "\n") ) # String list of raw content for evrey musical element
         # Check statistics
         stats = parser.get_statistics()
+        print(stats["note_count"])
         assert stats["total_elements"] > 0
         assert stats["note_count"] > 0
+        assert stats["note_count"] == 18 # Specific to this example
+        assert stats["rest_count"] == 0
+        assert stats["chord_count"] == 1
     
     def test_parse_empty_content(self):
         """Test parsing empty content."""
@@ -44,12 +54,11 @@ class TestLilyPondParser:
     def test_parse_with_chords(self):
         """Test parsing content with chords."""
         parser = LilyPondParser()
-        content = """{ <c e g>4 <d f a>2 }"""
+        content = """\\relative do' { <c e g>4 <d f a>2 }"""
         
         elements = parser.parse_content(content)
         chords = [e for e in elements if e.type == "chord"]
-        assert len(chords) >= 1
-
+        assert len(chords) == 2
 
 class TestLilyPondPreprocessor:
     """Test LilyPond preprocessor functionality."""
@@ -66,19 +75,97 @@ class TestLilyPondPreprocessor:
     def test_normalize_notation(self):
         """Test notation normalization."""
         preprocessor = LilyPondPreprocessor(normalize_notation=True)
-        text = "\\relative c' { \\time 4/4 \\key c \\major c4 d e f }"
+        text = "\\relative c' { \\time 4/4 \\key c \\major \\clef basso c4 d e f }"
         
         normalized = preprocessor._normalize_notation(text)
+        print(f"Normalized text after normalization is {normalized}")
+        sys.stdout.write(f"Normalized is {normalized}")
         assert "\\relative c'" in normalized
     
-    def test_add_structural_tokens(self):
+    def test_add_structural_tokens_1(self):
         """Test adding structural tokens."""
+        """There are time signature, key signature, tempo, and measure separator tokens"""
         preprocessor = LilyPondPreprocessor(add_special_tokens=True)
-        text = "\\time 4/4 \\key c \\major c4 d e f"
+        text = " \\relative do' { \\time 4/4 \\key do \\major \\tempo 4 = 60 \\tempo \"Presto\" \\clef basso do4 re mi fa \\repeat unfold 60 {la} re}"
         
-        with_tokens = preprocessor._add_structural_tokens(text)
-        assert "<TIME:" in with_tokens
-        assert "<KEY:" in with_tokens
+
+        with_tokens = preprocessor._preprocess_text(text)
+        print(f"Structural Token Test 1: Structural tokens added to text is: {with_tokens}")
+
+        # Ensure structural tokens are added and contain correct data. 
+        #   Also we can assume white spaces are removed; happens in preprocessing step
+        assert "<KEY:do_major>" in with_tokens
+        assert "<TIME:4/4>" in with_tokens
+        assert "<TEMPO:4=60>" in with_tokens
+        assert '<TEMPO:"Presto">' in with_tokens
+        assert "<REPEAT_UNFOLD:60{la}>" in with_tokens
+        assert "<CLEF:basso>" in with_tokens
+
+    def test_add_structural_tokens_2(self):
+        """Test adding structural tokens."""
+        """There are time signature, key signature, tempo, and measure separator tokens"""
+        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
+        text = " \\relative do' { \\time 2/68 \\key mi\\major \\tempo \"Largo\" 4= 60 \\clef   baritonevarF do4 re mi fa \\repeat unfold 10 {do re mi}}"
+        
+
+        with_tokens = preprocessor._preprocess_text(text)
+        print(f"Structural Token Test 2: Structural tokens added to text is: {with_tokens}")
+
+        assert "<KEY:mi_major>" in with_tokens
+        assert "<TIME:2/68>" in with_tokens
+        assert '<TEMPO:"Largo"4=60>' in with_tokens
+        assert "<REPEAT_UNFOLD:10{do re mi}>" in with_tokens
+        assert "<CLEF:baritonevarF>" in with_tokens
+
+    def test_add_structural_tokens_3(self):
+        """Test adding structural tokens."""
+        """There are time signature, key signature, tempo, and measure separator tokens"""
+        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
+        text = " \\relative do' { \\time2/68 \\key mib'\\major \\tempo \"Presto\" 2 =  \t80 \\clef   baritonevarF do4 re mi fa | \\repeat unfold10 {do re   mi}}"
+        
+        with_tokens = preprocessor._preprocess_text(text)
+        print(f"Structural Token Test 3: Structural tokens added to text is: {with_tokens}")
+
+        assert "<TIME:2/68>" in with_tokens
+        assert "<KEY:mib'_major>" in with_tokens
+        assert '<TEMPO:"Presto"2=80>' in with_tokens
+        assert "<CLEF:baritonevarF>" in with_tokens
+        assert "<REPEAT_UNFOLD:10{do re mi}>" in with_tokens
+        assert "<MEASURE>" in with_tokens
+
+    def test_preprocess_file(self):
+        """Test LilyPond Parser & Preprocessor to see how they interact"""
+        parser = LilyPondParser()
+        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
+
+        sample = """\\version "2.24.0" 
+        \\header {
+            title = \\markup\\smaller\\center-column {"Concerto Sacro V Op. II"}
+            composer = \\markup \\center-column{"A. Scarlatti (1660 - 1725)"}
+        }
+        \\relative c' { 
+            \\time 4/4 \\key c \\major \\tempo "Presto" 4.=100
+            c4 d e f | g2 a2 | b4 c d e | c1\\rest r 
+        }"""
+        elements = parser.parse_content(sample)
+         # Convert to text sequence
+        raw_text = parser.to_sequence(include_metadata=True)
+        # Apply preprocessing steps
+        processed_text = preprocessor._preprocess_text(raw_text)
+        # Tokenize if tokenizer is available
+        tokenized = None
+        if preprocessor.tokenizer:
+            tokenized = preprocessor._tokenize_text(processed_text)
+        # Get statistics
+        statistics = parser.get_statistics()
+        out = {
+            "text": processed_text,
+            "raw_text": raw_text,
+            "tokenized": tokenized,
+            "metadata": parser.metadata,
+            "statistics": statistics
+        }
+        assert(out)
 
 
 class TestLoRAConfig:
@@ -173,14 +260,14 @@ class TestMusicMetrics:
         
         # Invalid syntax should score low
         invalid_score = metrics.calculate_syntax_score(
-            "{ c4 d e f | g2 a2"  # Missing closing brace
+            "\\version \"2.24.0\" { c4 d e f | g2 a2"  # Missing closing brace
         )
         assert invalid_score < valid_score
     
     def test_note_distribution_score(self):
         """Test note distribution scoring."""
         metrics = MusicMetrics()
-        
+        # Used to test how similar the generated text was to the reference text.
         score = metrics.calculate_note_distribution_score(
             "c4 d e f g a b c",
             reference_text="c4 d e f g a b c"
@@ -204,6 +291,7 @@ class TestMusicMetrics:
         
         assert consistent_score >= 0.0
         assert inconsistent_score >= 0.0
+        assert consistent_score >= inconsistent_score
     
     def test_evaluate_generation(self):
         """Test complete generation evaluation."""
@@ -231,9 +319,8 @@ class TestMusicMetrics:
             metrics.evaluate_generation(text)
         
         accumulated = metrics.get_accumulated_scores()
-        assert len(accumulated) > 0
-        assert "syntax_score_mean" in accumulated
-
+        assert len(accumulated) > 0 
+        assert "syntax_mean" in accumulated
 
 class TestIntegration:
     """Integration tests."""
@@ -242,9 +329,9 @@ class TestIntegration:
         """Test complete preprocessing pipeline."""
         # Create temporary test data
         test_content = '''\\version "2.24.0"
-        \\relative c' {
-            \\time 4/4 \\key c \\major
-            c4 d e f | g2 a2 | b4 c d e | c1
+        \\relative do' {
+            \\time 4/4 \\key do \\major
+            do re mi | sid4. 
         }'''
         
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -279,6 +366,5 @@ class TestIntegration:
             assert loaded_config.num_train_epochs == original_config.num_train_epochs
             assert loaded_config.use_lora == original_config.use_lora
 
-
 if __name__ == "__main__":
-    pytest.main([__file__])
+    pytest.main([__file__, "-s"])

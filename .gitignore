@@ -211,7 +211,8 @@ outputs/
 generated_music/
 corrected_scores/
 data/processed/
-data/raw/*.ly
+data/raw/*.pdf
+data/raw/*.mid
 models/
 wandb/
 .wandb/
@@ -224,7 +225,6 @@ evaluation_results/
 *.safetensors
 
 # Generated LilyPond files
-*.ly
 *.midi
 *.wav
 *.mp3

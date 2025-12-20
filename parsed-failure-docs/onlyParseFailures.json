@@ -1,0 +1,17 @@
+{
+    "boccherini_divertimento_quinto_G_465_processed.ly": "-0.01% error (note_count=9234, num_matches=9233)",
+    "boccherini_divertimento_secondo_G_462_processed.ly": "-0.01% error (note_count=17133, num_matches=17131)",
+    "boccherini_divertimento_sesto_G_466_processed.ly": "-0.01% error (note_count=9509, num_matches=9508)",
+    "caldara_sinfonia_in_do_processed.ly": "-0.01% error (note_count=11077, num_matches=11076)",
+    "campra_cantata_les plaisirs de la campagne_livre_3_processed.ly": "0.04% error (note_count=4842, num_matches=4844)",
+    "cimarosa_concerto_2_flauti_processed.ly": "0.10% error (note_count=18810, num_matches=18828)",
+    "francoeur_simphonie_du_festin_royal_1ere_suite_processed.ly": "0.03% error (note_count=17901, num_matches=17907)",
+    "francoeur_simphonie_du_festin_royal_3eme_suite_processed.ly": "0.01% error (note_count=28545, num_matches=28549)",
+    "francoeur_simphonie_du_festin_royal_4eme_suite_processed.ly": "0.19% error (note_count=21124, num_matches=21165)",
+    "rameau_suite_zais_1748_processed.ly": "0.02% error (note_count=5628, num_matches=5629)",
+    "stradella_sinfonia_n_2_da_12_sinfonie_Modena_processed.ly": "0.04% error (note_count=2835, num_matches=2836)",
+    "vivaldi_concerto_per_violino_e_violoncello_Giordano_28_RV_544_processed.ly": "0.01% error (note_count=6874, num_matches=6875)",
+    "vivaldi_salve_regina_ad_alto_solo_in_due_cori_RV_616_processed.ly": "-3.35% error (note_count=8908, num_matches=8619)",
+    "zelenka_laetatus_ZWV_88_processed.ly": "0.12% error (note_count=7685, num_matches=7694)",
+    "zelenka_ZWV_176_aria_italiana_5_e_7_processed.ly": "0.05% error (note_count=7479, num_matches=7483)"
+}
