@@ -19,7 +19,7 @@ try:
 except Exception:  # pragma: no cover - optional runtime dependency
     wandb = None
 
-from lilybert.data import LilyPondClassificationDataset
+from lilybert.data import BaroqueMusicClassificationDataset
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 from lilybert.models import (
     ComposerClassifier,
@@ -133,14 +133,14 @@ class StratifiedKFoldTrainer:
         self,
         movement_ids: Sequence[str],
         metadata: Dict[str, Dict[str, Any]],
-    ) -> LilyPondClassificationDataset:
+    ) -> BaroqueMusicClassificationDataset:
         tokenizer = self._ensure_tokenizer()
         language_dir = Path(self.config.data_dir) / self.config.language
         movement_files = [
             str(language_dir / f"{movement_id}.ly") for movement_id in movement_ids
         ]
 
-        return LilyPondClassificationDataset(
+        return BaroqueMusicClassificationDataset(
             movement_files=movement_files,
             metadata=metadata,
             tokenizer=tokenizer,
@@ -160,8 +160,8 @@ class StratifiedKFoldTrainer:
     def _train_and_evaluate_fold(
         self,
         fold_index: int,
-        train_dataset: LilyPondClassificationDataset,
-        val_dataset: LilyPondClassificationDataset,
+        train_dataset: BaroqueMusicClassificationDataset,
+        val_dataset: BaroqueMusicClassificationDataset,
     ) -> Dict[str, float]:
         multi_label = self.config.task in self.MULTI_LABEL_TASKS
         num_classes = self._infer_num_classes(train_dataset, val_dataset)
@@ -234,7 +234,9 @@ class StratifiedKFoldTrainer:
             train_loss_window.append(train_loss_value)
 
             if step % self.config.log_steps == 0 or step == total_steps:
-                window_avg = float(mean(train_loss_window)) if train_loss_window else 0.0
+                window_avg = (
+                    float(mean(train_loss_window)) if train_loss_window else 0.0
+                )
                 train_loss_window = []
                 self._log_wandb(
                     run,
@@ -388,7 +390,9 @@ class StratifiedKFoldTrainer:
             score = metric_values["accuracy"]
 
         normalized_metrics = {
-            key: float(value) for key, value in metric_values.items() if value is not None
+            key: float(value)
+            for key, value in metric_values.items()
+            if value is not None
         }
         normalized_metrics["score"] = float(score)
         return normalized_metrics
@@ -441,8 +445,8 @@ class StratifiedKFoldTrainer:
 
     def _infer_num_classes(
         self,
-        train_dataset: LilyPondClassificationDataset,
-        val_dataset: LilyPondClassificationDataset,
+        train_dataset: BaroqueMusicClassificationDataset,
+        val_dataset: BaroqueMusicClassificationDataset,
     ) -> int:
         if self.config.task == "composer":
             return 70

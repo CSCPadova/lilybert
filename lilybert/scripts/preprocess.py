@@ -6,7 +6,7 @@ import argparse
 import json
 from typing import Sequence
 
-from lilybert.data.preprocessing import LilyPondPreprocessor
+from lilybert.data.preprocessor import LilyPondPreprocessor
 
 
 def build_parser() -> argparse.ArgumentParser:

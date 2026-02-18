@@ -6,6 +6,7 @@ import argparse
 from typing import Callable, Sequence
 
 from lilybert.evaluation import cli as evaluate_cli
+from lilybert.inference import cli as inference_cli
 from lilybert.scripts import preprocess, run_experiment, train_tokenizer
 from lilybert.training import cli as train_cli
 
@@ -47,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
         "run-experiment",
         "Run Hydra-configured experiments",
         run_experiment.main,
+    )
+    _add_subcommand(
+        subparsers,
+        "predict",
+        "Run batch inference on LilyPond files",
+        inference_cli.main,
     )
 
     return parser

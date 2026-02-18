@@ -1,3 +1,5 @@
 """Inference package for lilyBERT."""
 
-__all__ = []
+from .pipeline import InferencePipeline
+
+__all__ = ["InferencePipeline"]

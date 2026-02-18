@@ -13,7 +13,6 @@ from omegaconf import DictConfig, OmegaConf
 from lilybert.models import TrainingMode
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 
-
 SUPPORTED_TASKS = {
     "composer",
     "musical_form",

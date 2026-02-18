@@ -292,9 +292,7 @@ class TestIntegration:
             (root / "italiano").mkdir(parents=True, exist_ok=True)
 
             (root / "english" / "mvt1.ly").write_text("c4 d e f", encoding="utf-8")
-            (root / "italiano" / "mvt1.ly").write_text(
-                "do4 re mi fa", encoding="utf-8"
-            )
+            (root / "italiano" / "mvt1.ly").write_text("do4 re mi fa", encoding="utf-8")
 
             tokenizer = LilyPondTokenizer()
 

@@ -6,21 +6,21 @@ from .parser import LilyPondParser
 # Conditional imports for ML-dependent modules
 try:
     from .dataset import (
-        LilyPondClassificationDataset,
-        LilyPondDataset,
+        BaroqueMusicClassificationDataset,
+        BaroqueMusicDataset,
     )
     from .label_encoder import LabelEncoder
-    from .preprocessing import LilyPondPreprocessor
-    from .repository import LilyPondDataAPI, MovementRecord
+    from .preprocessor import LilyPondPreprocessor
+    from .repository import BaroqueMusicDataAPI, MovementRecord
     from .tokenizer import LilyPondTokenizer
 
     __all__ = [
-        "LilyPondClassificationDataset",
-        "LilyPondDataset",
+        "BaroqueMusicClassificationDataset",
+        "BaroqueMusicDataset",
         "LilyPondParser",
         "LilyPondPreprocessor",
         "LilyPondTokenizer",
-        "LilyPondDataAPI",
+        "BaroqueMusicDataAPI",
         "MovementRecord",
         "LabelEncoder",
     ]

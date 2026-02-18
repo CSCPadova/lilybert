@@ -12,7 +12,7 @@ from transformers import PreTrainedTokenizer
 logger = logging.getLogger(__name__)
 
 
-class LilyPondClassificationDataset(Dataset):
+class BaroqueMusicClassificationDataset(Dataset):
     """Windowed dataset for movement-level classification tasks."""
 
     MULTI_LABEL_TASKS = {"musical_form", "instruments"}
@@ -236,8 +236,8 @@ class LilyPondClassificationDataset(Dataset):
         return "_".join(text.split())
 
 
-class LilyPondDataset(Dataset):
-    """PyTorch Dataset for LilyPond music notation data.
+class BaroqueMusicDataset(Dataset):
+    """PyTorch Dataset for Baroque music notation data.
 
     This dataset class handles loading and serving preprocessed LilyPond data
     for training language models on music notation.
@@ -279,7 +279,7 @@ class LilyPondDataset(Dataset):
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        logger.info(f"Initialized LilyPondDataset with {len(self.data)} samples")
+        logger.info(f"Initialized BaroqueMusicDataset with {len(self.data)} samples")
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""
@@ -330,7 +330,7 @@ class LilyPondDataset(Dataset):
     @classmethod
     def from_preprocessed_files(
         cls, file_paths: List[str], tokenizer: PreTrainedTokenizer, **kwargs
-    ) -> "LilyPondDataset":
+    ) -> "BaroqueMusicDataset":
         """Create dataset from preprocessed JSON files.
 
         Args:
@@ -339,7 +339,7 @@ class LilyPondDataset(Dataset):
             **kwargs: Additional arguments for dataset initialization
 
         Returns:
-            LilyPondDataset instance
+            BaroqueMusicDataset instance
         """
         data = []
 
@@ -357,7 +357,7 @@ class LilyPondDataset(Dataset):
     @classmethod
     def from_split_data(
         cls, split_data: List[Dict[str, Any]], tokenizer: PreTrainedTokenizer, **kwargs
-    ) -> "LilyPondDataset":
+    ) -> "BaroqueMusicDataset":
         """Create dataset from split data.
 
         Args:
@@ -366,7 +366,7 @@ class LilyPondDataset(Dataset):
             **kwargs: Additional arguments for dataset initialization
 
         Returns:
-            LilyPondDataset instance
+            BaroqueMusicDataset instance
         """
         return cls(split_data, tokenizer, **kwargs)
 

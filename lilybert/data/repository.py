@@ -20,7 +20,7 @@ class MovementRecord:
     metadata: Optional[Dict[str, Any]] = None
 
 
-class LilyPondDataAPI:
+class BaroqueMusicDataAPI:
     """High-level Python API to access lilyBERT datasets.
 
     This class supports:

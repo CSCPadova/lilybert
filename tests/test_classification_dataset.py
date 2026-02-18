@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 
-from lilybert.data.dataset import LilyPondClassificationDataset
+from lilybert.data.dataset import BaroqueMusicClassificationDataset
 
 
 class _FakeTokenizer:
@@ -65,7 +65,7 @@ def test_windowed_dataset_builds_overlapping_windows(tmp_path: Path):
     movement_files, metadata = _write_movements(tmp_path)
     tokenizer = _FakeTokenizer()
 
-    dataset = LilyPondClassificationDataset(
+    dataset = BaroqueMusicClassificationDataset(
         movement_files=movement_files,
         metadata=metadata,
         tokenizer=tokenizer,
@@ -104,7 +104,7 @@ def test_dataset_multi_label_encoding_for_instruments(tmp_path: Path):
     movement_files, metadata = _write_movements(tmp_path)
     tokenizer = _FakeTokenizer()
 
-    dataset = LilyPondClassificationDataset(
+    dataset = BaroqueMusicClassificationDataset(
         movement_files=movement_files,
         metadata=metadata,
         tokenizer=tokenizer,
@@ -123,7 +123,7 @@ def test_get_movement_ids_maps_window_index_to_movement(tmp_path: Path):
     movement_files, metadata = _write_movements(tmp_path)
     tokenizer = _FakeTokenizer()
 
-    dataset = LilyPondClassificationDataset(
+    dataset = BaroqueMusicClassificationDataset(
         movement_files=movement_files,
         metadata=metadata,
         tokenizer=tokenizer,

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from lilybert.data import LilyPondDataAPI
+from lilybert.data import BaroqueMusicDataAPI
 
 
 def test_data_api_raw_and_processed_access(tmp_path: Path):
@@ -28,7 +28,7 @@ def test_data_api_raw_and_processed_access(tmp_path: Path):
         encoding="utf-8",
     )
 
-    api = LilyPondDataAPI(data_root=data_root)
+    api = BaroqueMusicDataAPI(data_root=data_root)
 
     raw_files = api.list_raw_files()
     assert len(raw_files) == 1
@@ -50,7 +50,7 @@ def test_data_api_augmentations(tmp_path: Path):
     processed_it.mkdir(parents=True)
     (processed_it / "x_mvt1.ly").write_text("do4 re4", encoding="utf-8")
 
-    api = LilyPondDataAPI(data_root=data_root)
+    api = BaroqueMusicDataAPI(data_root=data_root)
 
     def aug_a(text: str) -> str:
         return text.replace("do", "XX")
