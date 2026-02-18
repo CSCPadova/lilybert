@@ -1,0 +1,4 @@
+data_dir: data/processed
+tokenizer_path: artifacts/tokenizer
+labels_path: labels/labels_v1.json
+language: english

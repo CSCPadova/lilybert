@@ -1,0 +1,14 @@
+defaults:
+  - dataset: default
+  - model: default
+  - training: default
+  - runtime: default
+  - tasks: default
+  - _self_
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+
+experiment_name: default

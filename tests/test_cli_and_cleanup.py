@@ -1,0 +1,192 @@
+"""Tests for hardened CLIs and cleaned public exports."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+from omegaconf import OmegaConf
+
+
+def test_training_cli_runs_cv(monkeypatch, capsys, tmp_path):
+    from lilybert.training import cli as training_cli
+
+    class _DummyTrainer:
+        def __init__(self, config):
+            self.config = config
+
+        def run(self):
+            return {
+                "task": self.config.task,
+                "n_folds": self.config.n_folds,
+                "mean": {"avg_score": 0.5},
+                "std": {"avg_score": 0.0},
+            }
+
+    monkeypatch.setattr(training_cli, "StratifiedKFoldTrainer", _DummyTrainer)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "lilybert-train",
+            "--task",
+            "composer",
+            "--data-dir",
+            str(tmp_path),
+            "--n-folds",
+            "3",
+        ],
+    )
+
+    training_cli.main()
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload["task"] == "composer"
+    assert payload["n_folds"] == 3
+
+
+def test_evaluation_cli_reports_single_label_metrics(monkeypatch, capsys, tmp_path):
+    from lilybert.evaluation import cli as eval_cli
+
+    y_true = np.array([0, 1, 1, 0])
+    y_pred = np.array([0, 1, 0, 0])
+
+    y_true_path = tmp_path / "y_true.npy"
+    y_pred_path = tmp_path / "y_pred.npy"
+    np.save(y_true_path, y_true)
+    np.save(y_pred_path, y_pred)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "lilybert-evaluate",
+            "--y-true",
+            str(y_true_path),
+            "--y-pred",
+            str(y_pred_path),
+        ],
+    )
+
+    eval_cli.main()
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert "accuracy" in payload
+    assert "f1_macro" in payload
+
+
+def test_run_experiment_script_module_exists(monkeypatch):
+    from lilybert.scripts import run_experiment
+
+    called = {}
+
+    class _DummyTrainer:
+        def __init__(self, config):
+            called["task"] = config.task
+
+        def run(self):
+            called["ran"] = True
+            return {}
+
+    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
+    run_experiment.run_task(
+        task="composer", data_dir="data/processed", tokenizer_path="artifacts/tokenizer"
+    )
+    assert called["task"] == "composer"
+    assert called["ran"] is True
+
+
+def test_run_experiment_hydra_config(monkeypatch):
+    from lilybert.scripts import run_experiment
+
+    seen = []
+
+    class _DummyTrainer:
+        def __init__(self, config):
+            seen.append(config)
+
+        def run(self):
+            return {"ok": True}
+
+    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
+
+    cfg = OmegaConf.create(
+        {
+            "dataset": {
+                "data_dir": "data/processed",
+                "tokenizer_path": "artifacts/tokenizer",
+                "labels_path": "labels/labels_v1.json",
+                "language": "english",
+            },
+            "model": {
+                "pretrained_model": "bert-base-uncased",
+                "mode": "full_finetune",
+                "lora_r": 16,
+                "lora_alpha": 32,
+            },
+            "training": {
+                "n_folds": 3,
+                "num_train_epochs": 2,
+                "batch_size": 4,
+                "learning_rate": 2e-5,
+                "weight_decay": 0.01,
+                "warmup_ratio": 0.1,
+                "early_stopping_patience": 2,
+                "max_length": 128,
+                "stride": 64,
+            },
+            "runtime": {"output_dir": "outputs/experiments", "seed": 42},
+            "tasks": {"list": ["composer", "key_scale"]},
+        }
+    )
+
+    results = run_experiment.run_from_config(cfg)
+    assert set(results.keys()) == {"composer", "key_scale"}
+    assert len(seen) == 2
+    assert seen[0].n_folds == 3
+    assert seen[0].batch_size == 4
+
+
+def test_generate_tables_creates_markdown_table(tmp_path):
+    from scripts import generate_tables
+
+    results = {
+        "composer": {
+            "mean": {"avg_score": 0.81, "majority_score": 0.78},
+            "std": {"avg_score": 0.02, "majority_score": 0.03},
+        }
+    }
+    input_path = tmp_path / "results.json"
+    output_path = tmp_path / "table.md"
+    input_path.write_text(json.dumps(results), encoding="utf-8")
+
+    generate_tables.generate_markdown_table(input_path, output_path)
+    text = output_path.read_text(encoding="utf-8")
+    assert "| Task |" in text
+    assert "composer" in text
+
+
+def test_main_cli_dispatches_subcommand(monkeypatch):
+    from lilybert import cli as main_cli
+
+    captured = {}
+
+    def _fake_run_experiment_main(argv=None):
+        captured["argv"] = argv
+
+    monkeypatch.setattr(
+        "lilybert.scripts.run_experiment.main", _fake_run_experiment_main
+    )
+    main_cli.main(["run-experiment", "--cfg", "job"])
+
+    assert captured["argv"] == ["--cfg", "job"]
+
+
+def test_main_cli_does_not_expose_meta_subcommands():
+    from lilybert import cli as main_cli
+
+    parser = main_cli.build_parser()
+    help_text = parser.format_help()
+
+    assert "upload-dataset" not in help_text
+    assert "upload-model" not in help_text
+    assert "generate-tables" not in help_text
