@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 import torch
+
+from .labels_hierarchy import LABEL_HIERARCHY
 
 
 class LabelEncoder:
@@ -167,13 +168,8 @@ class LabelEncoder:
         return classes
 
     def _load_hierarchy(self) -> Dict[str, Any]:
-        try:
-            module = importlib.import_module("labels.hierarchy")
-            schema = getattr(module, "labelSchema", None)
-            hierarchy = getattr(schema, "hierarchy", None) if schema else None
-            return hierarchy if isinstance(hierarchy, dict) else {}
-        except Exception:
-            return {}
+        hierarchy = LABEL_HIERARCHY
+        return hierarchy if isinstance(hierarchy, dict) else {}
 
     @staticmethod
     def _load_json(path: Path) -> Dict[str, Any]:

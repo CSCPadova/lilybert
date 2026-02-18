@@ -34,6 +34,9 @@ class TrainingConfig:
     weight_decay: float = 0.01
     warmup_ratio: float = 0.1
     early_stopping_patience: int = 5
+    max_steps: int = 0
+    eval_steps: int = 200
+    log_steps: int = 20
 
     lora_r: int = 16
     lora_alpha: int = 32
@@ -42,6 +45,11 @@ class TrainingConfig:
 
     output_dir: str = "outputs/cv"
     language: str = "english"
+    wandb_enabled: bool = False
+    wandb_project: str = "lilybert"
+    wandb_entity: Optional[str] = None
+    wandb_mode: str = "online"
+    wandb_run_name: Optional[str] = None
 
     # Legacy compatibility knobs retained for existing tests/transition
     use_lora: bool = True
@@ -81,6 +89,12 @@ class TrainingConfig:
             raise ValueError("n_folds must be >= 2")
         if self.early_stopping_patience < 1:
             raise ValueError("early_stopping_patience must be >= 1")
+        if self.max_steps < 0:
+            raise ValueError("max_steps must be >= 0")
+        if self.eval_steps < 1:
+            raise ValueError("eval_steps must be >= 1")
+        if self.log_steps < 1:
+            raise ValueError("log_steps must be >= 1")
 
     def save_pretrained(self, save_directory: str) -> None:
         save_path = Path(save_directory)

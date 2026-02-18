@@ -17,8 +17,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tokenizer-path", default="artifacts/tokenizer")
     parser.add_argument("--n-folds", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--max-steps", type=int, default=0)
+    parser.add_argument("--eval-steps", type=int, default=200)
+    parser.add_argument("--log-steps", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--output-dir", default="outputs/cv")
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="lilybert")
+    parser.add_argument("--wandb-entity", default=None)
+    parser.add_argument("--wandb-mode", default="online")
+    parser.add_argument("--wandb-run-name", default=None)
     return parser
 
 
@@ -31,10 +39,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         n_folds=args.n_folds,
         num_train_epochs=args.epochs,
         epochs=args.epochs,
+        max_steps=args.max_steps,
+        eval_steps=args.eval_steps,
+        log_steps=args.log_steps,
         batch_size=args.batch_size,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         output_dir=args.output_dir,
+        wandb_enabled=args.wandb,
+        wandb_project=args.wandb_project,
+        wandb_entity=args.wandb_entity,
+        wandb_mode=args.wandb_mode,
+        wandb_run_name=args.wandb_run_name,
     )
     trainer = StratifiedKFoldTrainer(config=config)
     results = trainer.run()

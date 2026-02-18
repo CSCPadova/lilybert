@@ -1,7 +1,7 @@
 """Data processing and dataset utilities for LilyPond music notation."""
 
 # Always available - core parsing functionality
-from .lilypond_parser import LilyPondParser
+from .parser import LilyPondParser
 
 # Conditional imports for ML-dependent modules
 try:

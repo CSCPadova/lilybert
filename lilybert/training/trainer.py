@@ -14,6 +14,11 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizerFast
 
+try:
+    import wandb
+except Exception:  # pragma: no cover - optional runtime dependency
+    wandb = None
+
 from lilybert.data import LilyPondClassificationDataset
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 from lilybert.models import (
@@ -183,33 +188,86 @@ class StratifiedKFoldTrainer:
 
         best_val_loss = float("inf")
         patience_count = 0
+        steps_per_epoch = max(1, len(train_loader))
+        total_steps = (
+            self.config.max_steps
+            if self.config.max_steps > 0
+            else self.config.num_train_epochs * steps_per_epoch
+        )
 
-        for _ in range(self.config.num_train_epochs):
+        run = self._start_wandb_run(
+            fold_index=fold_index,
+            total_steps=total_steps,
+            num_classes=num_classes,
+        )
+
+        step = 0
+        train_loss_window: List[float] = []
+        val_metrics: Dict[str, float] = {
+            "val_loss": 0.0,
+            "avg_score": 0.0,
+            "majority_score": 0.0,
+        }
+
+        train_iterator = iter(train_loader)
+        while step < total_steps:
             model.train()
-            for batch in train_loader:
-                optimizer.zero_grad()
-                labels = batch["label"].to(self.device)
-                outputs = model(
-                    input_ids=batch["input_ids"].to(self.device),
-                    attention_mask=batch["attention_mask"].to(self.device),
-                    labels=labels,
+            try:
+                batch = next(train_iterator)
+            except StopIteration:
+                train_iterator = iter(train_loader)
+                batch = next(train_iterator)
+
+            optimizer.zero_grad()
+            labels = batch["label"].to(self.device)
+            outputs = model(
+                input_ids=batch["input_ids"].to(self.device),
+                attention_mask=batch["attention_mask"].to(self.device),
+                labels=labels,
+            )
+            loss = outputs["loss"]
+            loss.backward()
+            optimizer.step()
+
+            step += 1
+            train_loss_value = float(loss.item())
+            train_loss_window.append(train_loss_value)
+
+            if step % self.config.log_steps == 0 or step == total_steps:
+                window_avg = float(mean(train_loss_window)) if train_loss_window else 0.0
+                train_loss_window = []
+                self._log_wandb(
+                    run,
+                    {
+                        "train/loss": window_avg,
+                        "fold": float(fold_index),
+                        "global_step": float(step),
+                    },
+                    step=step,
                 )
-                loss = outputs["loss"]
-                loss.backward()
-                optimizer.step()
 
-            val_metrics = self._evaluate(model, val_loader, multi_label)
-            val_loss = val_metrics["val_loss"]
+            should_eval = (step % self.config.eval_steps == 0) or (step == total_steps)
+            if should_eval:
+                val_metrics = self._evaluate(model, val_loader, multi_label)
+                log_payload = {
+                    "fold": float(fold_index),
+                    "global_step": float(step),
+                    **{f"val/{k}": float(v) for k, v in val_metrics.items()},
+                }
+                self._log_wandb(run, log_payload, step=step)
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_count = 0
-            else:
-                patience_count += 1
-                if patience_count >= self.config.early_stopping_patience:
-                    break
+                val_loss = val_metrics["val_loss"]
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_count = 0
+                else:
+                    patience_count += 1
+                    if patience_count >= self.config.early_stopping_patience:
+                        break
 
         val_metrics["fold"] = float(fold_index)
+        val_metrics["best_val_loss"] = float(best_val_loss)
+        self._finish_wandb_run(run, val_metrics)
         return val_metrics
 
     def _evaluate(
@@ -261,6 +319,16 @@ class StratifiedKFoldTrainer:
             "val_loss": float(mean(losses)) if losses else 0.0,
             "avg_score": float(average_metrics["score"]),
             "majority_score": float(majority_metrics["score"]),
+            **{
+                f"avg_{key}": float(value)
+                for key, value in average_metrics.items()
+                if key != "score"
+            },
+            **{
+                f"majority_{key}": float(value)
+                for key, value in majority_metrics.items()
+                if key != "score"
+            },
         }
 
     def _aggregate_metrics(
@@ -319,7 +387,57 @@ class StratifiedKFoldTrainer:
             )
             score = metric_values["accuracy"]
 
-        return {"score": float(score)}
+        normalized_metrics = {
+            key: float(value) for key, value in metric_values.items() if value is not None
+        }
+        normalized_metrics["score"] = float(score)
+        return normalized_metrics
+
+    def _start_wandb_run(
+        self,
+        fold_index: int,
+        total_steps: int,
+        num_classes: int,
+    ):
+        if not self.config.wandb_enabled or wandb is None:
+            return None
+
+        run_name = self.config.wandb_run_name or f"{self.config.task}-fold{fold_index}"
+        return wandb.init(
+            project=self.config.wandb_project,
+            entity=self.config.wandb_entity,
+            mode=self.config.wandb_mode,
+            name=run_name,
+            config={
+                "task": self.config.task,
+                "fold": fold_index,
+                "n_folds": self.config.n_folds,
+                "max_steps": total_steps,
+                "eval_steps": self.config.eval_steps,
+                "log_steps": self.config.log_steps,
+                "learning_rate": self.config.learning_rate,
+                "weight_decay": self.config.weight_decay,
+                "batch_size": self.config.per_device_train_batch_size,
+                "num_classes": num_classes,
+                "language": self.config.language,
+            },
+            reinit=True,
+        )
+
+    @staticmethod
+    def _log_wandb(run: Any, payload: Dict[str, float], step: int) -> None:
+        if run is None:
+            return
+        run.log(payload, step=step)
+
+    @staticmethod
+    def _finish_wandb_run(run: Any, summary: Dict[str, float]) -> None:
+        if run is None:
+            return
+        for key, value in summary.items():
+            if isinstance(value, (int, float)):
+                run.summary[key] = float(value)
+        run.finish()
 
     def _infer_num_classes(
         self,

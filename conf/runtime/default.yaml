@@ -1,2 +1,8 @@
 output_dir: outputs/experiments
 seed: 42
+wandb:
+  enabled: false
+  project: lilybert
+  entity: null
+  mode: online
+  run_name: null

@@ -3,6 +3,7 @@ defaults:
   - model: default
   - training: default
   - runtime: default
+  # Task-set preset used by run-experiment (e.g. default, baseline)
   - tasks: default
   - _self_
 

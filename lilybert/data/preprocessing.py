@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from transformers import PreTrainedTokenizer
 
-from .lilypond_parser import LilyPondParser
+from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
 
@@ -231,13 +231,18 @@ class LilyPondPreprocessor:
             if forma_commands:
                 expanded = re.sub(r"\\forma\b", lambda _: forma_commands, expanded)
 
-            stage5 = self._strip_engraving(expanded)
-            stage7 = self._postprocess(stage5)
-            if not stage7.strip():
-                continue
+            parts = self._extract_part_blocks(score_block, assignments, forma_commands)
 
-            italian = stage7.strip() + "\n"
-            english = self._convert_italian_to_english_notes(italian)
+            if parts:
+                italian = self._render_part_variables(parts, language="italiano")
+                english = self._render_part_variables(parts, language="english")
+            else:
+                stage5 = self._strip_engraving(expanded)
+                stage7 = self._postprocess(stage5)
+                if not stage7.strip():
+                    continue
+                italian = stage7.strip() + "\n"
+                english = self._convert_italian_to_english_notes(italian)
 
             meta_key = meta_items[idx - 1][0] if idx - 1 < len(meta_items) else None
             meta_value = meta_items[idx - 1][1] if idx - 1 < len(meta_items) else {}
@@ -264,12 +269,81 @@ class LilyPondPreprocessor:
                         "period": labels_entry.get("period") if labels_entry else None,
                         "meta": meta_value,
                     },
+                    "parts": parts,
                     "italiano_text": italian,
                     "english_text": english,
                 }
             )
 
         return outputs
+
+    def _extract_part_blocks(
+        self,
+        score_block: str,
+        assignments: Dict[str, str],
+        forma_commands: str,
+    ) -> List[Dict[str, str]]:
+        part_names = self._extract_referenced_assignment_names(score_block, assignments)
+        parts: List[Dict[str, str]] = []
+
+        for name in part_names:
+            value = assignments.get(name, "")
+            if not value:
+                continue
+
+            expanded = self._inline_variables(value, assignments)
+            if forma_commands:
+                expanded = re.sub(r"\\forma\b", lambda _: forma_commands, expanded)
+
+            stripped = self._strip_engraving(expanded)
+            cleaned = self._postprocess(stripped)
+            if not cleaned.strip():
+                continue
+
+            italian_text = cleaned.strip()
+            parts.append(
+                {
+                    "name": name,
+                    "italiano_text": italian_text,
+                    "english_text": self._convert_italian_to_english_notes(
+                        italian_text
+                    ),
+                }
+            )
+
+        return parts
+
+    def _extract_referenced_assignment_names(
+        self, score_block: str, assignments: Dict[str, str]
+    ) -> List[str]:
+        names: List[str] = []
+        seen = set()
+
+        for match in re.finditer(r"\\([A-Za-z][\w-]*)\b", score_block):
+            name = match.group(1)
+            if name in seen:
+                continue
+            if name not in assignments:
+                continue
+            if name == "forma":
+                continue
+            seen.add(name)
+            names.append(name)
+
+        return names
+
+    def _render_part_variables(
+        self, parts: List[Dict[str, str]], language: str
+    ) -> str:
+        rows: List[str] = []
+        key = f"{language}_text"
+
+        for part in parts:
+            name = part["name"]
+            body = part[key].strip()
+            rows.append(f"{name} = {{\n{body}\n}}")
+
+        return "\n\n".join(rows).strip() + "\n"
 
     def _preprocess_text(self, text: str) -> str:
         """Compatibility wrapper for tests and existing callers."""

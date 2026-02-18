@@ -68,6 +68,12 @@ lilybert run-experiment tasks=baseline
 # Override modular config values from CLI
 lilybert run-experiment training.n_folds=3 training.batch_size=8 runtime.output_dir=outputs/exp_debug
 
+# Step-oriented training with periodic eval/logging
+lilybert run-experiment training.max_steps=2000 training.eval_steps=200 training.log_steps=20
+
+# Enable W&B logging (one run per fold)
+lilybert run-experiment runtime.wandb.enabled=true runtime.wandb.project=lilybert
+
 # Switch config file
 lilybert run-experiment --config-name experiment
 ```
@@ -102,11 +108,10 @@ from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 conf/           # hydra config tree (dataset/model/training/runtime/tasks)
 
 lilybert/
-  data/         # parser, preprocessing, tokenizer, labels, dataset, repository API
+  data/         # parser, preprocessing, tokenizer, label hierarchy, dataset, repository API
   models/       # BERT classifier and model config
   training/     # grouped stratified CV trainer and config
   evaluation/   # aggregation and classification metrics
-  hub/          # dataset/model upload helpers
   scripts/      # packaged script entrypoints
 ```
 

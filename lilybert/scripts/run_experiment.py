@@ -14,6 +14,15 @@ from lilybert.models import TrainingMode
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 
 
+SUPPORTED_TASKS = {
+    "composer",
+    "musical_form",
+    "instruments",
+    "section_nomenclature",
+    "key_scale",
+}
+
+
 def _normalize_mode(value: Any) -> TrainingMode:
     if isinstance(value, TrainingMode):
         return value
@@ -52,7 +61,17 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
     runtime_cfg = cfg.get("runtime", {})
     tasks_cfg = cfg.get("tasks", {})
 
-    tasks = list(tasks_cfg.get("list", ["composer"]))
+    if isinstance(tasks_cfg, (list, tuple)):
+        tasks = list(tasks_cfg)
+    else:
+        tasks = list(tasks_cfg.get("list", ["composer"]))
+    invalid_tasks = [task for task in tasks if task not in SUPPORTED_TASKS]
+    if invalid_tasks:
+        raise ValueError(
+            f"Unknown task(s): {invalid_tasks}. Supported tasks: {sorted(SUPPORTED_TASKS)}"
+        )
+
+    wandb_cfg = runtime_cfg.get("wandb", {})
     training_overrides = {
         "pretrained_model": model_cfg.get("pretrained_model", "bert-base-uncased"),
         "mode": model_cfg.get("mode", "full_finetune"),
@@ -63,6 +82,9 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "n_folds": training_cfg.get("n_folds", 5),
         "num_train_epochs": training_cfg.get("num_train_epochs", 20),
         "epochs": training_cfg.get("num_train_epochs", 20),
+        "max_steps": training_cfg.get("max_steps", 0),
+        "eval_steps": training_cfg.get("eval_steps", 200),
+        "log_steps": training_cfg.get("log_steps", 20),
         "batch_size": training_cfg.get("batch_size", 16),
         "per_device_train_batch_size": training_cfg.get("batch_size", 16),
         "per_device_eval_batch_size": training_cfg.get("batch_size", 16),
@@ -73,6 +95,11 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "max_length": training_cfg.get("max_length", 512),
         "stride": training_cfg.get("stride", 256),
         "seed": runtime_cfg.get("seed", 42),
+        "wandb_enabled": wandb_cfg.get("enabled", False),
+        "wandb_project": wandb_cfg.get("project", "lilybert"),
+        "wandb_entity": wandb_cfg.get("entity", None),
+        "wandb_mode": wandb_cfg.get("mode", "online"),
+        "wandb_run_name": wandb_cfg.get("run_name", None),
     }
 
     results = {}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -12,7 +13,7 @@ from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
 
-from .lilypond_parser import LilyPondParser
+from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,16 @@ logger = logging.getLogger(__name__)
 class LilyPondTokenizer:
     """Parser-aware BPE tokenizer for movement-level LilyPond files."""
 
-    SPECIAL_TOKENS = ["[CLS]", "[SEP]", "[PAD]", "[UNK]", "[MASK]"]
+    SPECIAL_TOKENS = [
+        "[CLS]",
+        "[SEP]",
+        "[PAD]",
+        "[UNK]",
+        "[MASK]",
+        "[PART_BEGIN]",
+        "[PART_NAME]",
+        "[PART_END]",
+    ]
 
     def __init__(
         self,
@@ -116,8 +126,63 @@ class LilyPondTokenizer:
         yield from root.glob("*.ly")
 
     def _movement_to_parser_tokens(self, text: str) -> str:
+        parts = self._extract_part_variables(text)
+        if parts:
+            tokens: List[str] = []
+            for name, content in parts:
+                music_tokens = self.parser._tokenize_music(content)
+                if not music_tokens:
+                    parsed = self.parser.parse_content(content)
+                    music_tokens = [element.content for element in parsed]
+                if not music_tokens:
+                    continue
+
+                tokens.extend(
+                    [
+                        "[PART_BEGIN]",
+                        "[PART_NAME]",
+                        f"part:{name.lower()}",
+                        *music_tokens,
+                        "[PART_END]",
+                    ]
+                )
+            return " ".join(tokens).strip()
+
         tokens = self.parser._tokenize_music(text)
         if not tokens:
             parsed = self.parser.parse_content(text)
             tokens = [element.content for element in parsed]
         return " ".join(tokens).strip()
+
+    def _extract_part_variables(self, text: str) -> List[tuple[str, str]]:
+        parts: List[tuple[str, str]] = []
+        pattern = r"([A-Za-z][\w-]*)\s*=\s*\{"
+        cursor = 0
+
+        while True:
+            match = re.search(pattern, text[cursor:])
+            if not match:
+                break
+
+            start = cursor + match.start()
+            name = match.group(1)
+            open_brace = text.find("{", start)
+            close_brace = self._find_matching_brace(text, open_brace)
+            body = text[open_brace + 1 : close_brace - 1].strip()
+            if body:
+                parts.append((name, body))
+            cursor = close_brace
+
+        return parts
+
+    @staticmethod
+    def _find_matching_brace(text: str, open_idx: int) -> int:
+        depth = 1
+        for i in range(open_idx + 1, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+        return len(text)

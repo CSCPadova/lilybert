@@ -1,5 +1,8 @@
 n_folds: 5
 num_train_epochs: 20
+max_steps: 0
+eval_steps: 200
+log_steps: 20
 batch_size: 16
 learning_rate: 2e-5
 weight_decay: 0.01
