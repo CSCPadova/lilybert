@@ -120,15 +120,34 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "wandb_run_name": wandb_cfg.get("run_name", None),
     }
 
+    modes_cfg = cfg.get("modes", None)
+    if modes_cfg:
+        modes = [_normalize_mode(m) for m in modes_cfg]
+    else:
+        modes = [_normalize_mode(model_cfg.get("mode", "full_finetune"))]
+
     results = {}
-    for task in tasks:
-        results[task] = run_task(
-            task=task,
-            data_dir=dataset_cfg.get("data_dir", "data/processed"),
-            tokenizer_path=tokenizer_path,
-            output_dir=runtime_cfg.get("output_dir", "outputs/experiments"),
-            training_overrides=training_overrides,
-        )
+    base_output_dir = runtime_cfg.get("output_dir", "outputs/experiments")
+    for mode in modes:
+        mode_overrides = {**training_overrides, "mode": mode}
+        mode_key = mode.value
+        results[mode_key] = {}
+        for task in tasks:
+            print(f"\n{'='*60}")
+            print(f"Running: mode={mode_key}, task={task}")
+            print(f"{'='*60}")
+            mode_output_dir = str(Path(base_output_dir) / mode_key)
+            results[mode_key][task] = run_task(
+                task=task,
+                data_dir=dataset_cfg.get("data_dir", "data/processed"),
+                tokenizer_path=tokenizer_path,
+                output_dir=mode_output_dir,
+                training_overrides=mode_overrides,
+            )
+
+    if len(modes) == 1:
+        results = results[modes[0].value]
+
     return results
 
 

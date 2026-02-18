@@ -13,3 +13,7 @@ hydra:
   output_subdir: null
 
 experiment_name: default
+
+# Training modes to sweep over. Set to null to use model.mode only.
+# Example: modes: [frozen, lora, full_finetune, random_init]
+modes: null

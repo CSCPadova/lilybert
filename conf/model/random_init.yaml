@@ -1,0 +1,4 @@
+pretrained_model: bert-base-uncased
+mode: random_init
+lora_r: 16
+lora_alpha: 32
