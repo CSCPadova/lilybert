@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--labels-path",
-        default="labels/labels_v1.json",
+        default="data/labels/labels_v1.json",
         help="Path to labels_v1.json",
     )
     return parser

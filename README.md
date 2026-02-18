@@ -28,7 +28,7 @@ pip install -e ".[dev]"
 lilybert preprocess \
   --input-dir data/raw \
   --output-dir data/processed \
-  --labels-path labels/labels_v1.json
+  --labels-path data/labels/labels_v1.json
 ```
 
 ### Tokenizer training

@@ -121,7 +121,7 @@ def test_run_experiment_hydra_config(monkeypatch):
                     "italiano": "artifacts/tokenizer_italiano",
                     "both": "artifacts/tokenizer",
                 },
-                "labels_path": "labels/labels_v1.json",
+                "labels_path": "data/labels/labels_v1.json",
                 "language": "english",
             },
             "model": {
@@ -172,7 +172,7 @@ def test_run_experiment_invalid_tokenizer_notation_mode(monkeypatch):
                 "data_dir": "data/processed",
                 "tokenizer_path": "artifacts/tokenizer",
                 "tokenizer_notation_mode": "invalid",
-                "labels_path": "labels/labels_v1.json",
+                "labels_path": "data/labels/labels_v1.json",
                 "language": "english",
             },
             "model": {"pretrained_model": "bert-base-uncased", "mode": "full_finetune"},

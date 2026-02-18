@@ -5,5 +5,5 @@ tokenizer_path_by_notation:
   english: artifacts/tokenizer_english
   italiano: artifacts/tokenizer_italiano
   both: artifacts/tokenizer
-labels_path: labels/labels_v1.json
+labels_path: data/labels/labels_v1.json
 language: english

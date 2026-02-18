@@ -18,7 +18,7 @@ class TrainingConfig:
     mode: TrainingMode = TrainingMode.FULL_FINETUNE
     task: str = "composer"
     data_dir: str = "data/processed"
-    labels_path: str = "labels/labels_v1.json"
+    labels_path: str = "data/labels/labels_v1.json"
     tokenizer_path: str = "artifacts/tokenizer"
 
     max_length: int = 512

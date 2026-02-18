@@ -27,7 +27,7 @@ class LabelEncoder:
     def __init__(
         self,
         metadata_path: str | Path = "data/processed/metadata.json",
-        labels_path: str | Path = "labels/labels_v1.json",
+        labels_path: str | Path = "data/labels/labels_v1.json",
     ):
         self.metadata_path = Path(metadata_path)
         self.labels_path = Path(labels_path)

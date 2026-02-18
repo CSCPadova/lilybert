@@ -95,7 +95,7 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "mode": model_cfg.get("mode", "full_finetune"),
         "lora_r": model_cfg.get("lora_r", 16),
         "lora_alpha": model_cfg.get("lora_alpha", 32),
-        "labels_path": dataset_cfg.get("labels_path", "labels/labels_v1.json"),
+        "labels_path": dataset_cfg.get("labels_path", "data/labels/labels_v1.json"),
         "language": dataset_cfg.get("language", "english"),
         "n_folds": training_cfg.get("n_folds", 5),
         "num_train_epochs": training_cfg.get("num_train_epochs", 20),

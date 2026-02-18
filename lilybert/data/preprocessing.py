@@ -77,7 +77,7 @@ class LilyPondPreprocessor:
         self.add_special_tokens = add_special_tokens
         self.normalize_notation = normalize_notation
         self.parser = LilyPondParser()
-        self.labels_path = "./labels/labels_v1.json"
+        self.labels_path = "./data/labels/labels_v1.json"
         self._note_regex = self._build_note_regex()
 
     def preprocess_file(self, file_path: str) -> Dict[str, Any]:
