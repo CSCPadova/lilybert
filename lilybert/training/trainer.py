@@ -244,9 +244,11 @@ class StratifiedKFoldTrainer:
             )
             loss = outputs["loss"]
             loss.backward()
+            grad_norm = self._compute_grad_norm(model)
             optimizer.step()
 
             step += 1
+            epoch = step / steps_per_epoch
             train_loss_value = float(loss.item())
             train_loss_window.append(train_loss_value)
             pbar.update(1)
@@ -256,11 +258,15 @@ class StratifiedKFoldTrainer:
                     float(mean(train_loss_window)) if train_loss_window else 0.0
                 )
                 train_loss_window = []
-                pbar.set_postfix(loss=f"{window_avg:.4f}")
+                current_lr = optimizer.param_groups[0]["lr"]
+                pbar.set_postfix(loss=f"{window_avg:.4f}", lr=f"{current_lr:.2e}")
                 self._log_wandb(
                     run,
                     {
                         "train/loss": window_avg,
+                        "train/learning_rate": current_lr,
+                        "train/grad_norm": grad_norm,
+                        "train/epoch": epoch,
                         "fold": float(fold_index),
                         "global_step": float(step),
                     },
@@ -273,12 +279,16 @@ class StratifiedKFoldTrainer:
                 log_payload = {
                     "fold": float(fold_index),
                     "global_step": float(step),
+                    "train/epoch": epoch,
                     **{f"val/{k}": float(v) for k, v in val_metrics.items()},
                 }
                 self._log_wandb(run, log_payload, step=step)
+                score_key = "avg_f1_micro" if multi_label else "avg_accuracy"
+                score_val = val_metrics.get(score_key, 0.0)
                 pbar.set_postfix(
-                    loss=f"{pbar.postfix or ''}",
+                    loss=f"{window_avg:.4f}",
                     val_loss=f"{val_metrics['val_loss']:.4f}",
+                    score=f"{score_val:.3f}",
                 )
 
                 val_loss = val_metrics["val_loss"]
@@ -441,16 +451,33 @@ class StratifiedKFoldTrainer:
                 "fold": fold_index,
                 "n_folds": self.config.n_folds,
                 "max_steps": total_steps,
+                "num_train_epochs": self.config.num_train_epochs,
                 "eval_steps": self.config.eval_steps,
                 "log_steps": self.config.log_steps,
                 "learning_rate": self.config.learning_rate,
                 "weight_decay": self.config.weight_decay,
+                "warmup_ratio": self.config.warmup_ratio,
                 "batch_size": self.config.per_device_train_batch_size,
+                "max_length": self.config.max_length,
+                "stride": self.config.stride,
                 "num_classes": num_classes,
+                "mode": str(self.config.mode),
+                "pretrained_model": self.config.pretrained_model,
                 "language": self.config.language,
+                "early_stopping_patience": self.config.early_stopping_patience,
+                "seed": self.config.seed,
+                "device": str(self.device),
             },
             reinit=True,
         )
+
+    @staticmethod
+    def _compute_grad_norm(model: torch.nn.Module) -> float:
+        total_norm = 0.0
+        for p in model.parameters():
+            if p.grad is not None:
+                total_norm += p.grad.data.norm(2).item() ** 2
+        return total_norm**0.5
 
     @staticmethod
     def _log_wandb(run: Any, payload: Dict[str, float], step: int) -> None:
