@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
 
 try:
@@ -224,6 +225,7 @@ class StratifiedKFoldTrainer:
             "majority_score": 0.0,
         }
 
+        pbar = tqdm(total=total_steps, desc=f"Fold {fold_index}", unit="step")
         train_iterator = iter(train_loader)
         while step < total_steps:
             model.train()
@@ -247,12 +249,14 @@ class StratifiedKFoldTrainer:
             step += 1
             train_loss_value = float(loss.item())
             train_loss_window.append(train_loss_value)
+            pbar.update(1)
 
             if step % self.config.log_steps == 0 or step == total_steps:
                 window_avg = (
                     float(mean(train_loss_window)) if train_loss_window else 0.0
                 )
                 train_loss_window = []
+                pbar.set_postfix(loss=f"{window_avg:.4f}")
                 self._log_wandb(
                     run,
                     {
@@ -272,6 +276,10 @@ class StratifiedKFoldTrainer:
                     **{f"val/{k}": float(v) for k, v in val_metrics.items()},
                 }
                 self._log_wandb(run, log_payload, step=step)
+                pbar.set_postfix(
+                    loss=f"{pbar.postfix or ''}",
+                    val_loss=f"{val_metrics['val_loss']:.4f}",
+                )
 
                 val_loss = val_metrics["val_loss"]
                 if val_loss < best_val_loss:
@@ -281,6 +289,7 @@ class StratifiedKFoldTrainer:
                     patience_count += 1
                     if patience_count >= self.config.early_stopping_patience:
                         break
+        pbar.close()
 
         val_metrics["fold"] = float(fold_index)
         val_metrics["best_val_loss"] = float(best_val_loss)
