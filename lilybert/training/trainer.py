@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean, stdev
@@ -224,6 +225,7 @@ class StratifiedKFoldTrainer:
             "avg_score": 0.0,
             "majority_score": 0.0,
         }
+        best_checkpoint_dir: Optional[Path] = None
 
         pbar = tqdm(total=total_steps, desc=f"Fold {fold_index}", unit="step")
         train_iterator = iter(train_loader)
@@ -295,6 +297,22 @@ class StratifiedKFoldTrainer:
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     patience_count = 0
+                    best_checkpoint_dir = self._save_best_checkpoint(
+                        model=model,
+                        fold_index=fold_index,
+                        step=step,
+                        val_loss=val_loss,
+                        train_dataset=train_dataset,
+                        num_classes=num_classes,
+                        multi_label=multi_label,
+                    )
+                    self._upload_checkpoint_to_wandb(
+                        run=run,
+                        checkpoint_dir=best_checkpoint_dir,
+                        fold_index=fold_index,
+                        step=step,
+                        val_loss=val_loss,
+                    )
                 else:
                     patience_count += 1
                     if patience_count >= self.config.early_stopping_patience:
@@ -303,8 +321,97 @@ class StratifiedKFoldTrainer:
 
         val_metrics["fold"] = float(fold_index)
         val_metrics["best_val_loss"] = float(best_val_loss)
+        if best_checkpoint_dir is not None:
+            val_metrics["best_checkpoint_dir"] = str(best_checkpoint_dir)
         self._finish_wandb_run(run, val_metrics)
         return val_metrics
+
+    def _save_best_checkpoint(
+        self,
+        model: torch.nn.Module,
+        fold_index: int,
+        step: int,
+        val_loss: float,
+        train_dataset: BaroqueMusicClassificationDataset,
+        num_classes: int,
+        multi_label: bool,
+    ) -> Path:
+        checkpoint_dir = (
+            Path(self.config.output_dir) / "checkpoints" / f"fold_{fold_index}" / "best"
+        )
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        state_dict = {
+            key: value.detach().cpu() if torch.is_tensor(value) else value
+            for key, value in model.state_dict().items()
+        }
+        torch.save(state_dict, checkpoint_dir / "model.pt")
+
+        checkpoint_config = {
+            "task": self.config.task,
+            "num_classes": int(num_classes),
+            "multi_label": bool(multi_label),
+            "fold": int(fold_index),
+            "best_step": int(step),
+            "best_val_loss": float(val_loss),
+            "max_length": int(self.config.max_length),
+            "stride": int(self.config.stride),
+        }
+        (checkpoint_dir / "config.json").write_text(
+            json.dumps(checkpoint_config, indent=2),
+            encoding="utf-8",
+        )
+
+        label_map = {
+            str(idx): label for label, idx in train_dataset.label_to_index.items()
+        }
+        (checkpoint_dir / "label_map.json").write_text(
+            json.dumps(label_map, indent=2),
+            encoding="utf-8",
+        )
+
+        tokenizer_dir = checkpoint_dir / "tokenizer"
+        if tokenizer_dir.exists():
+            shutil.rmtree(tokenizer_dir)
+
+        tokenizer = self._ensure_tokenizer()
+        save_pretrained = getattr(tokenizer, "save_pretrained", None)
+        if callable(save_pretrained):
+            save_pretrained(str(tokenizer_dir))
+        else:
+            source_tokenizer_dir = Path(self.config.tokenizer_path)
+            if source_tokenizer_dir.exists():
+                shutil.copytree(source_tokenizer_dir, tokenizer_dir)
+
+        return checkpoint_dir
+
+    def _upload_checkpoint_to_wandb(
+        self,
+        run: Any,
+        checkpoint_dir: Path,
+        fold_index: int,
+        step: int,
+        val_loss: float,
+    ) -> None:
+        if run is None or wandb is None:
+            return
+        artifact_cls = getattr(wandb, "Artifact", None)
+        if artifact_cls is None:
+            return
+
+        artifact = artifact_cls(
+            name=f"{self.config.task}-fold{fold_index}-best-checkpoint",
+            type="model",
+            metadata={
+                "task": self.config.task,
+                "fold": int(fold_index),
+                "step": int(step),
+                "best_val_loss": float(val_loss),
+                "mode": str(self.config.mode),
+            },
+        )
+        artifact.add_dir(str(checkpoint_dir))
+        run.log_artifact(artifact, aliases=["best", f"step-{step}"])
 
     def _evaluate(
         self, model: torch.nn.Module, val_loader: DataLoader, multi_label: bool
@@ -577,11 +684,14 @@ class StratifiedKFoldTrainer:
     def _summarize_fold_metrics(
         fold_metrics: List[Dict[str, float]],
     ) -> tuple[Dict[str, float], Dict[str, float]]:
-        numeric_keys = (
-            [key for key in fold_metrics[0].keys() if key != "fold"]
-            if fold_metrics
-            else []
-        )
+        numeric_keys = []
+        if fold_metrics:
+            for key in fold_metrics[0].keys():
+                if key == "fold":
+                    continue
+                values = [metrics.get(key) for metrics in fold_metrics]
+                if all(isinstance(value, (int, float)) for value in values):
+                    numeric_keys.append(key)
         mean_metrics: Dict[str, float] = {}
         std_metrics: Dict[str, float] = {}
 

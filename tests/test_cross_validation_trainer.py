@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import torch
 from torch import nn
 
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 from lilybert.training.cross_validation import build_grouped_stratified_folds
+from lilybert.training import trainer as trainer_module
 
 
 class _FakeTokenizer:
@@ -152,3 +154,79 @@ def test_stratified_kfold_trainer_run_writes_results(tmp_path: Path):
 
     results_path = Path(results["results_path"])
     assert results_path.exists()
+
+    for fold_idx in range(1, config.n_folds + 1):
+        checkpoint_dir = output_dir / "checkpoints" / f"fold_{fold_idx}" / "best"
+        assert checkpoint_dir.exists()
+        assert (checkpoint_dir / "model.pt").exists()
+        assert (checkpoint_dir / "config.json").exists()
+        assert (checkpoint_dir / "label_map.json").exists()
+
+
+def test_checkpoint_uploads_to_wandb_artifact(tmp_path: Path, monkeypatch):
+    processed = _build_processed_dataset(tmp_path)
+    output_dir = tmp_path / "cv_outputs"
+
+    config = TrainingConfig.for_quick_test()
+    config.data_dir = str(processed)
+    config.output_dir = str(output_dir)
+    config.task = "composer"
+    config.n_folds = 2
+    config.max_length = 10
+    config.stride = 4
+    config.eval_steps = 1
+    config.log_steps = 1
+    config.max_steps = 1
+    config.wandb_enabled = True
+
+    tokenizer = _FakeTokenizer()
+
+    def model_factory(num_classes: int, multi_label: bool):
+        return _TinyClassifier(
+            vocab_size=64, num_classes=num_classes, multi_label=multi_label
+        )
+
+    artifacts_logged = []
+
+    class _FakeArtifact:
+        def __init__(self, name, type, metadata):
+            self.name = name
+            self.type = type
+            self.metadata = metadata
+            self.added_dirs = []
+
+        def add_dir(self, path):
+            self.added_dirs.append(path)
+
+    class _FakeRun:
+        def __init__(self):
+            self.summary = {}
+
+        def log(self, payload, step):
+            del payload, step
+
+        def log_artifact(self, artifact, aliases=None):
+            artifacts_logged.append((artifact, aliases or []))
+
+        def finish(self):
+            return None
+
+    def _fake_init(**kwargs):
+        del kwargs
+        return _FakeRun()
+
+    fake_wandb = SimpleNamespace(Artifact=_FakeArtifact, init=_fake_init)
+    monkeypatch.setattr(trainer_module, "wandb", fake_wandb)
+
+    trainer = StratifiedKFoldTrainer(
+        config=config,
+        tokenizer=tokenizer,
+        model_factory=model_factory,
+    )
+    trainer.run()
+
+    assert artifacts_logged
+    artifact, aliases = artifacts_logged[0]
+    assert artifact.type == "model"
+    assert "best" in aliases
+    assert artifact.added_dirs
