@@ -77,7 +77,7 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
     runtime_cfg = cfg.get("runtime", {})
     tasks_cfg = cfg.get("tasks", {})
 
-    if isinstance(tasks_cfg, (list, tuple)):
+    if OmegaConf.is_list(tasks_cfg) or isinstance(tasks_cfg, (list, tuple)):
         tasks = list(tasks_cfg)
     else:
         tasks = list(tasks_cfg.get("list", ["composer"]))
