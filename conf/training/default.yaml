@@ -7,6 +7,10 @@ batch_size: 16
 learning_rate: 2e-5
 weight_decay: 0.01
 warmup_ratio: 0.1
+lr_scheduler_type: cosine
+grad_clip_norm: 1.0
 early_stopping_patience: 5
+model_selection_metric: auto
+model_selection_mode: auto
 max_length: 512
 stride: 256

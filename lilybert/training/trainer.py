@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import platform
+import random
 import shutil
+import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean, stdev
@@ -11,10 +15,15 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
+from sklearn.metrics import (
+    confusion_matrix,
+    multilabel_confusion_matrix,
+    precision_recall_fscore_support,
+)
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerFast
+from transformers import PreTrainedTokenizerFast, get_scheduler
 
 try:
     import wandb
@@ -74,7 +83,7 @@ class StratifiedKFoldTrainer:
             seed=self.config.seed,
         )
 
-        fold_metrics: List[Dict[str, float]] = []
+        fold_metrics: List[Dict[str, Any]] = []
         for fold_index, fold in enumerate(folds, start=1):
             print(
                 f"\n--- Fold {fold_index}/{self.config.n_folds} "
@@ -179,7 +188,7 @@ class StratifiedKFoldTrainer:
         fold_index: int,
         train_dataset: BaroqueMusicClassificationDataset,
         val_dataset: BaroqueMusicClassificationDataset,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         multi_label = self.config.task in self.MULTI_LABEL_TASKS
         num_classes = self._infer_num_classes(train_dataset, val_dataset)
         model = self._build_model(num_classes=num_classes, multi_label=multi_label).to(
@@ -211,6 +220,22 @@ class StratifiedKFoldTrainer:
             if self.config.max_steps > 0
             else self.config.num_train_epochs * steps_per_epoch
         )
+        warmup_steps = int(self.config.warmup_ratio * total_steps)
+        scheduler = get_scheduler(
+            name=self.config.lr_scheduler_type,
+            optimizer=optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
+        )
+
+        selection_metric, selection_mode = self._resolve_selection_metric(multi_label)
+        best_selection_value = (
+            float("-inf") if selection_mode == "max" else float("inf")
+        )
+        best_selection_step = 0
+
+        label_map = self._index_to_label_map(train_dataset)
+        class_names = [label_map.get(i, f"class_{i}") for i in range(num_classes)]
 
         run = self._start_wandb_run(
             fold_index=fold_index,
@@ -220,6 +245,7 @@ class StratifiedKFoldTrainer:
 
         step = 0
         train_loss_window: List[float] = []
+        window_avg = 0.0
         val_metrics: Dict[str, float] = {
             "val_loss": 0.0,
             "avg_score": 0.0,
@@ -246,8 +272,14 @@ class StratifiedKFoldTrainer:
             )
             loss = outputs["loss"]
             loss.backward()
+            if self.config.grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(),
+                    max_norm=float(self.config.grad_clip_norm),
+                )
             grad_norm = self._compute_grad_norm(model)
             optimizer.step()
+            scheduler.step()
 
             step += 1
             epoch = step / steps_per_epoch
@@ -260,7 +292,11 @@ class StratifiedKFoldTrainer:
                     float(mean(train_loss_window)) if train_loss_window else 0.0
                 )
                 train_loss_window = []
-                current_lr = optimizer.param_groups[0]["lr"]
+                current_lr = (
+                    float(scheduler.get_last_lr()[0])
+                    if scheduler.get_last_lr()
+                    else float(optimizer.param_groups[0]["lr"])
+                )
                 pbar.set_postfix(loss=f"{window_avg:.4f}", lr=f"{current_lr:.2e}")
                 self._log_wandb(
                     run,
@@ -277,7 +313,12 @@ class StratifiedKFoldTrainer:
 
             should_eval = (step % self.config.eval_steps == 0) or (step == total_steps)
             if should_eval:
-                val_metrics = self._evaluate(model, val_loader, multi_label)
+                val_metrics, eval_details = self._evaluate(
+                    model,
+                    val_loader,
+                    multi_label,
+                    return_details=True,
+                )
                 log_payload = {
                     "fold": float(fold_index),
                     "global_step": float(step),
@@ -285,6 +326,13 @@ class StratifiedKFoldTrainer:
                     **{f"val/{k}": float(v) for k, v in val_metrics.items()},
                 }
                 self._log_wandb(run, log_payload, step=step)
+                self._log_wandb_eval_diagnostics(
+                    run=run,
+                    eval_details=eval_details,
+                    class_names=class_names,
+                    multi_label=multi_label,
+                    step=step,
+                )
                 score_key = "avg_f1_micro" if multi_label else "avg_accuracy"
                 score_val = val_metrics.get(score_key, 0.0)
                 pbar.set_postfix(
@@ -296,12 +344,22 @@ class StratifiedKFoldTrainer:
                 val_loss = val_metrics["val_loss"]
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
+
+                selection_value = float(val_metrics.get(selection_metric, 0.0))
+                if self._is_improved(selection_value, best_selection_value, selection_mode):
+                    best_selection_value = selection_value
+                    best_selection_step = int(step)
                     patience_count = 0
                     best_checkpoint_dir = self._save_best_checkpoint(
                         model=model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
                         fold_index=fold_index,
                         step=step,
                         val_loss=val_loss,
+                        selection_metric=selection_metric,
+                        selection_mode=selection_mode,
+                        selection_value=selection_value,
                         train_dataset=train_dataset,
                         num_classes=num_classes,
                         multi_label=multi_label,
@@ -321,6 +379,10 @@ class StratifiedKFoldTrainer:
 
         val_metrics["fold"] = float(fold_index)
         val_metrics["best_val_loss"] = float(best_val_loss)
+        val_metrics["best_selection_metric"] = selection_metric
+        val_metrics["best_selection_mode"] = selection_mode
+        val_metrics["best_selection_value"] = float(best_selection_value)
+        val_metrics["best_selection_step"] = float(best_selection_step)
         if best_checkpoint_dir is not None:
             val_metrics["best_checkpoint_dir"] = str(best_checkpoint_dir)
         self._finish_wandb_run(run, val_metrics)
@@ -329,9 +391,14 @@ class StratifiedKFoldTrainer:
     def _save_best_checkpoint(
         self,
         model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: Any,
         fold_index: int,
         step: int,
         val_loss: float,
+        selection_metric: str,
+        selection_mode: str,
+        selection_value: float,
         train_dataset: BaroqueMusicClassificationDataset,
         num_classes: int,
         multi_label: bool,
@@ -354,8 +421,12 @@ class StratifiedKFoldTrainer:
             "fold": int(fold_index),
             "best_step": int(step),
             "best_val_loss": float(val_loss),
+            "best_selection_metric": selection_metric,
+            "best_selection_mode": selection_mode,
+            "best_selection_value": float(selection_value),
             "max_length": int(self.config.max_length),
             "stride": int(self.config.stride),
+            "runtime": self._runtime_metadata(),
         }
         (checkpoint_dir / "config.json").write_text(
             json.dumps(checkpoint_config, indent=2),
@@ -382,6 +453,21 @@ class StratifiedKFoldTrainer:
             source_tokenizer_dir = Path(self.config.tokenizer_path)
             if source_tokenizer_dir.exists():
                 shutil.copytree(source_tokenizer_dir, tokenizer_dir)
+
+        training_state = {
+            "global_step": int(step),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": (
+                scheduler.state_dict() if hasattr(scheduler, "state_dict") else None
+            ),
+            "python_random_state": random.getstate(),
+            "numpy_random_state": np.random.get_state(),
+            "torch_rng_state": torch.get_rng_state(),
+            "torch_cuda_rng_state_all": (
+                torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+            ),
+        }
+        torch.save(training_state, checkpoint_dir / "training_state.pt")
 
         return checkpoint_dir
 
@@ -414,8 +500,12 @@ class StratifiedKFoldTrainer:
         run.log_artifact(artifact, aliases=["best", f"step-{step}"])
 
     def _evaluate(
-        self, model: torch.nn.Module, val_loader: DataLoader, multi_label: bool
-    ) -> Dict[str, float]:
+        self,
+        model: torch.nn.Module,
+        val_loader: DataLoader,
+        multi_label: bool,
+        return_details: bool = False,
+    ) -> Any:
         model.eval()
 
         losses: List[float] = []
@@ -458,7 +548,7 @@ class StratifiedKFoldTrainer:
             multi_label=multi_label,
         )
 
-        return {
+        metrics = {
             "val_loss": float(mean(losses)) if losses else 0.0,
             "avg_score": float(average_metrics["score"]),
             "majority_score": float(majority_metrics["score"]),
@@ -474,14 +564,38 @@ class StratifiedKFoldTrainer:
             },
         }
 
-    def _aggregate_metrics(
+        if not return_details:
+            return metrics
+
+        avg_true, avg_pred = self._aggregate_predictions(
+            probs_per_window,
+            labels_per_window,
+            movement_ids_per_window,
+            method="average",
+            multi_label=multi_label,
+        )
+        majority_true, majority_pred = self._aggregate_predictions(
+            probs_per_window,
+            labels_per_window,
+            movement_ids_per_window,
+            method="majority",
+            multi_label=multi_label,
+        )
+
+        details = {
+            "average": {"y_true": avg_true, "y_pred": avg_pred},
+            "majority": {"y_true": majority_true, "y_pred": majority_pred},
+        }
+        return metrics, details
+
+    def _aggregate_predictions(
         self,
         probs_per_window: Sequence[np.ndarray],
         labels_per_window: Sequence[np.ndarray],
         movement_ids: Sequence[str],
         method: str,
         multi_label: bool,
-    ) -> Dict[str, float]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         grouped_probs: Dict[str, List[np.ndarray]] = defaultdict(list)
         grouped_labels: Dict[str, List[np.ndarray]] = defaultdict(list)
 
@@ -514,16 +628,35 @@ class StratifiedKFoldTrainer:
             y_pred.append(np.asarray(pred))
 
         if multi_label:
-            y_true_arr = np.vstack(y_true)
-            y_pred_arr = np.vstack(y_pred)
+            return np.vstack(y_true), np.vstack(y_pred)
+
+        y_true_arr = np.array([int(v) for v in y_true], dtype=np.int64)
+        y_pred_arr = np.array([int(v) for v in y_pred], dtype=np.int64)
+        return y_true_arr, y_pred_arr
+
+    def _aggregate_metrics(
+        self,
+        probs_per_window: Sequence[np.ndarray],
+        labels_per_window: Sequence[np.ndarray],
+        movement_ids: Sequence[str],
+        method: str,
+        multi_label: bool,
+    ) -> Dict[str, float]:
+        y_true_arr, y_pred_arr = self._aggregate_predictions(
+            probs_per_window=probs_per_window,
+            labels_per_window=labels_per_window,
+            movement_ids=movement_ids,
+            method=method,
+            multi_label=multi_label,
+        )
+
+        if multi_label:
             metric_values = self.classification_metrics.compute_multi_label(
                 y_true=y_true_arr,
                 y_pred=y_pred_arr,
             )
             score = metric_values["f1_micro"]
         else:
-            y_true_arr = np.array([int(v) for v in y_true])
-            y_pred_arr = np.array([int(v) for v in y_pred])
             metric_values = self.classification_metrics.compute_single_label(
                 y_true=y_true_arr,
                 y_pred=y_pred_arr,
@@ -538,6 +671,167 @@ class StratifiedKFoldTrainer:
         normalized_metrics["score"] = float(score)
         return normalized_metrics
 
+    def _resolve_selection_metric(self, multi_label: bool) -> tuple[str, str]:
+        if self.config.model_selection_metric == "auto":
+            metric = "avg_f1_micro" if multi_label else "avg_accuracy"
+        else:
+            metric = str(self.config.model_selection_metric)
+
+        if self.config.model_selection_mode == "auto":
+            mode = "min" if "loss" in metric else "max"
+        else:
+            mode = str(self.config.model_selection_mode)
+
+        return metric, mode
+
+    @staticmethod
+    def _is_improved(current: float, best: float, mode: str) -> bool:
+        if mode == "min":
+            return current < best
+        return current > best
+
+    @staticmethod
+    def _index_to_label_map(dataset: Any) -> Dict[int, str]:
+        label_to_index = getattr(dataset, "label_to_index", {}) or {}
+        return {int(idx): str(label) for label, idx in label_to_index.items()}
+
+    def _log_wandb_eval_diagnostics(
+        self,
+        run: Any,
+        eval_details: Dict[str, Dict[str, np.ndarray]],
+        class_names: Sequence[str],
+        multi_label: bool,
+        step: int,
+    ) -> None:
+        if run is None:
+            return
+
+        for method, details in eval_details.items():
+            y_true = np.asarray(details["y_true"])
+            y_pred = np.asarray(details["y_pred"])
+            if y_true.size == 0 or y_pred.size == 0:
+                continue
+
+            if multi_label:
+                precision, recall, f1, _ = precision_recall_fscore_support(
+                    y_true,
+                    y_pred,
+                    average=None,
+                    zero_division=0,
+                )
+                payload: Dict[str, float] = {}
+                for idx, class_name in enumerate(class_names):
+                    payload[f"val/{method}/per_class/{class_name}/precision"] = float(
+                        precision[idx]
+                    )
+                    payload[f"val/{method}/per_class/{class_name}/recall"] = float(
+                        recall[idx]
+                    )
+                    payload[f"val/{method}/per_class/{class_name}/f1"] = float(
+                        f1[idx]
+                    )
+
+                ml_cm = multilabel_confusion_matrix(y_true, y_pred)
+                for idx, class_name in enumerate(class_names):
+                    tn, fp, fn, tp = ml_cm[idx].ravel()
+                    payload[f"val/{method}/confusion/{class_name}/tn"] = float(tn)
+                    payload[f"val/{method}/confusion/{class_name}/fp"] = float(fp)
+                    payload[f"val/{method}/confusion/{class_name}/fn"] = float(fn)
+                    payload[f"val/{method}/confusion/{class_name}/tp"] = float(tp)
+
+                self._log_wandb(run, payload, step=step)
+                continue
+
+            precision, recall, f1, support = precision_recall_fscore_support(
+                y_true,
+                y_pred,
+                labels=list(range(len(class_names))),
+                average=None,
+                zero_division=0,
+            )
+            payload = {}
+            for idx, class_name in enumerate(class_names):
+                payload[f"val/{method}/per_class/{class_name}/precision"] = float(
+                    precision[idx]
+                )
+                payload[f"val/{method}/per_class/{class_name}/recall"] = float(
+                    recall[idx]
+                )
+                payload[f"val/{method}/per_class/{class_name}/f1"] = float(f1[idx])
+                payload[f"val/{method}/per_class/{class_name}/support"] = float(
+                    support[idx]
+                )
+            self._log_wandb(run, payload, step=step)
+
+            cm_arr = confusion_matrix(
+                y_true,
+                y_pred,
+                labels=list(range(len(class_names))),
+            )
+            self._log_wandb(
+                run,
+                {
+                    f"val/{method}/confusion_matrix_total": float(cm_arr.sum()),
+                    f"val/{method}/confusion_matrix_trace": float(np.trace(cm_arr)),
+                },
+                step=step,
+            )
+
+            if wandb is not None and hasattr(wandb, "plot"):
+                try:
+                    cm_plot = wandb.plot.confusion_matrix(
+                        probs=None,
+                        y_true=y_true.tolist(),
+                        preds=y_pred.tolist(),
+                        class_names=list(class_names),
+                    )
+                    self._log_wandb(
+                        run,
+                        {f"val/{method}/confusion_matrix": cm_plot},
+                        step=step,
+                    )
+                except Exception:
+                    pass
+
+    def _runtime_metadata(self) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {
+            "python_version": sys.version.split()[0],
+            "platform": platform.platform(),
+            "torch_version": getattr(torch, "__version__", None),
+            "numpy_version": getattr(np, "__version__", None),
+            "cuda_available": bool(torch.cuda.is_available()),
+            "cuda_device_count": int(torch.cuda.device_count()),
+            "cuda_device_name": (
+                torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+            ),
+            "transformers_version": self._module_version("transformers"),
+            "accelerate_version": self._module_version("accelerate"),
+            "wandb_version": self._module_version("wandb"),
+            "git_commit": self._git_commit_hash(),
+        }
+        return metadata
+
+    @staticmethod
+    def _module_version(module_name: str) -> Optional[str]:
+        try:
+            module = __import__(module_name)
+            return str(getattr(module, "__version__", "unknown"))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _git_commit_hash() -> Optional[str]:
+        try:
+            completed = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return completed.stdout.strip()
+        except Exception:
+            return None
+
     def _start_wandb_run(
         self,
         fold_index: int,
@@ -548,6 +842,8 @@ class StratifiedKFoldTrainer:
             return None
 
         run_name = self.config.wandb_run_name or f"{self.config.task}-fold{fold_index}"
+        runtime_metadata = self._runtime_metadata()
+
         return wandb.init(
             project=self.config.wandb_project,
             entity=self.config.wandb_entity,
@@ -574,6 +870,11 @@ class StratifiedKFoldTrainer:
                 "early_stopping_patience": self.config.early_stopping_patience,
                 "seed": self.config.seed,
                 "device": str(self.device),
+                "lr_scheduler_type": self.config.lr_scheduler_type,
+                "grad_clip_norm": self.config.grad_clip_norm,
+                "model_selection_metric": self.config.model_selection_metric,
+                "model_selection_mode": self.config.model_selection_mode,
+                **{f"runtime/{k}": v for k, v in runtime_metadata.items()},
             },
             reinit=True,
         )
@@ -587,13 +888,13 @@ class StratifiedKFoldTrainer:
         return total_norm**0.5
 
     @staticmethod
-    def _log_wandb(run: Any, payload: Dict[str, float], step: int) -> None:
+    def _log_wandb(run: Any, payload: Dict[str, Any], step: int) -> None:
         if run is None:
             return
         run.log(payload, step=step)
 
     @staticmethod
-    def _finish_wandb_run(run: Any, summary: Dict[str, float]) -> None:
+    def _finish_wandb_run(run: Any, summary: Dict[str, Any]) -> None:
         if run is None:
             return
         for key, value in summary.items():
@@ -682,7 +983,7 @@ class StratifiedKFoldTrainer:
 
     @staticmethod
     def _summarize_fold_metrics(
-        fold_metrics: List[Dict[str, float]],
+        fold_metrics: List[Dict[str, Any]],
     ) -> tuple[Dict[str, float], Dict[str, float]]:
         numeric_keys = []
         if fold_metrics:

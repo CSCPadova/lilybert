@@ -33,7 +33,11 @@ class TrainingConfig:
     per_device_eval_batch_size: int = 16
     weight_decay: float = 0.01
     warmup_ratio: float = 0.1
+    lr_scheduler_type: str = "linear"
+    grad_clip_norm: Optional[float] = 1.0
     early_stopping_patience: int = 5
+    model_selection_metric: str = "auto"
+    model_selection_mode: str = "auto"
     max_steps: int = 0
     eval_steps: int = 200
     log_steps: int = 20
@@ -90,6 +94,12 @@ class TrainingConfig:
             raise ValueError("n_folds must be >= 2")
         if self.early_stopping_patience < 1:
             raise ValueError("early_stopping_patience must be >= 1")
+        if self.warmup_ratio < 0 or self.warmup_ratio > 1:
+            raise ValueError("warmup_ratio must be in [0, 1]")
+        if self.grad_clip_norm is not None and self.grad_clip_norm <= 0:
+            raise ValueError("grad_clip_norm must be > 0 when set")
+        if self.model_selection_mode not in {"auto", "min", "max"}:
+            raise ValueError("model_selection_mode must be one of: auto, min, max")
         if self.max_steps < 0:
             raise ValueError("max_steps must be >= 0")
         if self.eval_steps < 1:

@@ -21,6 +21,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eval-steps", type=int, default=200)
     parser.add_argument("--log-steps", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--lr-scheduler-type", default="linear")
+    parser.add_argument("--grad-clip-norm", type=float, default=1.0)
+    parser.add_argument("--model-selection-metric", default="auto")
+    parser.add_argument("--model-selection-mode", default="auto")
     parser.add_argument("--pretokenized", default=None, help="Path to .npz from pretokenize")
     parser.add_argument("--output-dir", default="outputs/cv")
     parser.add_argument("--wandb", action="store_true")
@@ -46,6 +50,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         batch_size=args.batch_size,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
+        lr_scheduler_type=args.lr_scheduler_type,
+        grad_clip_norm=args.grad_clip_norm,
+        model_selection_metric=args.model_selection_metric,
+        model_selection_mode=args.model_selection_mode,
         pretokenized_path=args.pretokenized,
         output_dir=args.output_dir,
         wandb_enabled=args.wandb,

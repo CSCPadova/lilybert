@@ -152,6 +152,12 @@ def test_stratified_kfold_trainer_run_writes_results(tmp_path: Path):
     assert len(results["fold_metrics"]) == 3
     assert "mean" in results and "std" in results
 
+    for fold_metrics in results["fold_metrics"]:
+        assert fold_metrics["best_selection_metric"] == "avg_accuracy"
+        assert fold_metrics["best_selection_mode"] == "max"
+        assert "best_selection_value" in fold_metrics
+        assert "best_selection_step" in fold_metrics
+
     results_path = Path(results["results_path"])
     assert results_path.exists()
 
@@ -159,6 +165,7 @@ def test_stratified_kfold_trainer_run_writes_results(tmp_path: Path):
         checkpoint_dir = output_dir / "checkpoints" / f"fold_{fold_idx}" / "best"
         assert checkpoint_dir.exists()
         assert (checkpoint_dir / "model.pt").exists()
+        assert (checkpoint_dir / "training_state.pt").exists()
         assert (checkpoint_dir / "config.json").exists()
         assert (checkpoint_dir / "label_map.json").exists()
 
@@ -187,6 +194,8 @@ def test_checkpoint_uploads_to_wandb_artifact(tmp_path: Path, monkeypatch):
         )
 
     artifacts_logged = []
+    wandb_logs = []
+    init_payloads = []
 
     class _FakeArtifact:
         def __init__(self, name, type, metadata):
@@ -203,7 +212,7 @@ def test_checkpoint_uploads_to_wandb_artifact(tmp_path: Path, monkeypatch):
             self.summary = {}
 
         def log(self, payload, step):
-            del payload, step
+            wandb_logs.append((payload, step))
 
         def log_artifact(self, artifact, aliases=None):
             artifacts_logged.append((artifact, aliases or []))
@@ -212,7 +221,7 @@ def test_checkpoint_uploads_to_wandb_artifact(tmp_path: Path, monkeypatch):
             return None
 
     def _fake_init(**kwargs):
-        del kwargs
+        init_payloads.append(kwargs)
         return _FakeRun()
 
     fake_wandb = SimpleNamespace(Artifact=_FakeArtifact, init=_fake_init)
@@ -230,3 +239,16 @@ def test_checkpoint_uploads_to_wandb_artifact(tmp_path: Path, monkeypatch):
     assert artifact.type == "model"
     assert "best" in aliases
     assert artifact.added_dirs
+    assert any(
+        (
+            "val/average/confusion_matrix" in payload
+            or "val/average/confusion_matrix_total" in payload
+        )
+        for payload, _ in wandb_logs
+    )
+    assert any(
+        any(k.startswith("val/average/per_class/") for k in payload.keys())
+        for payload, _ in wandb_logs
+    )
+    assert init_payloads
+    assert "runtime/python_version" in init_payloads[0]["config"]
