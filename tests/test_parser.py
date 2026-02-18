@@ -188,7 +188,7 @@ def compile_lilypond_files(
                 f"{(stats['note_count']-num_matches)/100}% error (note_count={stats['note_count']}, num_matches={num_matches})"
             }
         print(
-            f"Note count by parser:{stats["note_count"]}. Note count by glyphs minus incipits:{num_matches}. Matches:{stats["note_count"] == num_matches}"
+            f"Note count by parser:{stats['note_count']}. Note count by glyphs minus incipits:{num_matches}. Matches:{stats['note_count'] == num_matches}"
         )
         print(f"Ready: {ly_file.name} → {output_file.name} ({len(ps_content)} chars)")
 
