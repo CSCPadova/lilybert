@@ -22,6 +22,8 @@ SUPPORTED_TASKS = {
     "key_scale",
 }
 
+SUPPORTED_TOKENIZER_NOTATION_MODES = {"english", "italiano", "both"}
+
 
 def _normalize_mode(value: Any) -> TrainingMode:
     if isinstance(value, TrainingMode):
@@ -54,6 +56,21 @@ def run_task(
     return trainer.run()
 
 
+def _resolve_tokenizer_path(dataset_cfg: DictConfig) -> str:
+    notation_mode = str(dataset_cfg.get("tokenizer_notation_mode", "both"))
+    if notation_mode not in SUPPORTED_TOKENIZER_NOTATION_MODES:
+        raise ValueError(
+            "Unknown tokenizer_notation_mode: "
+            f"{notation_mode}. Supported values: {sorted(SUPPORTED_TOKENIZER_NOTATION_MODES)}"
+        )
+
+    mode_map = dataset_cfg.get("tokenizer_path_by_notation", {})
+    if mode_map and notation_mode in mode_map:
+        return str(mode_map[notation_mode])
+
+    return str(dataset_cfg.get("tokenizer_path", "artifacts/tokenizer"))
+
+
 def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
     dataset_cfg = cfg.get("dataset", {})
     model_cfg = cfg.get("model", {})
@@ -72,6 +89,7 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         )
 
     wandb_cfg = runtime_cfg.get("wandb", {})
+    tokenizer_path = _resolve_tokenizer_path(dataset_cfg)
     training_overrides = {
         "pretrained_model": model_cfg.get("pretrained_model", "bert-base-uncased"),
         "mode": model_cfg.get("mode", "full_finetune"),
@@ -107,7 +125,7 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         results[task] = run_task(
             task=task,
             data_dir=dataset_cfg.get("data_dir", "data/processed"),
-            tokenizer_path=dataset_cfg.get("tokenizer_path", "artifacts/tokenizer"),
+            tokenizer_path=tokenizer_path,
             output_dir=runtime_cfg.get("output_dir", "outputs/experiments"),
             training_overrides=training_overrides,
         )

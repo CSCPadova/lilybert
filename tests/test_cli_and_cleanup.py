@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 from omegaconf import OmegaConf
 
 
@@ -114,6 +115,12 @@ def test_run_experiment_hydra_config(monkeypatch):
             "dataset": {
                 "data_dir": "data/processed",
                 "tokenizer_path": "artifacts/tokenizer",
+                "tokenizer_notation_mode": "english",
+                "tokenizer_path_by_notation": {
+                    "english": "artifacts/tokenizer_english",
+                    "italiano": "artifacts/tokenizer_italiano",
+                    "both": "artifacts/tokenizer",
+                },
                 "labels_path": "labels/labels_v1.json",
                 "language": "english",
             },
@@ -144,6 +151,39 @@ def test_run_experiment_hydra_config(monkeypatch):
     assert len(seen) == 2
     assert seen[0].n_folds == 3
     assert seen[0].batch_size == 4
+    assert seen[0].tokenizer_path == "artifacts/tokenizer_english"
+
+
+def test_run_experiment_invalid_tokenizer_notation_mode(monkeypatch):
+    from lilybert.scripts import run_experiment
+
+    class _DummyTrainer:
+        def __init__(self, config):
+            self.config = config
+
+        def run(self):
+            return {"ok": True}
+
+    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
+
+    cfg = OmegaConf.create(
+        {
+            "dataset": {
+                "data_dir": "data/processed",
+                "tokenizer_path": "artifacts/tokenizer",
+                "tokenizer_notation_mode": "invalid",
+                "labels_path": "labels/labels_v1.json",
+                "language": "english",
+            },
+            "model": {"pretrained_model": "bert-base-uncased", "mode": "full_finetune"},
+            "training": {"n_folds": 2, "num_train_epochs": 1, "batch_size": 2},
+            "runtime": {"output_dir": "outputs/experiments", "seed": 42},
+            "tasks": {"list": ["composer"]},
+        }
+    )
+
+    with pytest.raises(ValueError, match="tokenizer_notation_mode"):
+        run_experiment.run_from_config(cfg)
 
 
 def test_generate_tables_creates_markdown_table(tmp_path):

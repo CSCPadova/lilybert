@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from lilybert.data import LilyPondParser, LilyPondPreprocessor
+from lilybert.data import LilyPondParser, LilyPondPreprocessor, LilyPondTokenizer
 from lilybert.evaluation import ClassificationMetrics
 from lilybert.training import TrainingConfig
 
@@ -21,7 +21,7 @@ class TestLilyPondParser:
         """Test parsing simple LilyPond content."""
         parser = LilyPondParser()
         content = r"""
-        \version "2.24.0" 
+        \version "2.24.0"
         \header {
             title = \markup\smaller\center-column {"Concerto Sacro V Op. II"}
             composer = \markup \center-column{"A. Scarlatti (1660 - 1725)"}
@@ -29,7 +29,7 @@ class TestLilyPondParser:
         \relative do {
         \repeat unfold 9 {<mi la,>16}
         }
-       
+
         """
 
         elements = parser.parse_content(content)
@@ -140,14 +140,14 @@ class TestLilyPondPreprocessor:
         parser = LilyPondParser()
         preprocessor = LilyPondPreprocessor(add_special_tokens=True)
 
-        sample = """\\version "2.24.0" 
+        sample = """\\version "2.24.0"
         \\header {
             title = \\markup\\smaller\\center-column {"Concerto Sacro V Op. II"}
             composer = \\markup \\center-column{"A. Scarlatti (1660 - 1725)"}
         }
-        \\relative c' { 
+        \\relative c' {
             \\time 4/4 \\key c \\major \\tempo "Presto" 4.=100
-            c4 d e f | g2 a2 | b4 c d e | c1\\rest r 
+            c4 d e f | g2 a2 | b4 c d e | c1\\rest r
         }"""
         elements = parser.parse_content(sample)
         # Convert to text sequence
@@ -250,7 +250,7 @@ class TestIntegration:
         test_content = """\\version "2.24.0"
         \\relative do' {
             \\time 4/4 \\key do \\major
-            do re mi | sid4. 
+            do re mi | sid4.
         }"""
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -284,6 +284,36 @@ class TestIntegration:
             assert loaded_config.learning_rate == original_config.learning_rate
             assert loaded_config.num_train_epochs == original_config.num_train_epochs
             assert loaded_config.use_lora == original_config.use_lora
+
+    def test_tokenizer_notation_mode_filters_corpus(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "english").mkdir(parents=True, exist_ok=True)
+            (root / "italiano").mkdir(parents=True, exist_ok=True)
+
+            (root / "english" / "mvt1.ly").write_text("c4 d e f", encoding="utf-8")
+            (root / "italiano" / "mvt1.ly").write_text(
+                "do4 re mi fa", encoding="utf-8"
+            )
+
+            tokenizer = LilyPondTokenizer()
+
+            english = tokenizer.build_corpus(root, notation_mode="english")
+            italiano = tokenizer.build_corpus(root, notation_mode="italiano")
+            both = tokenizer.build_corpus(root, notation_mode="both")
+
+            assert len(english) == 1
+            assert len(italiano) == 1
+            assert len(both) == 2
+
+    def test_tokenizer_notation_mode_validation(self):
+        tokenizer = LilyPondTokenizer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            root.mkdir(parents=True, exist_ok=True)
+
+            with pytest.raises(ValueError):
+                tokenizer.build_corpus(root, notation_mode="invalid")
 
 
 if __name__ == "__main__":

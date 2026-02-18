@@ -37,7 +37,11 @@ lilybert preprocess \
 lilybert train-tokenizer \
   --processed-dir data/processed \
   --output-dir artifacts/tokenizer \
-  --vocab-size 8000
+  --vocab-size 8000 \
+  --notation-mode both
+
+# English-only tokenizer corpus
+lilybert train-tokenizer --processed-dir data/processed --notation-mode english
 ```
 
 ### Cross-validated training
@@ -64,6 +68,15 @@ lilybert run-experiment
 
 # Use a predefined task set
 lilybert run-experiment tasks=baseline
+
+# Select tokenizer artifact automatically by notation mode
+lilybert run-experiment dataset.tokenizer_notation_mode=english
+
+# Preset: English-only tokenizer experiment
+lilybert run-experiment dataset=english_only
+
+# Preset: English+Italian tokenizer experiment
+lilybert run-experiment dataset=english_italiano
 
 # Override modular config values from CLI
 lilybert run-experiment training.n_folds=3 training.batch_size=8 runtime.output_dir=outputs/exp_debug

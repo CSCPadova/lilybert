@@ -1,6 +1,6 @@
 data_dir: data/processed
-tokenizer_path: artifacts/tokenizer
-tokenizer_notation_mode: both
+tokenizer_path: artifacts/tokenizer_english
+tokenizer_notation_mode: english
 tokenizer_path_by_notation:
   english: artifacts/tokenizer_english
   italiano: artifacts/tokenizer_italiano

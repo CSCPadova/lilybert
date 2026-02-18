@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 class LilyPondTokenizer:
     """Parser-aware BPE tokenizer for movement-level LilyPond files."""
 
+    VALID_NOTATION_MODES = {"english", "italiano", "both"}
+
     SPECIAL_TOKENS = [
         "[CLS]",
         "[SEP]",
@@ -40,11 +42,15 @@ class LilyPondTokenizer:
         self.parser = parser or LilyPondParser()
         self.fast_tokenizer = fast_tokenizer
 
-    def build_corpus(self, processed_dir: str | Path) -> List[str]:
+    def build_corpus(
+        self, processed_dir: str | Path, notation_mode: str = "both"
+    ) -> List[str]:
         """Build parser-token corpus strings from cleaned movement files.
 
         Args:
             processed_dir: Root processed directory (typically `data/processed`).
+            notation_mode: Which notation folders to include: `english`,
+                `italiano`, or `both`.
 
         Returns:
             List of space-separated parser token strings (one per movement file).
@@ -52,8 +58,12 @@ class LilyPondTokenizer:
         root = Path(processed_dir)
         if not root.exists():
             raise FileNotFoundError(f"Processed directory not found: {root}")
+        if notation_mode not in self.VALID_NOTATION_MODES:
+            raise ValueError(
+                f"notation_mode must be one of {sorted(self.VALID_NOTATION_MODES)}, got: {notation_mode}"
+            )
 
-        movement_files = sorted(self._iter_movement_files(root))
+        movement_files = sorted(self._iter_movement_files(root, notation_mode))
         corpus: List[str] = []
 
         for file_path in movement_files:
@@ -113,14 +123,25 @@ class LilyPondTokenizer:
         fast_tokenizer = PreTrainedTokenizerFast.from_pretrained(str(path))
         return cls(fast_tokenizer=fast_tokenizer)
 
-    def _iter_movement_files(self, root: Path) -> Iterable[Path]:
+    def _iter_movement_files(self, root: Path, notation_mode: str) -> Iterable[Path]:
         if (root / "italiano").exists() or (root / "english").exists():
-            yield from (
-                (root / "italiano").glob("*.ly") if (root / "italiano").exists() else []
-            )
-            yield from (
-                (root / "english").glob("*.ly") if (root / "english").exists() else []
-            )
+            if notation_mode in {"italiano", "both"}:
+                italiano_dir = root / "italiano"
+                if notation_mode == "italiano" and not italiano_dir.exists():
+                    raise FileNotFoundError(
+                        f"Requested notation_mode=italiano but folder not found: {italiano_dir}"
+                    )
+                if italiano_dir.exists():
+                    yield from italiano_dir.glob("*.ly")
+
+            if notation_mode in {"english", "both"}:
+                english_dir = root / "english"
+                if notation_mode == "english" and not english_dir.exists():
+                    raise FileNotFoundError(
+                        f"Requested notation_mode=english but folder not found: {english_dir}"
+                    )
+                if english_dir.exists():
+                    yield from english_dir.glob("*.ly")
             return
 
         yield from root.glob("*.ly")

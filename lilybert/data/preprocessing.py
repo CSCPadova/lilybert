@@ -299,6 +299,8 @@ class LilyPondPreprocessor:
             cleaned = self._postprocess(stripped)
             if not cleaned.strip():
                 continue
+            if not self._has_musical_content(cleaned):
+                continue
 
             italian_text = cleaned.strip()
             parts.append(
@@ -312,6 +314,26 @@ class LilyPondPreprocessor:
             )
 
         return parts
+
+    def _has_musical_content(self, text: str) -> bool:
+        tokens = self.parser._tokenize_music(text)
+        if not tokens:
+            return False
+
+        for token in tokens:
+            element = self.parser._parse_token(token)
+            if element is None:
+                continue
+
+            if element.type in {"note", "chord", "rest"}:
+                return True
+
+            if element.type == "directive":
+                attrs = element.attributes or {}
+                if attrs.get("note_count", 0) > 0:
+                    return True
+
+        return False
 
     def _extract_referenced_assignment_names(
         self, score_block: str, assignments: Dict[str, str]

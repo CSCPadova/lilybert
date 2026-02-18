@@ -27,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=8000,
         help="Target BPE vocabulary size",
     )
+    parser.add_argument(
+        "--notation-mode",
+        choices=["english", "italiano", "both"],
+        default="both",
+        help="Which processed notation variants to include in tokenizer corpus",
+    )
     return parser
 
 
@@ -34,13 +40,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
     tokenizer = LilyPondTokenizer()
-    corpus = tokenizer.build_corpus(args.processed_dir)
+    corpus = tokenizer.build_corpus(
+        args.processed_dir,
+        notation_mode=args.notation_mode,
+    )
     fast_tokenizer = tokenizer.train(corpus=corpus, vocab_size=args.vocab_size)
     saved_dir = tokenizer.save(args.output_dir)
 
     summary = {
         "processed_dir": args.processed_dir,
         "output_dir": str(saved_dir),
+        "notation_mode": args.notation_mode,
         "num_corpus_samples": len(corpus),
         "vocab_size": fast_tokenizer.vocab_size,
     }
