@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
 from transformers import PreTrainedTokenizer
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,11 @@ class BaroqueMusicClassificationDataset(Dataset):
         body_size = self.max_length - 2
         step = max(1, body_size - self.stride)
 
-        for file_path in self.movement_files:
+        for file_path in tqdm(
+            self.movement_files,
+            desc="Building samples",
+            disable=len(self.movement_files) < 50,
+        ):
             movement_id = file_path.stem
             movement_meta = self.metadata.get(movement_id, {})
             base_work = movement_meta.get("base_work", movement_id)

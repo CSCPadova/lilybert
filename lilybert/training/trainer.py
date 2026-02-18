@@ -59,7 +59,9 @@ class StratifiedKFoldTrainer:
 
     def run(self) -> Dict[str, Any]:
         metadata = self._load_metadata()
+        print(f"Loaded metadata for {len(metadata)} movements")
         sample_ids, labels, groups = self._prepare_cv_samples(metadata)
+        print(f"Prepared {len(sample_ids)} samples for {self.config.n_folds}-fold CV")
 
         folds = build_grouped_stratified_folds(
             sample_ids=sample_ids,
@@ -71,7 +73,13 @@ class StratifiedKFoldTrainer:
 
         fold_metrics: List[Dict[str, float]] = []
         for fold_index, fold in enumerate(folds, start=1):
+            print(
+                f"\n--- Fold {fold_index}/{self.config.n_folds} "
+                f"(train={len(fold['train_ids'])}, val={len(fold['val_ids'])}) ---"
+            )
+            print("Building train dataset...")
             train_dataset = self._build_dataset(fold["train_ids"], metadata)
+            print("Building val dataset...")
             val_dataset = self._build_dataset(fold["val_ids"], metadata)
             metrics = self._train_and_evaluate_fold(
                 fold_index=fold_index,
