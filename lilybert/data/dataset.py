@@ -76,6 +76,11 @@ class BaroqueMusicClassificationDataset(Dataset):
             token_ids = self._encode_without_special_tokens(text)
 
             windows = self._split_into_windows(token_ids, body_size, step)
+
+            raw_value = self._extract_task_value(movement_meta)
+            if raw_value is None and self.task not in self.MULTI_LABEL_TASKS:
+                continue
+
             label = self._encode_label(movement_meta)
 
             for window in windows:

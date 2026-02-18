@@ -448,26 +448,10 @@ class StratifiedKFoldTrainer:
         train_dataset: BaroqueMusicClassificationDataset,
         val_dataset: BaroqueMusicClassificationDataset,
     ) -> int:
-        if self.config.task == "composer":
-            return 70
-        if self.config.task == "musical_form":
-            return 17
-        if self.config.task == "instruments":
-            return 25
-        if self.config.task == "section_nomenclature":
-            return 47
-        if self.config.task == "key_scale":
-            return 24
-
-        labels = []
-        for dataset in (train_dataset, val_dataset):
-            for idx in range(len(dataset)):
-                label = dataset[idx]["label"]
-                if torch.is_tensor(label):
-                    labels.extend(torch.where(label > 0)[0].tolist())
-                else:
-                    labels.append(int(label))
-        return max(labels) + 1 if labels else 1
+        train_labels = set(train_dataset.label_to_index.values())
+        val_labels = set(val_dataset.label_to_index.values())
+        all_labels = train_labels | val_labels
+        return max(all_labels) + 1 if all_labels else 1
 
     def _build_model(self, num_classes: int, multi_label: bool) -> torch.nn.Module:
         if self.model_factory is not None:
