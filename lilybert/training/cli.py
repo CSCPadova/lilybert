@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--eval-steps", type=int, default=200)
     parser.add_argument("--log-steps", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--pretokenized", default=None, help="Path to .npz from pretokenize")
     parser.add_argument("--output-dir", default="outputs/cv")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="lilybert")
@@ -45,6 +46,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         batch_size=args.batch_size,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
+        pretokenized_path=args.pretokenized,
         output_dir=args.output_dir,
         wandb_enabled=args.wandb,
         wandb_project=args.wandb_project,

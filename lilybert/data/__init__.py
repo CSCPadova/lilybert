@@ -11,12 +11,14 @@ try:
     )
     from .label_encoder import LabelEncoder
     from .preprocessor import LilyPondPreprocessor
+    from .pretokenized_dataset import PreTokenizedDataset
     from .repository import BaroqueMusicDataAPI, MovementRecord
     from .tokenizer import LilyPondTokenizer
 
     __all__ = [
         "BaroqueMusicClassificationDataset",
         "BaroqueMusicDataset",
+        "PreTokenizedDataset",
         "LilyPondParser",
         "LilyPondPreprocessor",
         "LilyPondTokenizer",

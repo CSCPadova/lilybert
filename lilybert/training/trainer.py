@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
     wandb = None
 
 from lilybert.data import BaroqueMusicClassificationDataset
+from lilybert.data.pretokenized_dataset import PreTokenizedDataset
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 from lilybert.models import (
     ComposerClassifier,
@@ -141,7 +142,13 @@ class StratifiedKFoldTrainer:
         self,
         movement_ids: Sequence[str],
         metadata: Dict[str, Dict[str, Any]],
-    ) -> BaroqueMusicClassificationDataset:
+    ):
+        if self.config.pretokenized_path:
+            return PreTokenizedDataset(
+                npz_path=self.config.pretokenized_path,
+                movement_ids=movement_ids,
+            )
+
         tokenizer = self._ensure_tokenizer()
         language_dir = Path(self.config.data_dir) / self.config.language
         movement_files = [

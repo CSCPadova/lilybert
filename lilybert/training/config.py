@@ -43,6 +43,7 @@ class TrainingConfig:
     n_folds: int = 5
     seed: int = 42
 
+    pretokenized_path: Optional[str] = None
     output_dir: str = "outputs/cv"
     language: str = "english"
     wandb_enabled: bool = False

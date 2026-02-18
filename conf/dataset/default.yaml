@@ -7,3 +7,4 @@ tokenizer_path_by_notation:
   both: artifacts/tokenizer
 labels_path: data/labels/labels_v1.json
 language: english
+pretokenized_path: null
