@@ -191,9 +191,33 @@ def test_generate_tables_creates_markdown_table(tmp_path):
 
     results = {
         "composer": {
-            "mean": {"avg_score": 0.81, "majority_score": 0.78},
-            "std": {"avg_score": 0.02, "majority_score": 0.03},
-        }
+            "mean": {
+                "avg_top1_accuracy": 0.81,
+                "avg_top5_accuracy": 0.95,
+                "avg_f1_macro": 0.78,
+                "avg_f1_weighted": 0.80,
+            },
+            "std": {
+                "avg_top1_accuracy": 0.02,
+                "avg_top5_accuracy": 0.01,
+                "avg_f1_macro": 0.03,
+                "avg_f1_weighted": 0.02,
+            },
+        },
+        "instruments": {
+            "mean": {
+                "avg_f1_micro": 0.85,
+                "avg_f1_macro": 0.72,
+                "avg_subset_accuracy": 0.60,
+                "avg_hamming_loss": 0.08,
+            },
+            "std": {
+                "avg_f1_micro": 0.02,
+                "avg_f1_macro": 0.03,
+                "avg_subset_accuracy": 0.04,
+                "avg_hamming_loss": 0.01,
+            },
+        },
     }
     input_path = tmp_path / "results.json"
     output_path = tmp_path / "table.md"
@@ -201,8 +225,47 @@ def test_generate_tables_creates_markdown_table(tmp_path):
 
     generate_tables.generate_markdown_table(input_path, output_path)
     text = output_path.read_text(encoding="utf-8")
-    assert "| Task |" in text
-    assert "composer" in text
+
+    assert "Single-label" in text
+    assert "Multi-label" in text
+    assert "Composer" in text
+    assert "Instruments" in text
+    assert "Top-1 Acc" in text
+    assert "Top-5 Acc" in text
+    assert "F1 (micro)" in text
+
+
+def test_generate_tables_creates_latex_table(tmp_path):
+    from scripts import generate_tables
+
+    results = {
+        "composer": {
+            "mean": {
+                "avg_top1_accuracy": 0.81,
+                "avg_top5_accuracy": 0.95,
+                "avg_f1_macro": 0.78,
+                "avg_f1_weighted": 0.80,
+            },
+            "std": {
+                "avg_top1_accuracy": 0.02,
+                "avg_top5_accuracy": 0.01,
+                "avg_f1_macro": 0.03,
+                "avg_f1_weighted": 0.02,
+            },
+        },
+    }
+    input_path = tmp_path / "results.json"
+    output_path = tmp_path / "table.tex"
+    input_path.write_text(json.dumps(results), encoding="utf-8")
+
+    generate_tables.generate_latex_table(input_path, output_path)
+    text = output_path.read_text(encoding="utf-8")
+
+    assert r"\begin{table}" in text
+    assert r"\toprule" in text
+    assert "Composer" in text
+    assert "Top-1 Acc" in text
+    assert "Top-5 Acc" in text
 
 
 def test_main_cli_dispatches_subcommand(monkeypatch):

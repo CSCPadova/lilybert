@@ -123,6 +123,7 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "wandb_mode": wandb_cfg.get("mode", "online"),
         "wandb_run_name": wandb_cfg.get("run_name", None),
         "log_per_class_metrics": training_cfg.get("log_per_class_metrics", True),
+        "top_k": list(training_cfg.get("top_k", [1, 5])),
     }
 
     modes_cfg = cfg.get("modes", None)
