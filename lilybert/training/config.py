@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from lilybert.models import TrainingMode
 
@@ -56,6 +56,7 @@ class TrainingConfig:
     wandb_mode: str = "online"
     wandb_run_name: Optional[str] = None
     log_per_class_metrics: bool = True
+    top_k: List[int] = field(default_factory=lambda: [1, 5])
 
     # Legacy compatibility knobs retained for existing tests/transition
     use_lora: bool = True
@@ -107,6 +108,8 @@ class TrainingConfig:
             raise ValueError("eval_steps must be >= 1")
         if self.log_steps < 1:
             raise ValueError("log_steps must be >= 1")
+        if not self.top_k or any(k < 1 for k in self.top_k):
+            raise ValueError("top_k must be a non-empty list of positive integers")
 
     def save_pretrained(self, save_directory: str) -> None:
         save_path = Path(save_directory)

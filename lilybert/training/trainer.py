@@ -67,7 +67,7 @@ class StratifiedKFoldTrainer:
             device or ("cuda" if torch.cuda.is_available() else "cpu")
         )
         self.window_aggregator = WindowAggregator()
-        self.classification_metrics = ClassificationMetrics()
+        self.classification_metrics = ClassificationMetrics(top_k=config.top_k)
 
     def run(self) -> Dict[str, Any]:
         metadata = self._load_metadata()
@@ -365,13 +365,6 @@ class StratifiedKFoldTrainer:
                         num_classes=num_classes,
                         multi_label=multi_label,
                     )
-                    self._upload_checkpoint_to_wandb(
-                        run=run,
-                        checkpoint_dir=best_checkpoint_dir,
-                        fold_index=fold_index,
-                        step=step,
-                        val_loss=val_loss,
-                    )
                 else:
                     patience_count += 1
                     if patience_count >= self.config.early_stopping_patience:
@@ -386,6 +379,13 @@ class StratifiedKFoldTrainer:
         val_metrics["best_selection_step"] = float(best_selection_step)
         if best_checkpoint_dir is not None:
             val_metrics["best_checkpoint_dir"] = str(best_checkpoint_dir)
+            self._upload_checkpoint_to_wandb(
+                run=run,
+                checkpoint_dir=best_checkpoint_dir,
+                fold_index=fold_index,
+                step=best_selection_step,
+                val_loss=best_val_loss,
+            )
         self._finish_wandb_run(run, val_metrics)
         return val_metrics
 
@@ -568,14 +568,14 @@ class StratifiedKFoldTrainer:
         if not return_details:
             return metrics
 
-        avg_true, avg_pred = self._aggregate_predictions(
+        avg_true, avg_pred, _ = self._aggregate_predictions(
             probs_per_window,
             labels_per_window,
             movement_ids_per_window,
             method="average",
             multi_label=multi_label,
         )
-        majority_true, majority_pred = self._aggregate_predictions(
+        majority_true, majority_pred, _ = self._aggregate_predictions(
             probs_per_window,
             labels_per_window,
             movement_ids_per_window,
@@ -596,7 +596,7 @@ class StratifiedKFoldTrainer:
         movement_ids: Sequence[str],
         method: str,
         multi_label: bool,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         grouped_probs: Dict[str, List[np.ndarray]] = defaultdict(list)
         grouped_labels: Dict[str, List[np.ndarray]] = defaultdict(list)
 
@@ -608,11 +608,14 @@ class StratifiedKFoldTrainer:
 
         y_true: List[np.ndarray] = []
         y_pred: List[np.ndarray] = []
+        y_probs: List[np.ndarray] = []
 
         for movement_id in grouped_probs:
             window_probs = np.asarray(grouped_probs[movement_id])
             window_labels = np.asarray(grouped_labels[movement_id])
             true_label = window_labels[0]
+
+            averaged_probs = window_probs.mean(axis=0)
 
             if method == "average":
                 pred = self.window_aggregator.average_probabilities(
@@ -627,13 +630,15 @@ class StratifiedKFoldTrainer:
 
             y_true.append(np.asarray(true_label))
             y_pred.append(np.asarray(pred))
+            y_probs.append(averaged_probs)
 
         if multi_label:
-            return np.vstack(y_true), np.vstack(y_pred)
+            return np.vstack(y_true), np.vstack(y_pred), np.vstack(y_probs)
 
         y_true_arr = np.array([int(v) for v in y_true], dtype=np.int64)
         y_pred_arr = np.array([int(v) for v in y_pred], dtype=np.int64)
-        return y_true_arr, y_pred_arr
+        y_probs_arr = np.vstack(y_probs)
+        return y_true_arr, y_pred_arr, y_probs_arr
 
     def _aggregate_metrics(
         self,
@@ -643,7 +648,7 @@ class StratifiedKFoldTrainer:
         method: str,
         multi_label: bool,
     ) -> Dict[str, float]:
-        y_true_arr, y_pred_arr = self._aggregate_predictions(
+        y_true_arr, y_pred_arr, y_probs_arr = self._aggregate_predictions(
             probs_per_window=probs_per_window,
             labels_per_window=labels_per_window,
             movement_ids=movement_ids,
@@ -661,6 +666,7 @@ class StratifiedKFoldTrainer:
             metric_values = self.classification_metrics.compute_single_label(
                 y_true=y_true_arr,
                 y_pred=y_pred_arr,
+                y_probs=y_probs_arr,
             )
             score = metric_values["accuracy"]
 
