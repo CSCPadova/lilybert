@@ -524,13 +524,8 @@ class StratifiedKFoldTrainer:
                 )
                 losses.append(float(outputs["loss"].item()))
 
-                logits = outputs["logits"].detach().cpu()
-                if multi_label:
-                    probs = torch.sigmoid(logits).numpy()
-                else:
-                    probs = torch.softmax(logits, dim=-1).numpy()
-
-                probs_per_window.extend(list(probs))
+                logits = outputs["logits"].detach().cpu().numpy()
+                probs_per_window.extend(list(logits))
                 labels_per_window.extend(list(labels.detach().cpu().numpy()))
                 movement_ids_per_window.extend(list(batch["movement_id"]))
 

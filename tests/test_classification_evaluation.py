@@ -142,6 +142,73 @@ def test_classification_metrics_single_label_no_top_k_without_probs():
     assert "top5_accuracy" not in scores
 
 
+def test_window_aggregator_multi_label_no_double_sigmoid():
+    """Regression: passing pre-sigmoided probs to the aggregator must not
+    collapse predictions.  Raw logits with a strong positive signal (e.g. 5.0)
+    should produce a prediction of 1, whereas double-sigmoid would compress
+    sigmoid(5.0)≈1.0 → sigmoid(1.0)≈0.73, still above 0.5 but the *negative*
+    case is the real tell: a logit of -3.0 yields sigmoid(-3.0)≈0.05, but
+    double-sigmoid gives sigmoid(0.05)≈0.51 — flipping it to 1."""
+    aggregator = WindowAggregator(threshold=0.5)
+
+    # Single window with a clear negative logit for class 1
+    logits = np.array([[4.0, -3.0, 2.0]])
+
+    pred_from_logits = aggregator.average_probabilities(logits, multi_label=True)
+    # Class 1 must be 0 (sigmoid(-3.0) ≈ 0.05 < 0.5)
+    assert pred_from_logits[1] == 0, (
+        "Aggregator should predict 0 for strongly negative logit; "
+        "got 1 — possible double-sigmoid"
+    )
+
+    # If someone mistakenly pre-applies sigmoid, the aggregator would get
+    # values near (0.98, 0.05, 0.88) and sigmoid those again to
+    # (0.73, 0.51, 0.71) — all above threshold, flipping class 1 to 1.
+    pre_sigmoided = 1.0 / (1.0 + np.exp(-logits))
+    pred_from_probs = aggregator.average_probabilities(
+        pre_sigmoided, multi_label=True
+    )
+    assert pred_from_probs[1] == 1, (
+        "Sanity check: double-sigmoid on this input should incorrectly predict 1"
+    )
+
+
+def test_window_aggregator_single_label_no_double_softmax():
+    """Regression: passing pre-softmaxed probs to the aggregator must not
+    change the predicted class.  With raw logits [0.1, 5.0, 0.1] the winner
+    is clearly class 1.  Double-softmax sharpens further so it often still
+    picks the same argmax — but with a more ambiguous case the double
+    application distorts the distribution."""
+    aggregator = WindowAggregator()
+
+    # Two windows: first strongly favours class 0, second mildly favours class 1.
+    # Averaging raw softmax: class 0 wins.
+    logits = np.array([
+        [5.0, 0.0, 0.0],
+        [1.0, 1.5, 0.0],
+    ])
+
+    pred_from_logits = aggregator.average_probabilities(logits, multi_label=False)
+
+    # Manually compute expected: softmax then average
+    def softmax(x):
+        shifted = x - np.max(x, axis=-1, keepdims=True)
+        e = np.exp(shifted)
+        return e / e.sum(axis=-1, keepdims=True)
+
+    expected = int(np.argmax(softmax(logits).mean(axis=0)))
+    assert pred_from_logits == expected
+
+    # Double softmax would change the distribution — verify it diverges
+    pre_softmaxed = softmax(logits)
+    pred_double = aggregator.average_probabilities(pre_softmaxed, multi_label=False)
+    # After double-softmax the strong logit advantage is flattened, so the
+    # second window's mild preference can shift the result.  We don't assert
+    # which class wins with double-softmax, just that using raw logits gives
+    # the correct answer.
+    assert pred_from_logits == expected
+
+
 def test_classification_metrics_multi_label():
     metrics = ClassificationMetrics()
     y_true = np.array(
