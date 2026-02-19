@@ -87,7 +87,7 @@ class LilyBERTEncoder(nn.Module):
                 r=lora_r,
                 lora_alpha=lora_alpha,
                 target_modules=["query", "value"],
-                task_type=TaskType.SEQ_CLS,
+                task_type=TaskType.FEATURE_EXTRACTION,
             )
             self.bert = get_peft_model(self.bert, peft_config)
         elif mode == TrainingMode.FULL_FINETUNE:
