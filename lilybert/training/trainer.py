@@ -326,13 +326,14 @@ class StratifiedKFoldTrainer:
                     **{f"val/{k}": float(v) for k, v in val_metrics.items()},
                 }
                 self._log_wandb(run, log_payload, step=step)
-                self._log_wandb_eval_diagnostics(
-                    run=run,
-                    eval_details=eval_details,
-                    class_names=class_names,
-                    multi_label=multi_label,
-                    step=step,
-                )
+                if self.config.log_per_class_metrics:
+                    self._log_wandb_eval_diagnostics(
+                        run=run,
+                        eval_details=eval_details,
+                        class_names=class_names,
+                        multi_label=multi_label,
+                        step=step,
+                    )
                 score_key = "avg_f1_micro" if multi_label else "avg_accuracy"
                 score_val = val_metrics.get(score_key, 0.0)
                 pbar.set_postfix(

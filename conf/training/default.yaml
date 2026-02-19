@@ -14,3 +14,4 @@ model_selection_metric: auto
 model_selection_mode: auto
 max_length: 512
 stride: 256
+log_per_class_metrics: true

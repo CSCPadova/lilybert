@@ -55,6 +55,7 @@ class TrainingConfig:
     wandb_entity: Optional[str] = None
     wandb_mode: str = "online"
     wandb_run_name: Optional[str] = None
+    log_per_class_metrics: bool = True
 
     # Legacy compatibility knobs retained for existing tests/transition
     use_lora: bool = True
