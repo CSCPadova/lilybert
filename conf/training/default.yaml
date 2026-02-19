@@ -1,7 +1,7 @@
 n_folds: 5
 num_train_epochs: 10
 max_steps: 0
-eval_steps: 200
+eval_steps: 100
 log_steps: 20
 batch_size: 16
 learning_rate: 2e-5
@@ -9,7 +9,7 @@ weight_decay: 0.01
 warmup_ratio: 0.1
 lr_scheduler_type: cosine
 grad_clip_norm: 1.0
-early_stopping_patience: 5
+early_stopping_patience: 20
 model_selection_metric: auto
 model_selection_mode: auto
 max_length: 512
