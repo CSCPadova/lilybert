@@ -17,7 +17,22 @@ from transformers import PreTrainedTokenizerFast
 
 from .parser import LilyPondParser
 
+import ly.document
+import ly.lex
+
+
 logger = logging.getLogger(__name__)
+
+
+def _tokenize_file_worker(path: str) -> dict:
+    """Process-safe worker for corpus token extraction."""
+    tokenizer = LilyPondTokenizer()
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        token_line = tokenizer._movement_to_parser_tokens(text)
+        return {"ok": True, "token_line": token_line}
+    except Exception as exc:  # pragma: no cover - runtime failure path
+        return {"ok": False, "error": str(exc), "path": path}
 
 
 class LilyPondTokenizer:
@@ -34,6 +49,12 @@ class LilyPondTokenizer:
         "[PART_BEGIN]",
         "[PART_NAME]",
         "[PART_END]",
+        "[SIMUL_BEGIN]",
+        "[SIMUL_END]",
+        "[SEQ_BEGIN]",
+        "[SEQ_END]",
+        "[VOICE_SEP]",
+        "[SCORE]",
     ]
 
     def __init__(
@@ -75,18 +96,8 @@ class LilyPondTokenizer:
         max_workers = min(8, (os.cpu_count() or 2))
         corpus: List[str] = []
 
-        def _worker(path: str) -> dict:
-            # instantiate local tokenizer+parser to avoid pickling bound methods
-            try:
-                t = LilyPondTokenizer()
-                text = Path(path).read_text(encoding="utf-8", errors="ignore")
-                token_line = t._movement_to_parser_tokens(text)
-                return {"ok": True, "token_line": token_line}
-            except Exception as exc:
-                return {"ok": False, "error": str(exc), "path": path}
-
         with ProcessPoolExecutor(max_workers=max_workers) as exe:
-            futures = {exe.submit(_worker, str(p)): p for p in movement_files}
+            futures = {exe.submit(_tokenize_file_worker, str(p)): p for p in movement_files}
             for fut in as_completed(futures):
                 res = fut.result()
                 if not res.get("ok"):
@@ -191,6 +202,7 @@ class LilyPondTokenizer:
         if parts:
             tokens: List[str] = []
             for name, content in parts:
+                structural_tokens = self._extract_structural_tokens(content)
                 music_tokens = self.parser._tokenize_music(content)
                 if not music_tokens:
                     parsed = self.parser.parse_content(content)
@@ -203,17 +215,62 @@ class LilyPondTokenizer:
                         "[PART_BEGIN]",
                         "[PART_NAME]",
                         f"part:{name.lower()}",
+                        *structural_tokens,
                         *music_tokens,
                         "[PART_END]",
                     ]
                 )
             return " ".join(tokens).strip()
 
+        structural_tokens = self._extract_structural_tokens(text)
         tokens = self.parser._tokenize_music(text)
         if not tokens:
             parsed = self.parser.parse_content(text)
             tokens = [element.content for element in parsed]
-        return " ".join(tokens).strip()
+        return " ".join([*structural_tokens, *tokens]).strip()
+
+    def _extract_structural_tokens(self, text: str) -> List[str]:
+        """Extract score-structure markers using python-ly lexical tokens."""
+        document = ly.document.Document(text)
+        state = ly.lex.state("lilypond")
+
+        markers: List[str] = []
+        in_simultaneous_depth = 0
+
+        for token in state.tokens(document.plaintext()):
+            token_type = type(token).__name__
+            token_text = str(token)
+
+            if token_type == "Score":
+                markers.append("[SCORE]")
+                continue
+
+            if token_type == "SimultaneousStart":
+                markers.append("[SIMUL_BEGIN]")
+                in_simultaneous_depth += 1
+                continue
+
+            if token_type == "SimultaneousEnd":
+                markers.append("[SIMUL_END]")
+                in_simultaneous_depth = max(0, in_simultaneous_depth - 1)
+                continue
+
+            if token_type == "SequentialStart":
+                markers.append("[SEQ_BEGIN]")
+                continue
+
+            if token_type == "SequentialEnd":
+                markers.append("[SEQ_END]")
+                continue
+
+            if (
+                token_type == "Unparsed"
+                and token_text == "\\"
+                and in_simultaneous_depth > 0
+            ):
+                markers.append("[VOICE_SEP]")
+
+        return markers
 
     def _extract_part_variables(self, text: str) -> List[tuple[str, str]]:
         parts: List[tuple[str, str]] = []

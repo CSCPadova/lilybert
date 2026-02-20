@@ -38,6 +38,7 @@ def _write_movements(tmp_path: Path) -> tuple[list[str], dict]:
     metadata = {
         "sample_work_mvt1": {
             "base_work": "sample_work",
+            "structure_markers": ["[SIMUL_BEGIN]", "[VOICE_SEP]", "[SIMUL_END]"],
             "labels": {
                 "composer": "Vivaldi",
                 "musical_form": ["concerto"],
@@ -48,6 +49,7 @@ def _write_movements(tmp_path: Path) -> tuple[list[str], dict]:
         },
         "sample_work_mvt2": {
             "base_work": "sample_work",
+            "structure_markers": [],
             "labels": {
                 "composer": "Bach",
                 "musical_form": ["cantata"],
@@ -136,3 +138,26 @@ def test_get_movement_ids_maps_window_index_to_movement(tmp_path: Path):
     assert movement_map[0] == "sample_work_mvt1"
     assert movement_map[len(dataset) - 1] == "sample_work_mvt2"
     assert len(movement_map) == len(dataset)
+
+
+def test_dataset_can_include_structure_markers(tmp_path: Path):
+    movement_files, metadata = _write_movements(tmp_path)
+    tokenizer = _FakeTokenizer()
+
+    dataset = BaroqueMusicClassificationDataset(
+        movement_files=movement_files,
+        metadata=metadata,
+        tokenizer=tokenizer,
+        max_length=6,
+        stride=2,
+        task="composer",
+        include_structure_markers=True,
+    )
+
+    first = dataset[0]
+    assert "structure_markers" in first
+    assert first["structure_markers"] == [
+        "[SIMUL_BEGIN]",
+        "[VOICE_SEP]",
+        "[SIMUL_END]",
+    ]

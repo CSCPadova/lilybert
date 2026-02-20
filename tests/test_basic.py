@@ -268,6 +268,29 @@ class TestIntegration:
             assert "statistics" in result
             assert len(result["text"]) > 0
 
+    def test_preprocessor_preserves_simultaneous_structure_markers(self):
+        test_content = r"""\version "2.24.0"
+        \score {
+            <<
+                { do4 re mi fa }
+                \\
+                { sol4 la si do }
+            >>
+        }"""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_file = Path(temp_dir) / "simul.ly"
+            test_file.write_text(test_content, encoding="utf-8")
+
+            preprocessor = LilyPondPreprocessor()
+            result = preprocessor.preprocess_file(str(test_file))
+
+            assert result["movements"]
+            movement = result["movements"][0]
+            markers = movement.get("structure_markers", [])
+            assert "[SIMUL_BEGIN]" in markers
+            assert "[SIMUL_END]" in markers
+
     def test_config_serialization(self):
         """Test configuration serialization roundtrip."""
         original_config = TrainingConfig.for_quick_test()
@@ -312,6 +335,68 @@ class TestIntegration:
 
             with pytest.raises(ValueError):
                 tokenizer.build_corpus(root, notation_mode="invalid")
+
+    def test_tokenizer_preserves_simultaneous_structure_markers(self):
+        tokenizer = LilyPondTokenizer()
+        text = r"""
+        \score {
+            <<
+                { c4 d e f }
+                \\
+                { g4 a b c }
+            >>
+        }
+        """
+
+        token_line = tokenizer._movement_to_parser_tokens(text)
+        assert "[SIMUL_BEGIN]" in token_line
+        assert "[SIMUL_END]" in token_line
+        assert "[SEQ_BEGIN]" in token_line
+        assert "[SEQ_END]" in token_line
+
+    def test_preprocess_to_dataset_persists_structure_markers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw_dir = root / "raw"
+            out_dir = root / "processed"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+
+            file_name = "sample.ly"
+            content = r"""\version "2.24.0"
+            \score {
+              <<
+                { do4 re mi fa }
+                \\
+                { sol4 la si do }
+              >>
+            }
+            """
+            (raw_dir / file_name).write_text(content, encoding="utf-8")
+
+            labels_path = root / "labels.json"
+            labels = {
+                file_name: {
+                    "composer": "test",
+                    "musical_form": ["concerto"],
+                    "midi_instruments": ["violin"],
+                    "period": "baroque",
+                    "meta": {},
+                }
+            }
+            labels_path.write_text(json.dumps(labels), encoding="utf-8")
+
+            preprocessor = LilyPondPreprocessor()
+            preprocessor.preprocess_to_dataset(
+                input_dir=str(raw_dir),
+                output_dir=str(out_dir),
+                labels_path=str(labels_path),
+            )
+
+            metadata = json.loads((out_dir / "metadata.json").read_text(encoding="utf-8"))
+            entry = metadata["sample_mvt1"]
+            assert "structure_markers" in entry
+            assert "[SIMUL_BEGIN]" in entry["structure_markers"]
+            assert "[SIMUL_END]" in entry["structure_markers"]
 
 
 if __name__ == "__main__":

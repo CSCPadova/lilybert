@@ -29,6 +29,7 @@ try:
     import ly.pitch
     from ly.pitch.abs2rel import abs2rel
     from ly.pitch.rel2abs import rel2abs
+    import ly.lex
     from ly.pitch.translate import translate
     from ly.pitch.transpose import Transposer, transpose
 
@@ -37,6 +38,50 @@ except Exception:  # pragma: no cover - optional runtime dependency
     PYTHON_LY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def _preprocess_dataset_file_worker(
+    path: str,
+    labels_map: Dict[str, Any],
+    aug_cfg: Dict[str, Any],
+    max_sequence_length: int,
+    add_special_tokens: bool,
+    normalize_notation: bool,
+) -> Dict[str, Any]:
+    """Process one raw file and return augmented movement payloads."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        pre = LilyPondPreprocessor(
+            tokenizer=None,
+            max_sequence_length=max_sequence_length,
+            add_special_tokens=add_special_tokens,
+            normalize_notation=normalize_notation,
+            augmentation_config=aug_cfg,
+        )
+        labels_entry = labels_map.get(Path(path).name, {})
+        movements = pre.process_content(text, Path(path).name, labels_entry)
+        out_items = []
+        for movement in movements:
+            variants = pre._build_augmented_variants(movement, pre.augmentation_config)
+            for variant in variants:
+                out_items.append(
+                    {
+                        "movement_id": movement["movement_id"],
+                        "language": variant["language"],
+                        "variant_id": variant["variant_id"],
+                        "text": variant["text"],
+                        "base_work": movement.get("base_work"),
+                        "movement_index": movement.get("movement_index"),
+                        "source_file": Path(path).name,
+                        "meta_key": movement.get("meta_key"),
+                        "section_nomenclature": movement.get("section_nomenclature"),
+                        "labels": movement.get("labels", {}),
+                        "structure_markers": movement.get("structure_markers", []),
+                    }
+                )
+        return {"ok": True, "items": out_items}
+    except Exception as exc:  # pragma: no cover - runtime failure path
+        return {"ok": False, "error": str(exc), "file": path}
 
 
 ITALIAN_TO_ENGLISH_NOTES = {
@@ -273,43 +318,28 @@ class LilyPondPreprocessor:
         raw_files = sorted([str(p) for p in raw_dir.glob("*.ly")])
         max_workers = min(8, (os.cpu_count() or 2))
 
-        def _file_worker(path: str, labels_map: Dict[str, Any], aug_cfg: AugmentationConfig):
-            # This function will be executed in a separate process
-            try:
-                text = Path(path).read_text(encoding="utf-8", errors="ignore")
-                pre = LilyPondPreprocessor(
-                    tokenizer=None,
-                    max_sequence_length=self.max_sequence_length,
-                    add_special_tokens=self.add_special_tokens,
-                    normalize_notation=self.normalize_notation,
-                    augmentation_config=aug_cfg,
-                )
-                labels_entry = labels_map.get(Path(path).name, {})
-                movements = pre.process_content(text, Path(path).name, labels_entry)
-                out_items = []
-                for movement in movements:
-                    variants = pre._build_augmented_variants(movement, pre.augmentation_config)
-                    for variant in variants:
-                        out_items.append(
-                            {
-                                "movement_id": movement["movement_id"],
-                                "language": variant["language"],
-                                "variant_id": variant["variant_id"],
-                                "text": variant["text"],
-                                "base_work": movement.get("base_work"),
-                                "movement_index": movement.get("movement_index"),
-                                "source_file": Path(path).name,
-                                "meta_key": movement.get("meta_key"),
-                                "section_nomenclature": movement.get("section_nomenclature"),
-                                "labels": movement.get("labels", {}),
-                            }
-                        )
-                return {"ok": True, "items": out_items}
-            except Exception as exc:  # pragma: no cover - runtime failure path
-                return {"ok": False, "error": str(exc), "file": path}
+        aug_cfg = {
+            "languages": list(config.languages),
+            "enable_transposition": config.enable_transposition,
+            "enable_absolute_relative": config.enable_absolute_relative,
+            "enable_articulation_variants": config.enable_articulation_variants,
+            "enable_barline_variants": config.enable_barline_variants,
+            "include_original": config.include_original,
+        }
 
         with ProcessPoolExecutor(max_workers=max_workers) as exe:
-            futures = {exe.submit(_file_worker, path, labels_map, config): path for path in raw_files}
+            futures = {
+                exe.submit(
+                    _preprocess_dataset_file_worker,
+                    path,
+                    labels_map,
+                    aug_cfg,
+                    self.max_sequence_length,
+                    self.add_special_tokens,
+                    self.normalize_notation,
+                ): path
+                for path in raw_files
+            }
             for fut in as_completed(futures):
                 path = futures[fut]
                 res = fut.result()
@@ -341,6 +371,7 @@ class LilyPondPreprocessor:
                             "meta_key": item.get("meta_key"),
                             "section_nomenclature": item.get("section_nomenclature"),
                             "labels": item.get("labels", {}),
+                            "structure_markers": item.get("structure_markers", []),
                         }
 
         metadata_path = out_root / "metadata.json"
@@ -685,6 +716,7 @@ class LilyPondPreprocessor:
                     "parts": parts,
                     "italiano_text": italian,
                     "english_text": english,
+                    "structure_markers": self._extract_structure_markers(italian),
                 }
             )
 
@@ -723,6 +755,7 @@ class LilyPondPreprocessor:
                     "english_text": self._convert_italian_to_english_notes(
                         italian_text
                     ),
+                    "structure_markers": self._extract_structure_markers(italian_text),
                 }
             )
 
@@ -777,6 +810,52 @@ class LilyPondPreprocessor:
             rows.append(f"{name} = {{\n{body}\n}}")
 
         return "\n\n".join(rows).strip() + "\n"
+
+    def _extract_structure_markers(self, text: str) -> List[str]:
+        """Extract score-structure markers using python-ly lexical tokens."""
+        if not PYTHON_LY_AVAILABLE:
+            return []
+
+        document = ly.document.Document(text)
+        state = ly.lex.state("lilypond")
+
+        markers: List[str] = []
+        in_simultaneous_depth = 0
+
+        for token in state.tokens(document.plaintext()):
+            token_type = type(token).__name__
+            token_text = str(token)
+
+            if token_type == "Score":
+                markers.append("[SCORE]")
+                continue
+
+            if token_type == "SimultaneousStart":
+                markers.append("[SIMUL_BEGIN]")
+                in_simultaneous_depth += 1
+                continue
+
+            if token_type == "SimultaneousEnd":
+                markers.append("[SIMUL_END]")
+                in_simultaneous_depth = max(0, in_simultaneous_depth - 1)
+                continue
+
+            if token_type == "SequentialStart":
+                markers.append("[SEQ_BEGIN]")
+                continue
+
+            if token_type == "SequentialEnd":
+                markers.append("[SEQ_END]")
+                continue
+
+            if (
+                token_type == "Unparsed"
+                and token_text == "\\"
+                and in_simultaneous_depth > 0
+            ):
+                markers.append("[VOICE_SEP]")
+
+        return markers
 
     def _preprocess_text(self, text: str) -> str:
         """Compatibility wrapper for tests and existing callers."""

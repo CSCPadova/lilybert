@@ -24,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--stride", type=int, default=256)
     parser.add_argument("--language", default="english")
+    parser.add_argument(
+        "--include-structure-markers",
+        action="store_true",
+        help="Persist structure_markers from movement metadata in pretokenized cache metadata",
+    )
     return parser
 
 
@@ -58,6 +63,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         max_length=args.max_length,
         stride=args.stride,
         task=args.task,
+        include_structure_markers=args.include_structure_markers,
     )
 
     n = len(dataset)
@@ -71,6 +77,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     attention_mask = np.empty((n, args.max_length), dtype=np.int8)
     movement_ids = []
     base_works = []
+    structure_markers = [] if args.include_structure_markers else None
 
     sample0 = dataset[0]
     is_multi_label = sample0["label"].dim() > 0 if hasattr(sample0["label"], "dim") else False
@@ -87,6 +94,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         labels[i] = sample["label"].numpy() if hasattr(sample["label"], "numpy") else sample["label"]
         movement_ids.append(sample["movement_id"])
         base_works.append(sample["base_work"])
+        if args.include_structure_markers:
+            structure_markers.append(sample.get("structure_markers", []))
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,8 +120,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             "tokenizer_path": args.tokenizer_path,
             "language": args.language,
             "data_dir": args.data_dir,
+            "include_structure_markers": args.include_structure_markers,
         },
     }
+    if args.include_structure_markers:
+        meta["structure_markers"] = structure_markers
     meta_path = output_dir / f"{args.task}_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Saved metadata to {meta_path}")

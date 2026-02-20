@@ -34,6 +34,7 @@ class PreTokenizedDataset(Dataset):
         self.label_to_index: Dict[str, int] = meta["label_to_index"]
         all_movement_ids: List[str] = meta["movement_ids"]
         all_base_works: List[str] = meta["base_works"]
+        all_structure_markers: Optional[List[List[str]]] = meta.get("structure_markers")
 
         data = np.load(npz_path)
         all_input_ids = data["input_ids"]
@@ -57,6 +58,11 @@ class PreTokenizedDataset(Dataset):
 
         self._movement_ids = [all_movement_ids[i] for i in indices]
         self._base_works = [all_base_works[i] for i in indices]
+        self._structure_markers = (
+            [all_structure_markers[i] for i in indices]
+            if all_structure_markers is not None
+            else None
+        )
 
         self._window_to_movement = {
             i: mid for i, mid in enumerate(self._movement_ids)
@@ -73,6 +79,11 @@ class PreTokenizedDataset(Dataset):
             "label": label.clone() if label.dim() > 0 else label.item(),
             "movement_id": self._movement_ids[idx],
             "base_work": self._base_works[idx],
+            **(
+                {"structure_markers": self._structure_markers[idx]}
+                if self._structure_markers is not None
+                else {}
+            ),
         }
 
     def get_movement_ids(self) -> Dict[int, str]:

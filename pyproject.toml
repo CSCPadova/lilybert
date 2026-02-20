@@ -58,9 +58,9 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/matteospanio/MaestroGPT"
-"Bug Tracker" = "https://github.com/matteospanio/MaestroGPT/issues"
-"Repository" = "https://github.com/matteospanio/MaestroGPT"
+"Homepage" = "https://github.com/CSCPadova/lilybert"
+"Bug Tracker" = "https://github.com/CSCPadova/lilybert/issues"
+"Repository" = "https://github.com/CSCPadova/lilybert"
 
 [project.scripts]
 lilybert = "lilybert.cli:main"

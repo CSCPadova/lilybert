@@ -26,6 +26,7 @@ class BaroqueMusicClassificationDataset(Dataset):
         max_length: int = 512,
         stride: int = 256,
         task: str = "composer",
+        include_structure_markers: bool = False,
     ):
         self.movement_files = [Path(path) for path in movement_files]
         self.metadata = metadata or {}
@@ -33,6 +34,7 @@ class BaroqueMusicClassificationDataset(Dataset):
         self.max_length = max_length
         self.stride = stride
         self.task = task
+        self.include_structure_markers = include_structure_markers
 
         if self.max_length < 3:
             raise ValueError("max_length must be >= 3 to include [CLS] and [SEP]")
@@ -97,6 +99,10 @@ class BaroqueMusicClassificationDataset(Dataset):
                     "movement_id": movement_id,
                     "base_work": base_work,
                 }
+                if self.include_structure_markers:
+                    sample["structure_markers"] = movement_meta.get(
+                        "structure_markers", []
+                    )
                 sample_index = len(self.samples)
                 self.samples.append(sample)
                 self._window_to_movement[sample_index] = movement_id
