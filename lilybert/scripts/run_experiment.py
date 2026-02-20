@@ -10,7 +10,9 @@ from typing import Any, Dict, Sequence
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+from lilybert.data import LilyPondPreprocessor
 from lilybert.models import TrainingMode
+from lilybert.pretraining import MLMPretrainer, PretrainingConfig
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 
 SUPPORTED_TASKS = {
@@ -74,8 +76,91 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
     dataset_cfg = cfg.get("dataset", {})
     model_cfg = cfg.get("model", {})
     training_cfg = cfg.get("training", {})
+    pretraining_cfg = cfg.get("pretraining", {})
+    augmentation_cfg = cfg.get("augmentation", {})
     runtime_cfg = cfg.get("runtime", {})
     tasks_cfg = cfg.get("tasks", {})
+    stage_cfg = cfg.get("pipeline", {})
+
+    stage = str(stage_cfg.get("stage", "stage2")).lower()
+    if stage not in {"stage1", "stage2", "both"}:
+        raise ValueError("pipeline.stage must be one of: stage1, stage2, both")
+
+    outputs: Dict[str, Any] = {}
+
+    if stage in {"stage1", "both"}:
+        stage1_languages = list(
+            pretraining_cfg.get(
+                "languages",
+                augmentation_cfg.get("languages", dataset_cfg.get("languages", [])),
+            )
+        )
+        stage1_data_dir = str(
+            pretraining_cfg.get("data_dir", dataset_cfg.get("data_dir", "data/processed"))
+        )
+        if bool(pretraining_cfg.get("prepare_data", False)):
+            preprocessor = LilyPondPreprocessor(
+                augmentation_config={
+                    "languages": stage1_languages,
+                    "enable_transposition": bool(
+                        augmentation_cfg.get("enable_transposition", False)
+                    ),
+                    "enable_absolute_relative": bool(
+                        augmentation_cfg.get("enable_absolute_relative", False)
+                    ),
+                    "enable_articulation_variants": bool(
+                        augmentation_cfg.get("enable_articulation_variants", False)
+                    ),
+                    "enable_barline_variants": bool(
+                        augmentation_cfg.get("enable_barline_variants", False)
+                    ),
+                    "include_original": True,
+                }
+            )
+            preprocessor.preprocess_to_dataset(
+                input_dir=str(pretraining_cfg.get("raw_input_dir", "data/raw")),
+                output_dir=stage1_data_dir,
+                labels_path=str(
+                    pretraining_cfg.get("labels_path", "data/labels/labels_v1.json")
+                ),
+            )
+
+        pretrain_config = PretrainingConfig(
+            data_dir=stage1_data_dir,
+            tokenizer_path=str(
+                pretraining_cfg.get(
+                    "tokenizer_path",
+                    _resolve_tokenizer_path(dataset_cfg),
+                )
+            ),
+            output_dir=str(pretraining_cfg.get("output_dir", "outputs/pretraining")),
+            languages=stage1_languages,
+            model_architecture=str(pretraining_cfg.get("model_architecture", "bert-base")),
+            hidden_size=int(pretraining_cfg.get("hidden_size", 768)),
+            num_hidden_layers=int(pretraining_cfg.get("num_hidden_layers", 12)),
+            num_attention_heads=int(pretraining_cfg.get("num_attention_heads", 12)),
+            intermediate_size=int(pretraining_cfg.get("intermediate_size", 3072)),
+            max_position_embeddings=int(
+                pretraining_cfg.get("max_position_embeddings", 512)
+            ),
+            max_length=int(pretraining_cfg.get("max_length", 512)),
+            mlm_probability=float(pretraining_cfg.get("mlm_probability", 0.15)),
+            per_device_train_batch_size=int(
+                pretraining_cfg.get("per_device_train_batch_size", 16)
+            ),
+            num_train_epochs=int(pretraining_cfg.get("num_train_epochs", 3)),
+            learning_rate=float(pretraining_cfg.get("learning_rate", 5e-5)),
+            weight_decay=float(pretraining_cfg.get("weight_decay", 0.01)),
+            warmup_ratio=float(pretraining_cfg.get("warmup_ratio", 0.06)),
+            max_steps=int(pretraining_cfg.get("max_steps", 0)),
+            logging_steps=int(pretraining_cfg.get("logging_steps", 50)),
+            save_steps=int(pretraining_cfg.get("save_steps", 500)),
+            seed=int(runtime_cfg.get("seed", pretraining_cfg.get("seed", 42))),
+        )
+        outputs["stage1"] = MLMPretrainer(pretrain_config).run()
+
+    if stage == "stage1":
+        return outputs
 
     if OmegaConf.is_list(tasks_cfg) or isinstance(tasks_cfg, (list, tuple)):
         tasks = list(tasks_cfg)
@@ -89,8 +174,13 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
 
     wandb_cfg = runtime_cfg.get("wandb", {})
     tokenizer_path = _resolve_tokenizer_path(dataset_cfg)
+    if stage == "both":
+        pretrained_from_stage1 = outputs["stage1"].get("model_dir")
+        if pretrained_from_stage1:
+            model_cfg = {**dict(model_cfg), "pretrained_model": pretrained_from_stage1}
+
     training_overrides = {
-        "pretrained_model": model_cfg.get("pretrained_model", "bert-base-uncased"),
+        "pretrained_model": model_cfg.get("pretrained_model", "bert-base"),
         "mode": model_cfg.get("mode", "full_finetune"),
         "lora_r": model_cfg.get("lora_r", 16),
         "lora_alpha": model_cfg.get("lora_alpha", 32),
@@ -153,6 +243,10 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
 
     if len(modes) == 1:
         results = results[modes[0].value]
+
+    if stage == "both":
+        outputs["stage2"] = results
+        return outputs
 
     return results
 

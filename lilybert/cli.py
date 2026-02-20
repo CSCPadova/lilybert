@@ -7,7 +7,13 @@ from typing import Callable, Sequence
 
 from lilybert.evaluation import cli as evaluate_cli
 from lilybert.inference import cli as inference_cli
-from lilybert.scripts import preprocess, pretokenize, run_experiment, train_tokenizer
+from lilybert.scripts import (
+    preprocess,
+    pretokenize,
+    pretrain,
+    run_experiment,
+    train_tokenizer,
+)
 from lilybert.training import cli as train_cli
 
 Handler = Callable[[Sequence[str] | None], None]
@@ -38,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
         "train-tokenizer",
         "Train parser-aware tokenizer",
         train_tokenizer.main,
+    )
+    _add_subcommand(
+        subparsers,
+        "pretrain",
+        "Run Stage-1 MLM pretraining",
+        pretrain.main,
     )
     _add_subcommand(
         subparsers,

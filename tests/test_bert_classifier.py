@@ -138,7 +138,7 @@ def test_lora_mode_uses_query_value_target_modules(monkeypatch):
 
 def test_lilybert_config_defaults():
     config = LilyBERTConfig()
-    assert config.pretrained_model == "bert-base-uncased"
+    assert config.pretrained_model == "bert-base"
     assert config.mode == TrainingMode.FULL_FINETUNE
     assert config.max_length == 512
     assert config.lora_r == 16

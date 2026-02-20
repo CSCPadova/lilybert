@@ -29,6 +29,14 @@ lilybert preprocess \
   --input-dir data/raw \
   --output-dir data/processed \
   --labels-path data/labels/labels_v1.json
+
+# Enable configurable data augmentation for Stage-1 corpus creation
+lilybert preprocess \
+  --languages italiano,english,nederlands \
+  --enable-transposition \
+  --enable-absolute-relative \
+  --enable-articulation-variants \
+  --enable-barline-variants
 ```
 
 ### Tokenizer training
@@ -42,6 +50,20 @@ lilybert train-tokenizer \
 
 # English-only tokenizer corpus
 lilybert train-tokenizer --processed-dir data/processed --notation-mode english
+
+# Explicit language folders (beyond english/italiano presets)
+lilybert train-tokenizer --processed-dir data/processed --languages italiano,english,nederlands
+```
+
+### Stage-1 MLM pretraining (BERT-base from scratch)
+
+```bash
+lilybert pretrain \
+  --data-dir data/processed \
+  --tokenizer-path artifacts/tokenizer \
+  --output-dir outputs/pretraining \
+  --languages italiano,english \
+  --epochs 3
 ```
 
 ### Cross-validated training
@@ -86,6 +108,9 @@ lilybert run-experiment training.max_steps=2000 training.eval_steps=200 training
 
 # Enable W&B logging (one run per fold)
 lilybert run-experiment runtime.wandb.enabled=true runtime.wandb.project=lilybert
+
+# Run both stages with one entrypoint
+lilybert run-experiment pipeline.stage=both
 
 # Switch config file
 lilybert run-experiment --config-name experiment

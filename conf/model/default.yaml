@@ -1,4 +1,4 @@
-pretrained_model: bert-base-uncased
+pretrained_model: bert-base
 mode: full_finetune
 lora_r: 16
 lora_alpha: 32

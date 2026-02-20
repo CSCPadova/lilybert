@@ -33,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="both",
         help="Which processed notation variants to include in tokenizer corpus",
     )
+    parser.add_argument(
+        "--languages",
+        default=None,
+        help="Optional comma-separated explicit language folders to include",
+    )
     return parser
 
 
@@ -40,9 +45,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
     tokenizer = LilyPondTokenizer()
+    languages = None
+    if args.languages:
+        languages = [lang.strip() for lang in args.languages.split(",") if lang.strip()]
     corpus = tokenizer.build_corpus(
         args.processed_dir,
         notation_mode=args.notation_mode,
+        languages=languages,
     )
     fast_tokenizer = tokenizer.train(corpus=corpus, vocab_size=args.vocab_size)
     saved_dir = tokenizer.save(args.output_dir)
@@ -51,6 +60,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "processed_dir": args.processed_dir,
         "output_dir": str(saved_dir),
         "notation_mode": args.notation_mode,
+        "languages": languages,
         "num_corpus_samples": len(corpus),
         "vocab_size": fast_tokenizer.vocab_size,
     }

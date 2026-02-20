@@ -11,7 +11,7 @@ from .bert_classifier import TrainingMode
 class LilyBERTConfig:
     """Model/training configuration container for lilyBERT phases 6-7."""
 
-    pretrained_model: str = "bert-base-uncased"
+    pretrained_model: str = "bert-base"
     mode: TrainingMode = TrainingMode.FULL_FINETUNE
     task: str = "composer"
     data_dir: str = "data/processed"

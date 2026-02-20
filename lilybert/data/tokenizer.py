@@ -43,7 +43,10 @@ class LilyPondTokenizer:
         self.fast_tokenizer = fast_tokenizer
 
     def build_corpus(
-        self, processed_dir: str | Path, notation_mode: str = "both"
+        self,
+        processed_dir: str | Path,
+        notation_mode: str = "both",
+        languages: Optional[List[str]] = None,
     ) -> List[str]:
         """Build parser-token corpus strings from cleaned movement files.
 
@@ -51,6 +54,7 @@ class LilyPondTokenizer:
             processed_dir: Root processed directory (typically `data/processed`).
             notation_mode: Which notation folders to include: `english`,
                 `italiano`, or `both`.
+            languages: Optional explicit language folders to include.
 
         Returns:
             List of space-separated parser token strings (one per movement file).
@@ -63,7 +67,9 @@ class LilyPondTokenizer:
                 f"notation_mode must be one of {sorted(self.VALID_NOTATION_MODES)}, got: {notation_mode}"
             )
 
-        movement_files = sorted(self._iter_movement_files(root, notation_mode))
+        movement_files = sorted(
+            self._iter_movement_files(root, notation_mode, languages=languages)
+        )
         corpus: List[str] = []
 
         for file_path in movement_files:
@@ -123,7 +129,23 @@ class LilyPondTokenizer:
         fast_tokenizer = PreTrainedTokenizerFast.from_pretrained(str(path))
         return cls(fast_tokenizer=fast_tokenizer)
 
-    def _iter_movement_files(self, root: Path, notation_mode: str) -> Iterable[Path]:
+    def _iter_movement_files(
+        self,
+        root: Path,
+        notation_mode: str,
+        languages: Optional[List[str]] = None,
+    ) -> Iterable[Path]:
+        if languages:
+            normalized = [language.strip().lower() for language in languages if language]
+            for language in normalized:
+                language_dir = root / language
+                if not language_dir.exists():
+                    raise FileNotFoundError(
+                        f"Requested language folder not found: {language_dir}"
+                    )
+                yield from language_dir.glob("*.ly")
+            return
+
         if (root / "italiano").exists() or (root / "english").exists():
             if notation_mode in {"italiano", "both"}:
                 italiano_dir = root / "italiano"

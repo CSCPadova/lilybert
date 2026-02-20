@@ -25,9 +25,9 @@ class LilyBERTEncoder(nn.Module):
 
     def __init__(
         self,
-        vocab_size: int,
-        mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        vocab_size: int = 30522,
+        mode: Union[TrainingMode, str] = TrainingMode.FULL_FINETUNE,
+        pretrained: str = "bert-base",
         lora_r: int = 16,
         lora_alpha: int = 32,
     ):
@@ -42,7 +42,8 @@ class LilyBERTEncoder(nn.Module):
             self.bert = BertModel(config)
         else:
             self.bert = BertModel.from_pretrained(pretrained)
-            self._replace_embeddings(self.bert, self.vocab_size)
+            if int(self.bert.config.vocab_size) != self.vocab_size:
+                self._replace_embeddings(self.bert, self.vocab_size)
 
         self._apply_mode(self.mode, lora_r=lora_r, lora_alpha=lora_alpha)
 
@@ -148,9 +149,9 @@ class LilyBERTClassifier(LilyBERTTaskClassifier):
     def __init__(
         self,
         num_classes: int,
-        vocab_size: int,
-        mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        vocab_size: int = 30522,
+        mode: Union[TrainingMode, str] = TrainingMode.FULL_FINETUNE,
+        pretrained: str = "bert-base",
         multi_label: bool = False,
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -172,7 +173,7 @@ class ComposerClassifier(LilyBERTClassifier):
         self,
         vocab_size: int,
         mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        pretrained: str = "bert-base",
         num_classes: int = 70,
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -193,7 +194,7 @@ class MusicalFormClassifier(LilyBERTClassifier):
         self,
         vocab_size: int,
         mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        pretrained: str = "bert-base",
         num_classes: int = 17,
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -214,7 +215,7 @@ class InstrumentsClassifier(LilyBERTClassifier):
         self,
         vocab_size: int,
         mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        pretrained: str = "bert-base",
         num_classes: int = 25,
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -235,7 +236,7 @@ class SectionNomenclatureClassifier(LilyBERTClassifier):
         self,
         vocab_size: int,
         mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        pretrained: str = "bert-base",
         num_classes: int = 47,
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -256,7 +257,7 @@ class KeyScaleClassifier(LilyBERTClassifier):
         self,
         vocab_size: int,
         mode: Union[TrainingMode, str],
-        pretrained: str = "bert-base-uncased",
+        pretrained: str = "bert-base",
         num_classes: int = 24,
         lora_r: int = 16,
         lora_alpha: int = 32,

@@ -14,7 +14,7 @@ from lilybert.models import TrainingMode
 class TrainingConfig:
     """Configuration for grouped stratified cross-validation training."""
 
-    pretrained_model: str = "bert-base-uncased"
+    pretrained_model: str = "bert-base"
     mode: TrainingMode = TrainingMode.FULL_FINETUNE
     task: str = "composer"
     data_dir: str = "data/processed"
