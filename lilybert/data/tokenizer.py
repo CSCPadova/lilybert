@@ -6,6 +6,8 @@ import logging
 import re
 from pathlib import Path
 from typing import Iterable, List, Optional
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -67,16 +69,32 @@ class LilyPondTokenizer:
                 f"notation_mode must be one of {sorted(self.VALID_NOTATION_MODES)}, got: {notation_mode}"
             )
 
-        movement_files = sorted(
-            self._iter_movement_files(root, notation_mode, languages=languages)
-        )
+        movement_files = sorted(self._iter_movement_files(root, notation_mode, languages=languages))
+
+        # parallelize token-line extraction using worker processes
+        max_workers = min(8, (os.cpu_count() or 2))
         corpus: List[str] = []
 
-        for file_path in movement_files:
-            text = file_path.read_text(encoding="utf-8", errors="ignore")
-            token_line = self._movement_to_parser_tokens(text)
-            if token_line:
-                corpus.append(token_line)
+        def _worker(path: str) -> dict:
+            # instantiate local tokenizer+parser to avoid pickling bound methods
+            try:
+                t = LilyPondTokenizer()
+                text = Path(path).read_text(encoding="utf-8", errors="ignore")
+                token_line = t._movement_to_parser_tokens(text)
+                return {"ok": True, "token_line": token_line}
+            except Exception as exc:
+                return {"ok": False, "error": str(exc), "path": path}
+
+        with ProcessPoolExecutor(max_workers=max_workers) as exe:
+            futures = {exe.submit(_worker, str(p)): p for p in movement_files}
+            for fut in as_completed(futures):
+                res = fut.result()
+                if not res.get("ok"):
+                    logger.warning("Failed building token line for %s: %s", res.get("path"), res.get("error"))
+                    continue
+                token_line = res.get("token_line")
+                if token_line:
+                    corpus.append(token_line)
 
         logger.info("Built tokenizer corpus with %d movement samples", len(corpus))
         return corpus

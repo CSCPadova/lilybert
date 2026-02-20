@@ -266,53 +266,88 @@ class LilyPondPreprocessor:
         failures: Dict[str, str] = {}
         total_movements = 0
 
-        for ly_file in sorted(raw_dir.glob("*.ly")):
-            try:
-                content = ly_file.read_text(encoding="utf-8", errors="ignore")
-                labels_entry = labels_map.get(ly_file.name, {})
-                movements = self.process_content(content, ly_file.name, labels_entry)
+        # Parallel worker submits per raw file to avoid holding heavy parser state
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        import os
 
+        raw_files = sorted([str(p) for p in raw_dir.glob("*.ly")])
+        max_workers = min(8, (os.cpu_count() or 2))
+
+        def _file_worker(path: str, labels_map: Dict[str, Any], aug_cfg: AugmentationConfig):
+            # This function will be executed in a separate process
+            try:
+                text = Path(path).read_text(encoding="utf-8", errors="ignore")
+                pre = LilyPondPreprocessor(
+                    tokenizer=None,
+                    max_sequence_length=self.max_sequence_length,
+                    add_special_tokens=self.add_special_tokens,
+                    normalize_notation=self.normalize_notation,
+                    augmentation_config=aug_cfg,
+                )
+                labels_entry = labels_map.get(Path(path).name, {})
+                movements = pre.process_content(text, Path(path).name, labels_entry)
+                out_items = []
                 for movement in movements:
-                    movement_id = movement["movement_id"]
+                    variants = pre._build_augmented_variants(movement, pre.augmentation_config)
+                    for variant in variants:
+                        out_items.append(
+                            {
+                                "movement_id": movement["movement_id"],
+                                "language": variant["language"],
+                                "variant_id": variant["variant_id"],
+                                "text": variant["text"],
+                                "base_work": movement.get("base_work"),
+                                "movement_index": movement.get("movement_index"),
+                                "source_file": Path(path).name,
+                                "meta_key": movement.get("meta_key"),
+                                "section_nomenclature": movement.get("section_nomenclature"),
+                                "labels": movement.get("labels", {}),
+                            }
+                        )
+                return {"ok": True, "items": out_items}
+            except Exception as exc:  # pragma: no cover - runtime failure path
+                return {"ok": False, "error": str(exc), "file": path}
+
+        with ProcessPoolExecutor(max_workers=max_workers) as exe:
+            futures = {exe.submit(_file_worker, path, labels_map, config): path for path in raw_files}
+            for fut in as_completed(futures):
+                path = futures[fut]
+                res = fut.result()
+                if not res.get("ok"):
+                    failures[Path(path).name] = res.get("error")
+                    continue
+                for item in res.get("items", []):
+                    movement_id = item["movement_id"]
                     total_movements += 1
 
-                    variants = self._build_augmented_variants(movement, config)
-                    canonical_written: Dict[str, bool] = {
-                        language: False for language in config.languages
-                    }
-                    for variant in variants:
-                        language = variant["language"]
-                        if language not in language_dirs:
-                            continue
+                    language = item["language"]
+                    if language not in language_dirs:
+                        continue
 
-                        variant_id = variant["variant_id"]
-                        if not canonical_written[language] and variant_id == "base":
-                            file_name = f"{movement_id}.ly"
-                            canonical_written[language] = True
-                        else:
-                            file_name = f"{movement_id}__{variant_id}.ly"
+                    variant_id = item["variant_id"]
+                    if variant_id == "base":
+                        file_name = f"{movement_id}.ly"
+                    else:
+                        file_name = f"{movement_id}__{variant_id}.ly"
 
-                        output_path = language_dirs[language] / file_name
-                        output_path.write_text(variant["text"], encoding="utf-8")
+                    output_path = language_dirs[language] / file_name
+                    output_path.write_text(item["text"], encoding="utf-8")
 
-                    metadata[movement_id] = {
-                        "base_work": movement["base_work"],
-                        "source_file": ly_file.name,
-                        "movement_index": movement["movement_index"],
-                        "meta_key": movement.get("meta_key"),
-                        "section_nomenclature": movement.get("section_nomenclature"),
-                        "labels": movement.get("labels", {}),
-                    }
-            except Exception as exc:
-                failures[ly_file.name] = str(exc)
+                    if variant_id == "base":
+                        metadata[movement_id] = {
+                            "base_work": item.get("base_work"),
+                            "source_file": item.get("source_file"),
+                            "movement_index": item.get("movement_index"),
+                            "meta_key": item.get("meta_key"),
+                            "section_nomenclature": item.get("section_nomenclature"),
+                            "labels": item.get("labels", {}),
+                        }
 
         metadata_path = out_root / "metadata.json"
-        metadata_path.write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
         return {
-            "files_processed": len(list(raw_dir.glob("*.ly"))),
+            "files_processed": len(raw_files),
             "movements_written": total_movements,
             "languages": config.languages,
             "augmentation": {
