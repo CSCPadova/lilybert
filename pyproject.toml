@@ -45,6 +45,7 @@ dependencies = [
     "scikit-learn>=1.2.0",
     "tokenizers>=0.13.0",
     "huggingface-hub>=0.16.0",
+    "python-ly>=0.9.9",
 ]
 
 [project.optional-dependencies]
