@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import ly.document
+import ly.lex
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,17 +31,12 @@ class LilyPondParser:
 
     This class handles parsing and basic analysis of LilyPond (.ly) files,
     extracting musical elements for training data preparation.
+
+    Note: This parser uses python-ly lexer for tokenization, validated against
+    PostScript output for note counting accuracy.
     """
 
-    # Common LilyPond patterns
-    english_notes = r"[a-g]"
-    english_accidentals = r"(?:is|es|isis|eses)?"
-
-    italian_notes = r"(?:do|re|mi|fa|sol|la|si)"
-    italian_accidentals = r"(?:-?(?:diesis|bemolle|doppio-diesis|doppio-bemolle)|d|b)?"
-    octaves = r"(?:,+|\'*)?"
-    durations = r"(?:\d+\.*)?"
-
+    # Note patterns for multilingual support
     ENGLISH_NOTE_PATTERN = re.compile(
         r"(?<![a-zA-Z])"  # no letter before (prevents matching inside words)
         r"([a-g]"  # base note
@@ -59,7 +57,6 @@ class LilyPondParser:
     )
     NOTE_PATTERN = re.compile(rf"({ITALIAN_NOTE_PATTERN.pattern})")
     CHORD_PATTERN = re.compile(r"<([^>]+)>(\d+\.?)?")
-    SIMULTANEOUS_PATTERN = re.compile(r"<<(.*)>>(\d+\.?)?")
     DURATION_PATTERN = re.compile(r"(\d+\.?)")
     REST_PATTERN = re.compile(r"(?:(?<![a-zA-Z])r\d*\.?|\\rest)")
     DIRECTIVE_PATTERN = re.compile(r"\\([a-zA-Z]+)(?:\s+([^\\{}\n]*))?")
@@ -138,12 +135,22 @@ class LilyPondParser:
         return self.elements
 
     def _remove_comments(self, content: str) -> str:
-        """Remove comments from LilyPond content."""
-        # Remove line comments
-        content = re.sub(r"%.*?$", "", content, flags=re.MULTILINE)
-        # Remove block comments
-        content = re.sub(r"%\{.*?\%\}", "", content, flags=re.DOTALL)
-        return content
+        """Remove comments from LilyPond content using python-ly lexer."""
+        state = ly.lex.state('lilypond')
+        result_parts = []
+
+        for token in state.tokens(content):
+            # Skip comment tokens
+            if isinstance(token, (ly.lex.lilypond.LineComment,
+                                 ly.lex.lilypond.BlockCommentStart,
+                                 ly.lex.lilypond.BlockComment,
+                                 ly.lex.lilypond.BlockCommentEnd)):
+                # Replace with space to preserve positions
+                result_parts.append(' ' * len(str(token)))
+            else:
+                result_parts.append(str(token))
+
+        return ''.join(result_parts)
 
     def parse_enclosure(self, s: str, oc: str, ec: str) -> str:
         b_level = 0
@@ -235,219 +242,222 @@ class LilyPondParser:
         return elements
 
     def _tokenize_music(self, block: str) -> List[str]:
-        """Tokenize music block into individual elements.
-        - Captures relevant musical notation
-        - This is a simplified tokenization. In practice, future researchers might need more advanced parsing
+        """Tokenize music block into individual elements using python-ly lexer.
 
-        - Add some memory, a buffer of some kind so we can retain memory of previous token
-            -- List of cases for directives with parameters (white lsit. we KNOW these directives need parameters)
-            -- Black list wouldn't work. We do not know how all the cases would work
+        This preserves the exact tokenization behavior needed for PostScript validation.
         """
-
+        state = ly.lex.state('lilypond')
         tokens = []
+        token_buffer = []
+
+        def flush_buffer():
+            if token_buffer:
+                token_str = ''.join(str(t) for t in token_buffer)
+                if token_str.strip():
+                    tokens.append(token_str.strip())
+                token_buffer.clear()
+
+        lex_tokens = list(state.tokens(block))
         i = 0
-        current_token = ""
-        while i < len(block):
-            # Discard simultaneous music groupings <<\musicData \forma >>. Avoid counting them as chords. Add functionality for them in future.
-            if block.startswith("<<", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                tokens.append("<<")
-                i += len("<<")
+
+        while i < len(lex_tokens):
+            token = lex_tokens[i]
+            token_str = str(token)
+
+            # Skip whitespace tokens (flush buffer first)
+            if isinstance(token, ly.lex.Space):
+                flush_buffer()
+                i += 1
+                continue
+
+            # Handle simultaneous music << >>
+            if isinstance(token, ly.lex.lilypond.SimultaneousStart):
+                flush_buffer()
+                tokens.append('<<')
+                i += 1
+                continue
+
+            if isinstance(token, ly.lex.lilypond.SimultaneousEnd):
+                flush_buffer()
+                # Check for duration after >>
+                if i + 1 < len(lex_tokens) and isinstance(lex_tokens[i + 1], ly.lex.lilypond.DecimalValue):
+                    duration = str(lex_tokens[i + 1])
+                    tokens.append('>>' + duration)
+                    i += 2
+                else:
+                    tokens.append('>>')
+                    i += 1
                 continue
 
             # Handle chords < ... >
-            elif block[i] == "<":
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                end_pos = block.find(">", i)
-                if end_pos != -1:
-                    chord = block[i : end_pos + 1]
-                    # capture possible duration digits after >
-                    j = end_pos + 1
-                    while j < len(block) and (block[j].isdigit() or block[j] == "."):
-                        chord += block[j]
-                        j += 1
-                    tokens.append(chord)
-                    i = j
-                    continue
-
-            # Handle crescendos. Avoid counting them as chords
-            elif (
-                block.startswith(r"\<", i)
-                or block.startswith(r"\>", i)
-                or block.startswith(r"\!", i)
-            ):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                tokens.append(block[i : i + 2])
-                i += 2
-                continue
-
-            # Handle musical directives with arguments
-            elif block.startswith("\\key", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.KEY_PATTERN.match(block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-            elif block.startswith("\\time", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.TIME_PATTERN.match(block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-            elif block.startswith("\\clef", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.CLEF_PATTERN.match(block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-            elif block.startswith("\\tempo", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.TEMPO_PATTERN.match(block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-            elif block.startswith("\\relative", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.RELATIVE_PATTERN.match(block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-            elif block.startswith("\\repeat", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = self.REPEAT_PATTERN.match(block[i:])
-                if m:
-                    after_first_cbracket = i + m.end() - 1
-                    end_pos = after_first_cbracket + len(
-                        self.parse_enclosure(block[after_first_cbracket:], "{", "}")
-                    )
-                    if end_pos != -1:
-                        tokens.append(block[i:end_pos])
-                        i = end_pos
-                        continue
-            # Handle multiple voice marker
-            elif block.startswith(r"\\", i):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                tokens.append(r"\\")
-                i += 2
-                continue
-            # Handle other directives (\something)
-            elif block[i] == "\\":
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                m = re.match(r"^\\[a-zA-Z,_,-]+", block[i:])
-                if m:
-                    tokens.append(m.group(0))
-                    i += len(m.group(0))
-                    continue
-
-            # Notes, rests, bars
-            m = re.match(
-                rf"(?:{self.NOTE_PATTERN.pattern}|[|]|{self.REST_PATTERN.pattern})",
-                block[i:],
-            )
-            if m and not re.search("[a-zA-Z]", current_token.strip()):
-                if current_token.strip():
-                    tokens.append(current_token)
-                tokens.append(m.group(0))
-                i += len(m.group(0))
-                continue
-
-            # Get raws nested in quotes
-            if block[i] == '"':
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                if i + 1 < len(block):
-                    end_pos = block.find('"', i + 1)
-                    if end_pos != -1:
-                        quote = block[i : end_pos + 1]
-                        # capture possible duration digits after >
-                        tokens.append(quote)
-                        i = end_pos + 1
-                        continue
-
-            # Skip whitespace
-            if block[i].isspace():
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
+            # Can be either ChordStart/ChordEnd or Unparsed('<')/Unparsed('>')
+            if isinstance(token, ly.lex.lilypond.ChordStart) or (isinstance(token, ly.lex.Unparsed) and token_str == '<'):
+                flush_buffer()
+                chord_parts = ['<']
                 i += 1
-                continue
+                # Collect chord content
+                chord_end_found = False
+                while i < len(lex_tokens):
+                    current = lex_tokens[i]
+                    current_str = str(current)
+                    # Check for chord end
+                    if isinstance(current, ly.lex.lilypond.ChordEnd) or (isinstance(current, ly.lex.Unparsed) and current_str == '>'):
+                        chord_end_found = True
+                        break
+                    if not isinstance(current, ly.lex.Space):
+                        chord_parts.append(current_str)
+                    i += 1
 
-            # Skip container characters or ties (ties not important for now. To revisit at a later date)
-            if (
-                block[i] == "{"
-                or block[i] == "["
-                or block[i] == "("
-                or block[i] == ")"
-                or block[i] == "]"
-                or block[i] == "}"
-                or block[i] == "~"
-                or block[i] == "-"
-                or block[i] == "+"
-                or block[i] == "_"
-            ):
-                if current_token.strip():
-                    tokens.append(current_token.strip())
-                    current_token = ""
-                tokens.append(block[i])
-                i += 1
-                continue
-
-            # Note typos. Character is non alphanumerical Ex: si 2la4 is the same as si2 la4. And both compile
-            if not block[i].isalpha() and len(tokens) > 0 and not current_token.strip():
-                if (
-                    block[i]
-                    not in (
-                        ".",
-                        ",",
-                        "'",
-                        "!",
-                        "?",
-                    )
-                    and not block[i].isdigit()
-                ):
-                    # skip merging for characters that could not follow a note
-                    pass
-                else:
-                    prev_token = tokens[-1]
-                    combined = prev_token + block[i]
-                    if self.NOTE_PATTERN.fullmatch(combined):
-                        tokens[-1] = combined
+                if chord_end_found:
+                    chord_parts.append('>')
+                    i += 1
+                    # Check for duration after chord
+                    if i < len(lex_tokens) and isinstance(lex_tokens[i], (ly.lex.lilypond.DecimalValue, ly.lex.lilypond.Length)):
+                        chord_parts.append(str(lex_tokens[i]))
                         i += 1
-                        continue
+                    tokens.append(''.join(chord_parts))
+                    continue
+                else:
+                    # Not a valid chord, treat as regular token
+                    tokens.append('<')
+                    continue
 
-            # Fallback
-            current_token += block[i]
+            # Handle voice separator \\
+            if isinstance(token, ly.lex.lilypond.VoiceSeparator):
+                flush_buffer()
+                tokens.append(r'\\')
+                i += 1
+                continue
+
+            # Handle commands (\\key, \\time, \\clef, etc.)
+            if isinstance(token, (ly.lex.lilypond.Command, ly.lex.lilypond.PitchCommand,
+                                 ly.lex.lilypond.Keyword)):
+                flush_buffer()
+                command_parts = [token_str]
+                i += 1
+
+                # Special handling for specific commands that take arguments
+                if token_str in ['\\key', '\\time', '\\clef', '\\tempo', '\\relative', '\\repeat']:
+                    # Collect arguments until we hit a bracket or next command
+                    while i < len(lex_tokens):
+                        next_tok = lex_tokens[i]
+                        if isinstance(next_tok, (ly.lex.lilypond.OpenBracket,
+                                                 ly.lex.lilypond.SequentialStart,
+                                                 ly.lex.lilypond.SimultaneousStart,
+                                                 ly.lex.lilypond.Command,
+                                                 ly.lex.lilypond.PitchCommand)):
+                            break
+                        if not isinstance(next_tok, ly.lex.Space) or len(command_parts) == 1:
+                            # Keep first space after command
+                            command_parts.append(str(next_tok))
+                        i += 1
+
+                    # Special handling for \repeat which includes the block
+                    if token_str == '\\repeat':
+                        # Find the opening bracket
+                        while i < len(lex_tokens) and not isinstance(lex_tokens[i], ly.lex.lilypond.SequentialStart):
+                            if not isinstance(lex_tokens[i], ly.lex.Space):
+                                command_parts.append(str(lex_tokens[i]))
+                            i += 1
+                        if i < len(lex_tokens):
+                            # Include the block content
+                            bracket_count = 0
+                            while i < len(lex_tokens):
+                                tok = lex_tokens[i]
+                                command_parts.append(str(tok))
+                                if isinstance(tok, ly.lex.lilypond.SequentialStart):
+                                    bracket_count += 1
+                                elif isinstance(tok, ly.lex.lilypond.SequentialEnd):
+                                    bracket_count -= 1
+                                    if bracket_count == 0:
+                                        i += 1
+                                        break
+                                i += 1
+
+                tokens.append(''.join(command_parts))
+                continue
+
+            # Handle notes
+            if isinstance(token, (ly.lex.lilypond.Note, ly.lex.lilypond.Name)):
+                # Check if this could be a note
+                if token_str[0] in 'abcdefg' or token_str in ['do', 're', 'mi', 'fa', 'sol', 'la', 'si']:
+                    flush_buffer()
+                    note_parts = [token_str]
+                    i += 1
+                    # Collect accidentals, octaves, durations
+                    while i < len(lex_tokens):
+                        next_tok = lex_tokens[i]
+                        if isinstance(next_tok, (ly.lex.lilypond.Accidental,
+                                                ly.lex.lilypond.Octave,
+                                                ly.lex.lilypond.OctaveCheck,
+                                                ly.lex.lilypond.DecimalValue,
+                                                ly.lex.lilypond.Length)):
+                            note_parts.append(str(next_tok))
+                            i += 1
+                        elif isinstance(next_tok, ly.lex.lilypond.Name):
+                            # Could be accidental name like 'is', 'es', 'diesis', 'bemolle'
+                            next_str = str(next_tok)
+                            if next_str in ['is', 'es', 'isis', 'eses', 'd', 'b', 'diesis', 'bemolle',
+                                          'doppio-diesis', 'doppio-bemolle']:
+                                note_parts.append(next_str)
+                                i += 1
+                            else:
+                                break
+                        else:
+                            break
+                    tokens.append(''.join(note_parts))
+                    continue
+
+            # Handle rests
+            if isinstance(token, ly.lex.lilypond.Rest) or (isinstance(token, ly.lex.lilypond.Name) and token_str == 'r'):
+                flush_buffer()
+                rest_parts = [token_str]
+                i += 1
+                # Check for duration
+                if i < len(lex_tokens) and isinstance(lex_tokens[i], (ly.lex.lilypond.DecimalValue, ly.lex.lilypond.Length)):
+                    rest_parts.append(str(lex_tokens[i]))
+                    i += 1
+                tokens.append(''.join(rest_parts))
+                continue
+
+            # Handle bar lines
+            if token_str == '|':
+                flush_buffer()
+                tokens.append('|')
+                i += 1
+                continue
+
+            # Handle brackets and other delimiters
+            if isinstance(token, (ly.lex.lilypond.OpenBracket, ly.lex.lilypond.CloseBracket,
+                                 ly.lex.lilypond.SequentialStart, ly.lex.lilypond.SequentialEnd,
+                                 ly.lex.lilypond.Delimiter)):
+                flush_buffer()
+                tokens.append(token_str)
+                i += 1
+                continue
+
+            # Handle strings
+            if isinstance(token, (ly.lex.lilypond.String, ly.lex.lilypond.StringQuotedStart, ly.lex.lilypond.StringQuotedEnd)):
+                flush_buffer()
+                string_parts = []
+                # Collect entire string
+                while i < len(lex_tokens) and isinstance(lex_tokens[i], (ly.lex.lilypond.String, ly.lex.lilypond.StringQuotedStart,
+                                                                          ly.lex.lilypond.StringQuotedEnd)):
+                    string_parts.append(str(lex_tokens[i]))
+                    if isinstance(lex_tokens[i], ly.lex.lilypond.StringQuotedEnd):
+                        i += 1
+                        break
+                    i += 1
+                if string_parts:
+                    tokens.append(''.join(string_parts))
+                continue
+
+            # Default: add to buffer or create token
+            if token_str.strip():
+                token_buffer.append(token)
             i += 1
-        if i == len(block) and current_token.strip():
-            tokens.append(current_token)
+
+        flush_buffer()
         return tokens
 
     def _parse_token(self, token: str) -> Optional[LilyPondElement]:
@@ -604,3 +614,271 @@ class LilyPondParser:
             parts.append(element.content)
 
         return " ".join(parts)
+
+    def validate_syntax(self, content: str) -> Tuple[bool, List[str]]:
+        """Validate LilyPond syntax using python-ly lexer.
+
+        Args:
+            content: LilyPond content to validate
+
+        Returns:
+            Tuple of (is_valid, list of error messages)
+        """
+        errors = []
+
+        try:
+            state = ly.lex.state('lilypond')
+            tokens = list(state.tokens(content))
+
+            # Basic validation: check for unmatched brackets/braces
+            bracket_stack = []
+            brace_stack = []
+            paren_stack = []
+            has_unmatched_closing = False
+
+            for token in tokens:
+                token_str = str(token)
+
+                # Track opening/closing brackets
+                if isinstance(token, (ly.lex.lilypond.SequentialStart, ly.lex.lilypond.OpenBracket)):
+                    if token_str == '{':
+                        brace_stack.append(token)
+                    elif token_str == '[':
+                        bracket_stack.append(token)
+                elif isinstance(token, (ly.lex.lilypond.SequentialEnd, ly.lex.lilypond.CloseBracket)):
+                    if token_str == '}':
+                        if not brace_stack:
+                            errors.append(f"Unmatched closing brace '}}' found")
+                            has_unmatched_closing = True
+                        else:
+                            brace_stack.pop()
+                    elif token_str == ']':
+                        if not bracket_stack:
+                            errors.append(f"Unmatched closing bracket ']' found")
+                            has_unmatched_closing = True
+                        else:
+                            bracket_stack.pop()
+
+                # Check for Unparsed tokens that are actually brackets (lexer may mark invalid brackets as Unparsed)
+                elif isinstance(token, ly.lex.Unparsed):
+                    if token_str == '}':
+                        errors.append(f"Unexpected closing brace '}}' found")
+                        has_unmatched_closing = True
+                    elif token_str == ']':
+                        errors.append(f"Unexpected closing bracket ']' found")
+                        has_unmatched_closing = True
+                    elif token_str == '>>':
+                        errors.append(f"Unexpected closing '>>' found")
+                        has_unmatched_closing = True
+
+                # Check for simultaneous music
+                if isinstance(token, ly.lex.lilypond.SimultaneousStart):
+                    paren_stack.append(token)
+                elif isinstance(token, ly.lex.lilypond.SimultaneousEnd):
+                    if not paren_stack:
+                        errors.append(f"Unmatched closing '>>' found")
+                        has_unmatched_closing = True
+                    else:
+                        paren_stack.pop()
+
+            # Check for unclosed brackets
+            if brace_stack:
+                errors.append(f"{len(brace_stack)} unclosed brace(s) '{{' found")
+            if bracket_stack:
+                errors.append(f"{len(bracket_stack)} unclosed bracket(s) '[' found")
+            if paren_stack:
+                errors.append(f"{len(paren_stack)} unclosed simultaneous music '<<' found")
+
+            return (len(errors) == 0, errors)
+
+        except Exception as e:
+            errors.append(f"Lexer error: {str(e)}")
+            return (False, errors)
+
+    def normalize_duration(self, duration_str: str) -> Optional[float]:
+        """Normalize a LilyPond duration string to a fractional value.
+
+        Args:
+            duration_str: Duration string (e.g., '4', '8.', '16')
+
+        Returns:
+            Fractional duration value (1.0 = whole note), or None if invalid
+        """
+        if not duration_str:
+            return None
+
+        try:
+            import ly.duration
+
+            # Parse duration with ly.duration
+            result = ly.duration.base_scaling_string(duration_str)
+            if result:
+                # result is a tuple of (Fraction, Fraction) - (duration, scaling)
+                duration_frac, scaling_frac = result
+                # Convert to float (relative to whole note)
+                return float(duration_frac * scaling_frac)
+        except Exception:
+            pass
+
+        # Fallback: manual parsing
+        # Extract base duration number
+        match = re.match(r'(\d+)(\.*)$', duration_str)
+        if not match:
+            return None
+
+        base = int(match.group(1))
+        dots = len(match.group(2))
+
+        # Calculate duration: 1/base for the base note
+        duration = 1.0 / base
+
+        # Add dotted duration (each dot adds half of the previous value)
+        dot_value = duration
+        for _ in range(dots):
+            dot_value /= 2
+            duration += dot_value
+
+        return duration
+
+    def detect_pitch_language(self, content: str) -> str:
+        """Detect the pitch language used in LilyPond content.
+
+        Args:
+            content: LilyPond content to analyze
+
+        Returns:
+            'english', 'italiano', or 'mixed'
+        """
+        # Check for explicit language directive
+        lang_match = re.search(r'\\language\s+"([^"]+)"', content)
+        if lang_match:
+            return lang_match.group(1)
+
+        # Analyze pitch names to infer language
+        english_notes = re.findall(r'\b([a-g](?:is|es|isis|eses)?)\b', content)
+        italian_notes = re.findall(r'\b(do|re|mi|fa|sol|la|si)(?:d|b|diesis|bemolle)?\b', content)
+
+        english_count = len(english_notes)
+        italian_count = len(italian_notes)
+
+        if english_count > 0 and italian_count == 0:
+            return 'english'
+        elif italian_count > 0 and english_count == 0:
+            return 'italiano'
+        elif english_count > 0 and italian_count > 0:
+            return 'mixed'
+        else:
+            return 'english'  # default
+
+    def normalize_pitch(self, pitch_str: str, target_language: str = 'english') -> Optional[str]:
+        """Normalize a pitch string to a target language.
+
+        Args:
+            pitch_str: Pitch string (e.g., 'cis', 'red', 'do', 'a')
+            target_language: Target language ('english' or 'italiano')
+
+        Returns:
+            Normalized pitch string, or None if invalid
+        """
+        # Mapping tables
+        english_to_italian = {
+            'c': 'do', 'd': 're', 'e': 'mi', 'f': 'fa',
+            'g': 'sol', 'a': 'la', 'b': 'si'
+        }
+        italian_to_english = {v: k for k, v in english_to_italian.items()}
+
+        # Try Italian pattern first (more specific)
+        # Match: base note + optional accidentals (long or short form)
+        ital_match = re.match(
+            r'^(do|re|mi|fa|sol|la|si)'
+            r'(d{1,2}|b{1,2}|diesis|bemolle|doppio-diesis|doppio-bemolle)?$',
+            pitch_str
+        )
+        if ital_match:
+            base = ital_match.group(1)
+            acc = ital_match.group(2) or ''
+
+            if target_language == 'english':
+                # Convert to English
+                english_base = italian_to_english.get(base, base)
+                # Convert accidentals
+                english_acc = ''
+                if acc in ('d', 'diesis'):
+                    english_acc = 'is'
+                elif acc in ('b', 'bemolle'):
+                    english_acc = 'es'
+                elif acc in ('dd', 'doppio-diesis'):
+                    english_acc = 'isis'
+                elif acc in ('bb', 'doppio-bemolle'):
+                    english_acc = 'eses'
+                return english_base + english_acc
+            else:
+                # Normalize Italian accidentals to short form
+                if acc == 'diesis':
+                    acc = 'd'
+                elif acc == 'bemolle':
+                    acc = 'b'
+                elif acc == 'doppio-diesis':
+                    acc = 'dd'
+                elif acc == 'doppio-bemolle':
+                    acc = 'bb'
+                return base + acc
+
+        # Try English pattern
+        eng_match = re.match(r'^([a-g])(is|es|isis|eses)?$', pitch_str)
+        if eng_match:
+            base = eng_match.group(1)
+            acc = eng_match.group(2) or ''
+
+            if target_language == 'italiano':
+                # Convert to Italian
+                italian_base = english_to_italian.get(base, base)
+                # Convert accidentals
+                italian_acc = ''
+                if acc == 'is':
+                    italian_acc = 'd'
+                elif acc == 'es':
+                    italian_acc = 'b'
+                elif acc == 'isis':
+                    italian_acc = 'dd'
+                elif acc == 'eses':
+                    italian_acc = 'bb'
+                return italian_base + italian_acc
+            else:
+                return base + acc
+
+        return None
+
+    def convert_pitch_language(self, content: str, target_language: str) -> str:
+        """Convert all pitches in content to a target language.
+
+        Args:
+            content: LilyPond content
+            target_language: Target language ('english' or 'italiano')
+
+        Returns:
+            Content with converted pitches
+        """
+        def replace_pitch(match):
+            pitch = match.group(0)
+            normalized = self.normalize_pitch(pitch, target_language)
+            return normalized if normalized else pitch
+
+        # Replace Italian pitches first (more specific patterns)
+        # Match Italian notes with optional long or short accidentals
+        content = re.sub(
+            r'\b((?:do|re|mi|fa|sol|la|si)(?:d{1,2}|b{1,2}|diesis|bemolle|doppio-diesis|doppio-bemolle)?)\b',
+            replace_pitch,
+            content
+        )
+
+        # Replace English pitches
+        # Match English notes with optional accidentals
+        content = re.sub(
+            r'\b([a-g](?:is|es|isis|eses)?)\b',
+            replace_pitch,
+            content
+        )
+
+        return content
+

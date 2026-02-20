@@ -24,18 +24,13 @@ from transformers import PreTrainedTokenizer
 
 from .parser import LilyPondParser
 
-try:
-    import ly.document
-    import ly.pitch
-    from ly.pitch.abs2rel import abs2rel
-    from ly.pitch.rel2abs import rel2abs
-    import ly.lex
-    from ly.pitch.translate import translate
-    from ly.pitch.transpose import Transposer, transpose
-
-    PYTHON_LY_AVAILABLE = True
-except Exception:  # pragma: no cover - optional runtime dependency
-    PYTHON_LY_AVAILABLE = False
+import ly.document
+import ly.pitch
+from ly.pitch.abs2rel import abs2rel
+from ly.pitch.rel2abs import rel2abs
+import ly.lex
+from ly.pitch.translate import translate
+from ly.pitch.transpose import Transposer, transpose
 
 logger = logging.getLogger(__name__)
 
@@ -536,10 +531,6 @@ class LilyPondPreprocessor:
     ) -> str:
         if source_language == target_language:
             return text
-        if not PYTHON_LY_AVAILABLE:
-            if target_language == "english" and source_language == "italiano":
-                return self._convert_italian_to_english_notes(text)
-            return text
 
         try:
             document = ly.document.Document(text)
@@ -557,9 +548,6 @@ class LilyPondPreprocessor:
         language: str,
         target_mode: str,
     ) -> str:
-        if not PYTHON_LY_AVAILABLE:
-            return text
-
         try:
             document = ly.document.Document(text)
             cursor = ly.document.Cursor(document)
@@ -577,9 +565,6 @@ class LilyPondPreprocessor:
         language: str,
         target_pitch_name: str,
     ) -> str:
-        if not PYTHON_LY_AVAILABLE:
-            return text
-
         try:
             reader = ly.pitch.pitchReader("english")
             target = reader(target_pitch_name)
@@ -813,9 +798,6 @@ class LilyPondPreprocessor:
 
     def _extract_structure_markers(self, text: str) -> List[str]:
         """Extract score-structure markers using python-ly lexical tokens."""
-        if not PYTHON_LY_AVAILABLE:
-            return []
-
         document = ly.document.Document(text)
         state = ly.lex.state("lilypond")
 

@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence
 import torch
 
 from .labels_hierarchy import LABEL_HIERARCHY
+from .music_theory import CANONICAL_KEY_ROOTS, canonicalize_key_root
 
 
 class LabelEncoder:
@@ -85,7 +86,7 @@ class LabelEncoder:
             else {}
         )
         meta = labels.get("meta", {}) if isinstance(labels, Mapping) else {}
-        key = self._normalize(meta.get("key", "do"))
+        key = canonicalize_key_root(meta.get("key", "do"))
         scale = self._normalize(meta.get("scale", "major"))
         return f"{key}_{scale}"
 
@@ -148,22 +149,10 @@ class LabelEncoder:
         return self._unique_sorted(leaves + from_metadata)
 
     def _build_key_scale_classes(self) -> List[str]:
-        key_roots = [
-            "do",
-            "dod",
-            "re",
-            "mib",
-            "mi",
-            "fa",
-            "fad",
-            "sol",
-            "lab",
-            "la",
-            "sib",
-            "si",
-        ]
         classes = [
-            f"{key}_{scale}" for key in key_roots for scale in ["major", "minor"]
+            f"{key}_{scale}"
+            for key in CANONICAL_KEY_ROOTS
+            for scale in ["major", "minor"]
         ]
         return classes
 

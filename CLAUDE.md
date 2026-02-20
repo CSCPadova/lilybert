@@ -63,7 +63,11 @@ python scripts/upload_model.py
 ## Architecture
 
 ### Data (`lilybert/data/`)
-- `parser.py`
+- `parser.py` - LilyPond parser with python-ly integration
+  - Syntax validation
+  - Pitch language detection and conversion (English ↔ Italian)
+  - Duration normalization
+  - Multilingual notation support
 - `preprocessor.py`
 - `tokenizer.py`
 - `label_encoder.py`

@@ -10,6 +10,8 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
 
+from .music_theory import CANONICAL_KEY_ROOTS, canonicalize_key_root
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,21 +170,11 @@ class BaroqueMusicClassificationDataset(Dataset):
 
     def _build_label_mapping(self) -> Dict[str, int]:
         if self.task == "key_scale":
-            keys = [
-                "do",
-                "dod",
-                "re",
-                "mib",
-                "mi",
-                "fa",
-                "fad",
-                "sol",
-                "lab",
-                "la",
-                "sib",
-                "si",
+            labels = [
+                f"{key}_{scale}"
+                for key in CANONICAL_KEY_ROOTS
+                for scale in ["major", "minor"]
             ]
-            labels = [f"{key}_{scale}" for key in keys for scale in ["major", "minor"]]
             return {label: idx for idx, label in enumerate(labels)}
 
         values = set()
@@ -230,7 +222,7 @@ class BaroqueMusicClassificationDataset(Dataset):
             return movement_meta.get("section_nomenclature")
         if self.task == "key_scale":
             meta = labels.get("meta", {}) if isinstance(labels, dict) else {}
-            key = self._normalize(meta.get("key", "do"))
+            key = canonicalize_key_root(meta.get("key", "do"))
             scale = self._normalize(meta.get("scale", "major"))
             return f"{key}_{scale}"
 
