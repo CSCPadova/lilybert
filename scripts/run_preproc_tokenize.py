@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from typing import List
+import argparse as ap
 
 
 def _preprocess_file_worker(path: str, aug_map: dict) -> dict:
@@ -54,10 +55,18 @@ def _build_corpus_worker(path: str) -> dict:
 def main():
     from lilybert.data.tokenizer import LilyPondTokenizer
 
+    parser = ap.ArgumentParser(description="Preprocess and tokenize LilyPond corpus for lilyBERT")
+    parser.add_argument("--input-dir", default="data/raw", help="Directory containing .ly files")
+    parser.add_argument("--processed-dir", default="data/processed", help="Output root directory for italiano/english + metadata.json")
+    parser.add_argument("--tokenizer-output", default="artifacts/tokenizer_from_augmented", help="Directory to save trained tokenizer files")
+    parser.add_argument("--vocab-size", type=int, default=8000, help="Target BPE vocabulary size")
+    parser.add_argument("--max-workers", type=int, default=8, help="Maximum number of parallel workers for preprocessing and corpus building")
+    args = parser.parse_args()
+
     # Config
-    input_dir = Path("data/raw")
-    processed_dir = Path("data/processed")
-    tokenizer_output = Path("artifacts/tokenizer_from_augmented")
+    input_dir = Path(args.input_dir)
+    processed_dir = Path(args.processed_dir)
+    tokenizer_output = Path(args.tokenizer_output)
     tokenizer_output.mkdir(parents=True, exist_ok=True)
 
     aug_map = {
@@ -79,7 +88,7 @@ def main():
     metadata = {}
     failures = {}
 
-    max_workers = min(8, (os.cpu_count() or 2))
+    max_workers = min(args.max_workers, os.cpu_count() or 1)
     with ProcessPoolExecutor(max_workers=max_workers) as exe:
         futures = {exe.submit(_preprocess_file_worker, path, aug_map): path for path in raw_files}
         for fut in tqdm(as_completed(futures), total=len(futures), desc="Preprocessing files"):
@@ -136,7 +145,7 @@ def main():
 
     # Train tokenizer (vocab default 8000)
     tok = LilyPondTokenizer()
-    fast_tok = tok.train(corpus, vocab_size=8000)
+    fast_tok = tok.train(corpus, vocab_size=args.vocab_size)
     fast_tok.save_pretrained(str(tokenizer_output))
 
     # Compute vocab size
