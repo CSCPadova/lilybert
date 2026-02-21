@@ -1,5 +1,5 @@
 data_dir: data/processed
-tokenizer_path: artifacts/tokenizer
+tokenizer_path: artifacts/tokenizer_from_augmented
 tokenizer_notation_mode: both
 tokenizer_path_by_notation:
   english: artifacts/tokenizer_english

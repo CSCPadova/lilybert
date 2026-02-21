@@ -30,7 +30,7 @@ class PretrainingConfig:
     learning_rate: float = 5e-5
     weight_decay: float = 0.01
     warmup_ratio: float = 0.06
-    max_steps: int = 0
+    max_steps: int = -1
     logging_steps: int = 50
     save_steps: int = 500
     seed: int = 42

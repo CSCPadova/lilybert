@@ -1,7 +1,7 @@
 output_dir: outputs/experiments
 seed: 42
 wandb:
-  enabled: false
+  enabled: true
   project: lilybert
   entity: null
   mode: online

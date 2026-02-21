@@ -131,6 +131,32 @@ python scripts/upload_dataset.py --help
 python scripts/upload_model.py --help
 ```
 
+## Mutopia Dataset Pretraining
+
+To preprocess a large-scale symbolic dataset (MutopiaProject) for pretraining:
+
+```bash
+# Combine split Mutopia files (resolves \include directives)
+# Validates with parser, updates notation with convert-ly
+uv run python scripts/combine_mutopia_files.py
+
+# Preprocess and train BPE tokenizer
+# Skips invalid files, keeps files intact (no movement splitting)
+uv run python scripts/preprocess_mutopia.py --train-tokenizer --vocab-size 8000
+```
+
+**See [MUTOPIA_PIPELINE.md](MUTOPIA_PIPELINE.md)** for comprehensive guide on:
+- Data ingestion and file aggregation
+- Preprocessing stages and file validation
+- Tokenizer training
+- Output formats and troubleshooting
+
+**See [MUTOPIA_ENHANCEMENTS.md](MUTOPIA_ENHANCEMENTS.md)** for details on:
+- Parser-based file validation
+- Notation updates with convert-ly
+- Robust error handling and skipping invalid files
+- Design choices (e.g., why files aren't split by movement)
+
 ## Python API
 
 ```python
