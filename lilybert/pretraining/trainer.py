@@ -23,6 +23,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+from tqdm.auto import tqdm
 
 from .config import PretrainingConfig
 
@@ -85,6 +86,7 @@ class MLMPretrainer:
             raise ValueError("No LilyPond files found for Stage-1 pretraining")
 
         token_stats = self.count_corpus_tokens(all_files, tokenizer)
+        print(f"Token stats: {token_stats}")
 
         # Split into 99% train, 1% eval
         train_files, eval_files = self._train_eval_split(
@@ -255,7 +257,11 @@ class MLMPretrainer:
         """
         total_tokens = 0
 
-        for file_path in files:
+        for file_path in tqdm(
+            files,
+            desc="Counting corpus tokens",
+            unit="file",
+        ):
             text = file_path.read_text(encoding="utf-8", errors="ignore")
             token_ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
             total_tokens += len(token_ids)
