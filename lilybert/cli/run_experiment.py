@@ -96,7 +96,9 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
             )
         )
         stage1_data_dir = str(
-            pretraining_cfg.get("data_dir", dataset_cfg.get("data_dir", "data/processed"))
+            pretraining_cfg.get(
+                "data_dir", dataset_cfg.get("data_dir", "data/processed")
+            )
         )
         if bool(pretraining_cfg.get("prepare_data", False)):
             preprocessor = LilyPondPreprocessor(
@@ -135,7 +137,9 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
             ),
             output_dir=str(pretraining_cfg.get("output_dir", "outputs/pretraining")),
             languages=stage1_languages,
-            model_architecture=str(pretraining_cfg.get("model_architecture", "bert-base")),
+            model_architecture=str(
+                pretraining_cfg.get("model_architecture", "bert-base")
+            ),
             hidden_size=int(pretraining_cfg.get("hidden_size", 768)),
             num_hidden_layers=int(pretraining_cfg.get("num_hidden_layers", 12)),
             num_attention_heads=int(pretraining_cfg.get("num_attention_heads", 12)),

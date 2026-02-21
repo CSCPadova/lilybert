@@ -54,7 +54,9 @@ class LilyBERTEncoder(nn.Module):
             return_dict=True,
         )
 
-    def encode(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def encode(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
         """Return pooled CLS embeddings for downstream heads."""
         outputs = self.forward(input_ids=input_ids, attention_mask=attention_mask)
         return outputs.last_hidden_state[:, 0, :]
@@ -111,7 +113,9 @@ class LilyBERTEncoder(nn.Module):
 class LilyBERTTaskClassifier(nn.Module):
     """Shared classifier logic over a standalone LilyBERTEncoder."""
 
-    def __init__(self, encoder: LilyBERTEncoder, num_classes: int, multi_label: bool = False):
+    def __init__(
+        self, encoder: LilyBERTEncoder, num_classes: int, multi_label: bool = False
+    ):
         super().__init__()
 
         self.encoder = encoder
@@ -163,7 +167,9 @@ class LilyBERTClassifier(LilyBERTTaskClassifier):
             lora_r=lora_r,
             lora_alpha=lora_alpha,
         )
-        super().__init__(encoder=encoder, num_classes=num_classes, multi_label=multi_label)
+        super().__init__(
+            encoder=encoder, num_classes=num_classes, multi_label=multi_label
+        )
         self.vocab_size = int(vocab_size)
         self.mode = TrainingMode(mode)
 

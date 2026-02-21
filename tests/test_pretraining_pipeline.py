@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from omegaconf import OmegaConf
 from pathlib import Path
+
+from omegaconf import OmegaConf
 
 from lilybert.data.preprocessor import AugmentationConfig
 from lilybert.pretraining.trainer import MLMPretrainer

@@ -13,15 +13,16 @@ Parallelization: Uses ProcessPoolExecutor to process multiple files in parallel
 for improved performance on multi-core systems.
 """
 
-import sys
-from pathlib import Path
-from typing import List, Dict, Any
 import argparse
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
 import os
+import sys
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from typing import Any, Dict, List
 
-from lilybert.data.preprocessor import LilyPondPreprocessor, AugmentationConfig
+from tqdm import tqdm
+
+from lilybert.data.preprocessor import AugmentationConfig, LilyPondPreprocessor
 from lilybert.data.tokenizer import LilyPondTokenizer
 
 
@@ -45,13 +46,17 @@ def preprocess_single_file(
         Dict with keys: file_path, variants_written, movements_count, error
     """
     try:
-        aug_config = AugmentationConfig() if not include_augmentation else AugmentationConfig(
-            languages=["italiano", "english", "nederlands"],
-            enable_transposition=True,
-            enable_absolute_relative=True,
-            enable_articulation_variants=True,
-            enable_barline_variants=True,
-            include_original=True,
+        aug_config = (
+            AugmentationConfig()
+            if not include_augmentation
+            else AugmentationConfig(
+                languages=["italiano", "english", "nederlands"],
+                enable_transposition=True,
+                enable_absolute_relative=True,
+                enable_articulation_variants=True,
+                enable_barline_variants=True,
+                include_original=True,
+            )
         )
 
         preprocessor = LilyPondPreprocessor(augmentation_config=aug_config)
@@ -167,16 +172,20 @@ def preprocess_mutopia_files(
         ]
 
         # Process results with progress bar
-        for future in tqdm(futures, desc="Preprocessing Mutopia files", total=len(ly_files)):
+        for future in tqdm(
+            futures, desc="Preprocessing Mutopia files", total=len(ly_files)
+        ):
             try:
                 result = future.result()
 
                 if result["error"]:
                     stats["failed"] += 1
-                    stats["errors"].append({
-                        "file": result["file_path"],
-                        "error": result["error"],
-                    })
+                    stats["errors"].append(
+                        {
+                            "file": result["file_path"],
+                            "error": result["error"],
+                        }
+                    )
 
                     if not skip_on_error:
                         raise Exception(
@@ -189,10 +198,12 @@ def preprocess_mutopia_files(
 
             except Exception as e:
                 stats["failed"] += 1
-                stats["errors"].append({
-                    "file": "unknown",
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "file": "unknown",
+                        "error": str(e),
+                    }
+                )
 
                 if not skip_on_error:
                     raise
@@ -237,62 +248,57 @@ def main(argv=None):
     parser.add_argument(
         "--input-dir",
         default="./data/mutopia",
-        help="Directory containing combined .ly files"
+        help="Directory containing combined .ly files",
     )
     parser.add_argument(
         "--output-dir",
         default="./data/mutopia_preprocessed",
-        help="Output directory for preprocessed files"
+        help="Output directory for preprocessed files",
     )
     parser.add_argument(
         "--max-files",
         type=int,
         default=None,
-        help="Maximum number of files to process (for testing)"
+        help="Maximum number of files to process (for testing)",
     )
     parser.add_argument(
         "--train-tokenizer",
         action="store_true",
-        help="Train BPE tokenizer on preprocessed corpus"
+        help="Train BPE tokenizer on preprocessed corpus",
     )
     parser.add_argument(
-        "--vocab-size",
-        type=int,
-        default=10000,
-        help="BPE vocabulary size"
+        "--vocab-size", type=int, default=10000, help="BPE vocabulary size"
     )
     parser.add_argument(
         "--tokenizer-output",
         default="./artifacts/mutopia_tokenizer",
-        help="Directory to save trained tokenizer"
+        help="Directory to save trained tokenizer",
     )
     parser.add_argument(
         "--skip-on-error",
         action="store_true",
         default=True,
-        help="Skip files that fail to preprocess (default: True)"
+        help="Skip files that fail to preprocess (default: True)",
     )
     parser.add_argument(
         "--fail-on-error",
         action="store_false",
         dest="skip_on_error",
-        help="Stop on first preprocessing error"
+        help="Stop on first preprocessing error",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
         default=None,
-        help="Number of parallel workers (default: CPU count)"
+        help="Number of parallel workers (default: CPU count)",
     )
     parser.add_argument(
         "--skip-preprocess",
         action="store_true",
-        help="Skip preprocessing step and only train tokenizer on existing preprocessed files"
+        help="Skip preprocessing step and only train tokenizer on existing preprocessed files",
     )
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Print detailed progress information"
+        "--verbose", action="store_true", help="Print detailed progress information"
     )
 
     args = parser.parse_args(argv)
@@ -313,9 +319,9 @@ def main(argv=None):
 
     # Step 1: Preprocess files
     if not args.skip_preprocess:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("STEP 1: PREPROCESSING MUTOPIA FILES")
-        print("="*60)
+        print("=" * 60)
         print(f"\nNote: Files are NOT split by movement. For pretraining (MLM),")
         print(f"longer sequences provide better transformer context.")
 
@@ -334,21 +340,23 @@ def main(argv=None):
         print(f"Total variants written: {stats['total_variants']}")
         print(f"Workers used: {stats['num_workers']}")
 
-        if stats['errors']:
-            error_count = len(stats['errors'])
+        if stats["errors"]:
+            error_count = len(stats["errors"])
             show_count = 10 if args.verbose else 5
             print(f"\nErrors ({error_count} total):")
-            for error in stats['errors'][:show_count]:
-                file_display = error['file'].split('/')[-1] if error['file'] else 'unknown'
+            for error in stats["errors"][:show_count]:
+                file_display = (
+                    error["file"].split("/")[-1] if error["file"] else "unknown"
+                )
                 print(f"  - {file_display}: {error['error'][:60]}")
             if error_count > show_count:
                 print(f"  ... and {error_count - show_count} more errors")
 
     # Step 2: Optionally train tokenizer
     if args.train_tokenizer:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("STEP 2: BUILDING CORPUS & TRAINING BPE TOKENIZER")
-        print("="*60)
+        print("=" * 60)
 
         # Build parser-aware token corpus using the tokenizer's own method
         print("Building parser-tokenized corpus...")
@@ -380,9 +388,9 @@ def main(argv=None):
 
         print(f"Vocab size: {vocab_size}")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("PREPROCESSING COMPLETE")
-    print("="*60)
+    print("=" * 60)
     print(f"Preprocessed files saved to: {output_dir.resolve()}")
 
     return 0

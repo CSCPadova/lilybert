@@ -64,9 +64,7 @@ class PreTokenizedDataset(Dataset):
             else None
         )
 
-        self._window_to_movement = {
-            i: mid for i, mid in enumerate(self._movement_ids)
-        }
+        self._window_to_movement = {i: mid for i, mid in enumerate(self._movement_ids)}
 
     def __len__(self) -> int:
         return len(self._movement_ids)

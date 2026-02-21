@@ -64,9 +64,7 @@ def generate_markdown_table(
     if single:
         lines.append("### Single-label classification")
         lines.append("")
-        lines.append(
-            "| Task | Top-1 Acc | Top-5 Acc | F1 (macro) | F1 (weighted) |"
-        )
+        lines.append("| Task | Top-1 Acc | Top-5 Acc | F1 (macro) | F1 (weighted) |")
         lines.append("|---|---:|---:|---:|---:|")
         for task, payload in single:
             mean, std = payload.get("mean", {}), payload.get("std", {})
@@ -82,9 +80,7 @@ def generate_markdown_table(
     if multi:
         lines.append("### Multi-label classification")
         lines.append("")
-        lines.append(
-            "| Task | F1 (micro) | F1 (macro) | Subset Acc | Hamming Loss |"
-        )
+        lines.append("| Task | F1 (micro) | F1 (macro) | Subset Acc | Hamming Loss |")
         lines.append("|---|---:|---:|---:|---:|")
         for task, payload in multi:
             mean, std = payload.get("mean", {}), payload.get("std", {})
@@ -153,11 +149,13 @@ def _latex_single_label(
         f1m = _get(mean, std, "avg_f1_macro")
         f1w = _get(mean, std, "avg_f1_weighted")
         lines.append(f"    {name} & {t1} & {t5} & {f1m} & {f1w} \\\\")
-    lines.extend([
-        r"    \bottomrule",
-        r"  \end{tabular}",
-        r"\end{table}",
-    ])
+    lines.extend(
+        [
+            r"    \bottomrule",
+            r"  \end{tabular}",
+            r"\end{table}",
+        ]
+    )
     return lines
 
 
@@ -182,11 +180,13 @@ def _latex_multi_label(
         sa = _get(mean, std, "avg_subset_accuracy")
         hl = _get(mean, std, "avg_hamming_loss")
         lines.append(f"    {name} & {f1i} & {f1m} & {sa} & {hl} \\\\")
-    lines.extend([
-        r"    \bottomrule",
-        r"  \end{tabular}",
-        r"\end{table}",
-    ])
+    lines.extend(
+        [
+            r"    \bottomrule",
+            r"  \end{tabular}",
+            r"\end{table}",
+        ]
+    )
     return lines
 
 

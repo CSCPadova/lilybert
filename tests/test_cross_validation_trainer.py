@@ -10,8 +10,8 @@ import torch
 from torch import nn
 
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
-from lilybert.training.cross_validation import build_grouped_stratified_folds
 from lilybert.training import trainer as trainer_module
+from lilybert.training.cross_validation import build_grouped_stratified_folds
 
 
 class _FakeTokenizer:

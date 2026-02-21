@@ -61,13 +61,13 @@ class TestDecodeLilypond:
     def test_includes_version(self, tokenizer):
         ids = tokenizer.encode_lilypond("c4")
         decoded = tokenizer.decode_to_lilypond(ids, include_version=True)
-        assert '\\version' in decoded
+        assert "\\version" in decoded
         assert tokenizer.DEFAULT_VERSION in decoded
 
     def test_no_version(self, tokenizer):
         ids = tokenizer.encode_lilypond("c4")
         decoded = tokenizer.decode_to_lilypond(ids, include_version=False)
-        assert '\\version' not in decoded
+        assert "\\version" not in decoded
 
     def test_part_variable_reconstruction(self, tokenizer):
         ids = tokenizer.encode_lilypond("violin = { c4 d4 e4 }")
@@ -137,13 +137,13 @@ class TestDecodeLilypond:
         # Should not crash and should produce some output
         assert len(decoded) > 0
         # Auto-closed braces should make it parseable
-        assert decoded.count("{") >= decoded.count("}")  or "}" in decoded
+        assert decoded.count("{") >= decoded.count("}") or "}" in decoded
 
     def test_unmatched_part_begin(self, tokenizer):
         """[PART_BEGIN] without [PART_END] should auto-close."""
         ids = tokenizer.encode_lilypond("violin = { c4 d4 e4 }")
         # Remove everything after midpoint to simulate partial generation
-        partial_ids = ids[:max(3, len(ids) // 2)]
+        partial_ids = ids[: max(3, len(ids) // 2)]
         decoded = tokenizer.decode_to_lilypond(partial_ids)
         # Should still produce output without crashing
         assert isinstance(decoded, str)

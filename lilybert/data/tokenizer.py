@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, List, Optional
-import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import ly.document
+import ly.lex
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import Whitespace
@@ -16,10 +18,6 @@ from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
 
 from .parser import LilyPondParser
-
-import ly.document
-import ly.lex
-
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +75,7 @@ class LilyPondTokenizer:
 
     _SKIP_ON_DECODE = {"[CLS]", "[SEP]", "[PAD]", "[MASK]", "[UNK]"}
 
-    DEFAULT_VERSION = '2.24.0'
+    DEFAULT_VERSION = "2.24.0"
 
     def __init__(
         self,
@@ -112,18 +110,26 @@ class LilyPondTokenizer:
                 f"notation_mode must be one of {sorted(self.VALID_NOTATION_MODES)}, got: {notation_mode}"
             )
 
-        movement_files = sorted(self._iter_movement_files(root, notation_mode, languages=languages))
+        movement_files = sorted(
+            self._iter_movement_files(root, notation_mode, languages=languages)
+        )
 
         # parallelize token-line extraction using worker processes
         max_workers = min(8, (os.cpu_count() or 2))
         corpus: List[str] = []
 
         with ProcessPoolExecutor(max_workers=max_workers) as exe:
-            futures = {exe.submit(_tokenize_file_worker, str(p)): p for p in movement_files}
+            futures = {
+                exe.submit(_tokenize_file_worker, str(p)): p for p in movement_files
+            }
             for fut in as_completed(futures):
                 res = fut.result()
                 if not res.get("ok"):
-                    logger.warning("Failed building token line for %s: %s", res.get("path"), res.get("error"))
+                    logger.warning(
+                        "Failed building token line for %s: %s",
+                        res.get("path"),
+                        res.get("error"),
+                    )
                     continue
                 token_line = res.get("token_line")
                 if token_line:
@@ -184,9 +190,7 @@ class LilyPondTokenizer:
     # Encode / Decode for generative (infilling) use
     # ------------------------------------------------------------------
 
-    def encode_lilypond(
-        self, text: str, add_special_tokens: bool = False
-    ) -> List[int]:
+    def encode_lilypond(self, text: str, add_special_tokens: bool = False) -> List[int]:
         """Encode raw LilyPond text to BPE token IDs.
 
         Converts text through the parser-token intermediate representation
@@ -262,7 +266,7 @@ class LilyPondTokenizer:
             # [LANGUAGE] lang:X  →  \language "X"
             if tok == "[LANGUAGE]":
                 if i + 1 < len(tokens) and tokens[i + 1].startswith("lang:"):
-                    lang = tokens[i + 1][len("lang:"):]
+                    lang = tokens[i + 1][len("lang:") :]
                     parts.append(f'\\language "{lang}"')
                     i += 2
                 else:
@@ -276,7 +280,7 @@ class LilyPondTokenizer:
                 if j < len(tokens) and tokens[j] == "[PART_NAME]":
                     j += 1
                 if j < len(tokens) and tokens[j].startswith("part:"):
-                    name = tokens[j][len("part:"):]
+                    name = tokens[j][len("part:") :]
                     j += 1
                 parts.append(f"{name} = {{")
                 open_braces += 1
@@ -317,9 +321,7 @@ class LilyPondTokenizer:
 
         return "\n".join(self._format_lilypond_parts(parts))
 
-    def validate_round_trip(
-        self, text: str
-    ) -> tuple[bool, str, List[str]]:
+    def validate_round_trip(self, text: str) -> tuple[bool, str, List[str]]:
         """Encode then decode and validate the result.
 
         Returns:
@@ -346,8 +348,15 @@ class LilyPondTokenizer:
                 music_buf.clear()
 
         structural = {
-            "<<", ">>", "{", "}", "\\score",
-            "\\new Staff", "\\new Voice", "\\new PianoStaff", "\\new ChoirStaff",
+            "<<",
+            ">>",
+            "{",
+            "}",
+            "\\score",
+            "\\new Staff",
+            "\\new Voice",
+            "\\new PianoStaff",
+            "\\new ChoirStaff",
             "\\\\",
         }
 
@@ -374,7 +383,9 @@ class LilyPondTokenizer:
         languages: Optional[List[str]] = None,
     ) -> Iterable[Path]:
         if languages:
-            normalized = [language.strip().lower() for language in languages if language]
+            normalized = [
+                language.strip().lower() for language in languages if language
+            ]
             for language in normalized:
                 language_dir = root / language
                 if not language_dir.exists():

@@ -99,7 +99,9 @@ def test_model_uploader_saves_and_uploads_folder(tmp_path: Path, monkeypatch):
             }
             return {"commit_url": f"https://huggingface.co/{repo_id}/commit/123"}
 
-    monkeypatch.setattr("lilybert.cli.upload_model.HfApi", lambda token=None: _DummyApi())
+    monkeypatch.setattr(
+        "lilybert.cli.upload_model.HfApi", lambda token=None: _DummyApi()
+    )
 
     uploader = ModelUploader(repo_id="org/test-model", private=False, token="abc")
     result = uploader.upload(

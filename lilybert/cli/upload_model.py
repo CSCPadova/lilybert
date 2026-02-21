@@ -14,7 +14,9 @@ from transformers import AutoModel, AutoTokenizer
 class ModelUploader:
     """Save and publish model artifacts to HuggingFace Hub."""
 
-    def __init__(self, repo_id: str, private: bool = False, token: Optional[str] = None):
+    def __init__(
+        self, repo_id: str, private: bool = False, token: Optional[str] = None
+    ):
         self.repo_id = repo_id
         self.private = private
         self.token = token
@@ -52,13 +54,21 @@ class ModelUploader:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Upload model artifacts to HuggingFace Hub")
+    parser = argparse.ArgumentParser(
+        description="Upload model artifacts to HuggingFace Hub"
+    )
     parser.add_argument("--model-dir", required=True, help="Local model directory")
-    parser.add_argument("--tokenizer-dir", required=True, help="Local tokenizer directory")
+    parser.add_argument(
+        "--tokenizer-dir", required=True, help="Local tokenizer directory"
+    )
     parser.add_argument("--repo-id", required=True, help="HuggingFace model repo id")
-    parser.add_argument("--private", action="store_true", help="Create/use private repo")
+    parser.add_argument(
+        "--private", action="store_true", help="Create/use private repo"
+    )
     parser.add_argument("--token", default=None, help="HF token (optional)")
-    parser.add_argument("--output-dir", default="artifacts/hub_model", help="Temp output dir")
+    parser.add_argument(
+        "--output-dir", default="artifacts/hub_model", help="Temp output dir"
+    )
     return parser
 
 
@@ -67,7 +77,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     model = AutoModel.from_pretrained(args.model_dir)
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir)
 
-    uploader = ModelUploader(repo_id=args.repo_id, private=args.private, token=args.token)
+    uploader = ModelUploader(
+        repo_id=args.repo_id, private=args.private, token=args.token
+    )
     result = uploader.upload(
         model=model,
         tokenizer=tokenizer,

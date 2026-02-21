@@ -73,9 +73,7 @@ def test_classification_metrics_single_label_top_k_default():
         ]
     )
 
-    scores = metrics.compute_single_label(
-        y_true=y_true, y_pred=y_pred, y_probs=y_probs
-    )
+    scores = metrics.compute_single_label(y_true=y_true, y_pred=y_pred, y_probs=y_probs)
 
     # Default top_k is [1, 5]
     assert "top1_accuracy" in scores
@@ -99,9 +97,7 @@ def test_classification_metrics_single_label_top_k_custom():
         ]
     )
 
-    scores = metrics.compute_single_label(
-        y_true=y_true, y_pred=y_pred, y_probs=y_probs
-    )
+    scores = metrics.compute_single_label(y_true=y_true, y_pred=y_pred, y_probs=y_probs)
 
     assert "top1_accuracy" in scores
     assert "top3_accuracy" in scores
@@ -122,9 +118,7 @@ def test_classification_metrics_single_label_top_k_skipped_when_few_classes():
         ]
     )
 
-    scores = metrics.compute_single_label(
-        y_true=y_true, y_pred=y_pred, y_probs=y_probs
-    )
+    scores = metrics.compute_single_label(y_true=y_true, y_pred=y_pred, y_probs=y_probs)
 
     # 2 classes: top-1 present, top-5 skipped
     assert "top1_accuracy" in scores
@@ -165,12 +159,10 @@ def test_window_aggregator_multi_label_no_double_sigmoid():
     # values near (0.98, 0.05, 0.88) and sigmoid those again to
     # (0.73, 0.51, 0.71) — all above threshold, flipping class 1 to 1.
     pre_sigmoided = 1.0 / (1.0 + np.exp(-logits))
-    pred_from_probs = aggregator.average_probabilities(
-        pre_sigmoided, multi_label=True
-    )
-    assert pred_from_probs[1] == 1, (
-        "Sanity check: double-sigmoid on this input should incorrectly predict 1"
-    )
+    pred_from_probs = aggregator.average_probabilities(pre_sigmoided, multi_label=True)
+    assert (
+        pred_from_probs[1] == 1
+    ), "Sanity check: double-sigmoid on this input should incorrectly predict 1"
 
 
 def test_window_aggregator_single_label_no_double_softmax():
@@ -183,10 +175,12 @@ def test_window_aggregator_single_label_no_double_softmax():
 
     # Two windows: first strongly favours class 0, second mildly favours class 1.
     # Averaging raw softmax: class 0 wins.
-    logits = np.array([
-        [5.0, 0.0, 0.0],
-        [1.0, 1.5, 0.0],
-    ])
+    logits = np.array(
+        [
+            [5.0, 0.0, 0.0],
+            [1.0, 1.5, 0.0],
+        ]
+    )
 
     pred_from_logits = aggregator.average_probabilities(logits, multi_label=False)
 

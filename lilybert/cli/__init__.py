@@ -1,9 +1,9 @@
 """CLI subcommand modules for lilyBERT workflows."""
 
 from . import (
+    combine,
     evaluate,
     generate_tables,
-    combine,
     mutopia_preprocess,
     predict,
     preprocess,

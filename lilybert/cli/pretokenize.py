@@ -80,7 +80,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     structure_markers = [] if args.include_structure_markers else None
 
     sample0 = dataset[0]
-    is_multi_label = sample0["label"].dim() > 0 if hasattr(sample0["label"], "dim") else False
+    is_multi_label = (
+        sample0["label"].dim() > 0 if hasattr(sample0["label"], "dim") else False
+    )
     if is_multi_label:
         num_classes = sample0["label"].shape[0]
         labels = np.empty((n, num_classes), dtype=np.float32)
@@ -91,7 +93,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         sample = dataset[i]
         input_ids[i] = sample["input_ids"].numpy()
         attention_mask[i] = sample["attention_mask"].numpy()
-        labels[i] = sample["label"].numpy() if hasattr(sample["label"], "numpy") else sample["label"]
+        labels[i] = (
+            sample["label"].numpy()
+            if hasattr(sample["label"], "numpy")
+            else sample["label"]
+        )
         movement_ids.append(sample["movement_id"])
         base_works.append(sample["base_work"])
         if args.include_structure_markers:
@@ -126,6 +132,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.include_structure_markers:
         meta["structure_markers"] = structure_markers
     meta_path = output_dir / f"{args.task}_meta.json"
-    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     print(f"Saved metadata to {meta_path}")
     print(f"Done: {n} samples, {len(dataset.label_to_index)} classes")

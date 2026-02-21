@@ -348,7 +348,9 @@ class StratifiedKFoldTrainer:
                     best_val_loss = val_loss
 
                 selection_value = float(val_metrics.get(selection_metric, 0.0))
-                if self._is_improved(selection_value, best_selection_value, selection_mode):
+                if self._is_improved(
+                    selection_value, best_selection_value, selection_mode
+                ):
                     best_selection_value = selection_value
                     best_selection_step = int(step)
                     patience_count = 0
@@ -730,9 +732,7 @@ class StratifiedKFoldTrainer:
                     payload[f"val/{method}/per_class/{class_name}/recall"] = float(
                         recall[idx]
                     )
-                    payload[f"val/{method}/per_class/{class_name}/f1"] = float(
-                        f1[idx]
-                    )
+                    payload[f"val/{method}/per_class/{class_name}/f1"] = float(f1[idx])
 
                 ml_cm = multilabel_confusion_matrix(y_true, y_pred)
                 for idx, class_name in enumerate(class_names):

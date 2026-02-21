@@ -20,17 +20,16 @@ from itertools import product
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from transformers import PreTrainedTokenizer
-
-from .parser import LilyPondParser
-
 import ly.document
+import ly.lex
 import ly.pitch
 from ly.pitch.abs2rel import abs2rel
 from ly.pitch.rel2abs import rel2abs
-import ly.lex
 from ly.pitch.translate import translate
 from ly.pitch.transpose import Transposer, transpose
+from transformers import PreTrainedTokenizer
+
+from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
 
@@ -307,8 +306,8 @@ class LilyPondPreprocessor:
         total_movements = 0
 
         # Parallel worker submits per raw file to avoid holding heavy parser state
-        from concurrent.futures import ProcessPoolExecutor, as_completed
         import os
+        from concurrent.futures import ProcessPoolExecutor, as_completed
 
         raw_files = sorted([str(p) for p in raw_dir.glob("*.ly")])
         max_workers = min(8, (os.cpu_count() or 2))
@@ -370,7 +369,9 @@ class LilyPondPreprocessor:
                         }
 
         metadata_path = out_root / "metadata.json"
-        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
         return {
             "files_processed": len(raw_files),
@@ -409,7 +410,9 @@ class LilyPondPreprocessor:
             if language == "italiano":
                 language_text = base_italiano
             elif language == "english":
-                language_text = movement.get("english_text") or self._translate_with_python_ly(
+                language_text = movement.get(
+                    "english_text"
+                ) or self._translate_with_python_ly(
                     base_italiano,
                     source_language="italiano",
                     target_language="english",
@@ -430,7 +433,9 @@ class LilyPondPreprocessor:
                     expanded.append(
                         {
                             "text": self._convert_relative_absolute(
-                                candidate["text"], language=language, target_mode="absolute"
+                                candidate["text"],
+                                language=language,
+                                target_mode="absolute",
                             ),
                             "ops": [*candidate["ops"], "absolute"],
                         }
@@ -438,7 +443,9 @@ class LilyPondPreprocessor:
                     expanded.append(
                         {
                             "text": self._convert_relative_absolute(
-                                candidate["text"], language=language, target_mode="relative"
+                                candidate["text"],
+                                language=language,
+                                target_mode="relative",
                             ),
                             "ops": [*candidate["ops"], "relative"],
                         }
@@ -447,7 +454,9 @@ class LilyPondPreprocessor:
 
             if config.enable_transposition:
                 expanded = []
-                for candidate, target in product(current, TRANSPOSITION_TARGETS_ENGLISH):
+                for candidate, target in product(
+                    current, TRANSPOSITION_TARGETS_ENGLISH
+                ):
                     expanded.append(
                         {
                             "text": self._transpose_with_python_ly(
@@ -488,7 +497,9 @@ class LilyPondPreprocessor:
                     expanded.append(candidate)
                     expanded.append(
                         {
-                            "text": self._barline_variant(candidate["text"], mode="add"),
+                            "text": self._barline_variant(
+                                candidate["text"], mode="add"
+                            ),
                             "ops": [*candidate["ops"], "barline_add"],
                         }
                     )

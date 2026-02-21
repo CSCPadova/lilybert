@@ -6,7 +6,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
-from lilybert.config import BaseModelConfig, BaseTrainingConfig, LoggingConfig, PathConfig
+from lilybert.config import (
+    BaseModelConfig,
+    BaseTrainingConfig,
+    LoggingConfig,
+    PathConfig,
+)
 
 
 @dataclass

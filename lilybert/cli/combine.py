@@ -17,16 +17,18 @@ Utilities:
   - Skips invalid files
 """
 
-import re
-import sys
-import subprocess
-from pathlib import Path
-from typing import Set, Optional
 import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional, Set
+
 from tqdm import tqdm
 
 try:
     from lilybert.data.parser import LilyPondParser
+
     PARSER_AVAILABLE = True
 except ImportError:
     PARSER_AVAILABLE = False
@@ -35,7 +37,9 @@ except ImportError:
 class LilyPondCombiner:
     """Combines LilyPond files by resolving includes."""
 
-    def __init__(self, max_depth: int = 20, validate: bool = True, update_notation: bool = True):
+    def __init__(
+        self, max_depth: int = 20, validate: bool = True, update_notation: bool = True
+    ):
         """Initialize combiner.
 
         Args:
@@ -50,10 +54,7 @@ class LilyPondCombiner:
         self.parser = LilyPondParser() if (validate and PARSER_AVAILABLE) else None
 
     def resolve_includes(
-        self,
-        file_path: Path,
-        depth: int = 0,
-        base_dir: Optional[Path] = None
+        self, file_path: Path, depth: int = 0, base_dir: Optional[Path] = None
     ) -> str:
         r"""Recursively resolve and inline \include directives.
 
@@ -92,22 +93,20 @@ class LilyPondCombiner:
         lines = []
         include_pattern = re.compile(r'^\s*\\include\s+"([^"]+)"\s*$', re.MULTILINE)
 
-        for line in content.split('\n'):
+        for line in content.split("\n"):
             match = include_pattern.match(line)
             if match:
                 include_file = match.group(1)
                 include_path = base_dir / include_file
 
                 # Try with .ily extension if not found
-                if not include_path.exists() and not include_file.endswith('.ily'):
-                    include_path = base_dir / (include_file + '.ily')
+                if not include_path.exists() and not include_file.endswith(".ily"):
+                    include_path = base_dir / (include_file + ".ily")
 
                 if include_path.exists():
                     # Recursively resolve includes in the included file
                     included_content = self.resolve_includes(
-                        include_path,
-                        depth + 1,
-                        base_dir
+                        include_path, depth + 1, base_dir
                     )
                     lines.append(f"% === BEGIN INCLUDE: {include_file} ===")
                     lines.append(included_content.rstrip())
@@ -117,7 +116,7 @@ class LilyPondCombiner:
             else:
                 lines.append(line)
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def validate_lilypond(self, content: str) -> tuple[bool, Optional[str]]:
         """Validate LilyPond content.
@@ -138,7 +137,9 @@ class LilyPondCombiner:
         except Exception as e:
             return False, str(e)
 
-    def update_notation_with_convert_ly(self, file_path: Path) -> tuple[bool, Optional[str]]:
+    def update_notation_with_convert_ly(
+        self, file_path: Path
+    ) -> tuple[bool, Optional[str]]:
         """Update LilyPond notation using convert-ly.
 
         Args:
@@ -150,22 +151,22 @@ class LilyPondCombiner:
         try:
             # Check if convert-ly is available
             result = subprocess.run(
-                ["convert-ly", "--version"],
-                capture_output=True,
-                timeout=2
+                ["convert-ly", "--version"], capture_output=True, timeout=2
             )
             if result.returncode != 0:
                 return False, "convert-ly not available"
 
             # Run convert-ly on the file (in-place)
             result = subprocess.run(
-                ["convert-ly", "-e", str(file_path)],
-                capture_output=True,
-                timeout=10
+                ["convert-ly", "-e", str(file_path)], capture_output=True, timeout=10
             )
 
             if result.returncode != 0:
-                error = result.stderr.decode("utf-8", errors="ignore") if result.stderr else "Unknown error"
+                error = (
+                    result.stderr.decode("utf-8", errors="ignore")
+                    if result.stderr
+                    else "Unknown error"
+                )
                 return False, error
 
             return True, None
@@ -212,22 +213,22 @@ def find_main_ly_files(directory: Path) -> list[tuple[Path, str]]:
     ly_files = []
 
     for work_dir in directory.iterdir():
-        if not work_dir.is_dir() or work_dir.name.startswith('.'):
+        if not work_dir.is_dir() or work_dir.name.startswith("."):
             continue
 
         # Look for subdirectories containing .ly files
-        for subdir in work_dir.rglob('*'):
-            if not subdir.is_dir() or subdir.name.startswith('.'):
+        for subdir in work_dir.rglob("*"):
+            if not subdir.is_dir() or subdir.name.startswith("."):
                 continue
 
             # Find .ly files in this subdirectory
-            ly_candidates = list(subdir.glob('*.ly'))
+            ly_candidates = list(subdir.glob("*.ly"))
 
             if not ly_candidates:
                 continue
 
             # Prefer score files (usually the largest or with "score" in name)
-            score_files = [f for f in ly_candidates if 'score' in f.name.lower()]
+            score_files = [f for f in ly_candidates if "score" in f.name.lower()]
             if score_files:
                 # Use the one with "score" in the name
                 main_file = max(score_files, key=lambda f: f.stat().st_size)
@@ -237,7 +238,7 @@ def find_main_ly_files(directory: Path) -> list[tuple[Path, str]]:
 
             # Create a meaningful output name
             composer = work_dir.name
-            work_name = subdir.name if subdir != work_dir else ''
+            work_name = subdir.name if subdir != work_dir else ""
 
             if work_name and work_name != main_file.stem:
                 output_name = f"{composer}_{work_name}"
@@ -346,7 +347,7 @@ def process_mutopia_dataset(
     output_dir: Path,
     max_files: Optional[int] = None,
     validate: bool = True,
-    update_notation: bool = True
+    update_notation: bool = True,
 ) -> dict:
     """Process entire Mutopia dataset and combine files.
 
@@ -369,12 +370,12 @@ def process_mutopia_dataset(
         ly_files = ly_files[:max_files]
 
     stats = {
-        'total_files': len(ly_files),
-        'successful': 0,
-        'failed': 0,
-        'validation_failed': 0,
-        'convert_ly_failed': 0,
-        'errors': []
+        "total_files": len(ly_files),
+        "successful": 0,
+        "failed": 0,
+        "validation_failed": 0,
+        "convert_ly_failed": 0,
+        "errors": [],
     }
 
     combiner = LilyPondCombiner(validate=validate, update_notation=update_notation)
@@ -385,12 +386,11 @@ def process_mutopia_dataset(
             combined_content, error = combiner.combine_file(file_path)
 
             if error:
-                stats['failed'] += 1
-                stats['validation_failed'] += 1
-                stats['errors'].append({
-                    'file': str(file_path),
-                    'error': f"Combine error: {error}"
-                })
+                stats["failed"] += 1
+                stats["validation_failed"] += 1
+                stats["errors"].append(
+                    {"file": str(file_path), "error": f"Combine error: {error}"}
+                )
                 continue
 
             # Save combined file temporarily
@@ -402,21 +402,17 @@ def process_mutopia_dataset(
                 success, error = combiner.update_notation_with_convert_ly(output_path)
                 if not success:
                     # Log but don't fail - convert-ly might not be available
-                    stats['convert_ly_failed'] += 1
+                    stats["convert_ly_failed"] += 1
                     if error != "convert-ly not available":
-                        stats['errors'].append({
-                            'file': str(file_path),
-                            'error': f"convert-ly: {error}"
-                        })
+                        stats["errors"].append(
+                            {"file": str(file_path), "error": f"convert-ly: {error}"}
+                        )
 
-            stats['successful'] += 1
+            stats["successful"] += 1
 
         except Exception as e:
-            stats['failed'] += 1
-            stats['errors'].append({
-                'file': str(file_path),
-                'error': str(e)
-            })
+            stats["failed"] += 1
+            stats["errors"].append({"file": str(file_path), "error": str(e)})
 
     return stats
 

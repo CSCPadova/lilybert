@@ -10,9 +10,9 @@ import argparse
 from typing import Callable, Sequence
 
 from lilybert.cli import (
+    combine,
     evaluate,
     generate_tables,
-    combine,
     mutopia_preprocess,
     predict,
     preprocess,

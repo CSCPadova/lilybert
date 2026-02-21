@@ -25,7 +25,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grad-clip-norm", type=float, default=1.0)
     parser.add_argument("--model-selection-metric", default="auto")
     parser.add_argument("--model-selection-mode", default="auto")
-    parser.add_argument("--pretokenized", default=None, help="Path to .npz from pretokenize")
+    parser.add_argument(
+        "--pretokenized", default=None, help="Path to .npz from pretokenize"
+    )
     parser.add_argument("--output-dir", default="outputs/cv")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="lilybert")

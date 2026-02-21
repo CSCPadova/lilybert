@@ -13,7 +13,9 @@ from datasets import Dataset, DatasetDict
 class DatasetUploader:
     """Build and publish lilyBERT datasets to HuggingFace Hub."""
 
-    def __init__(self, repo_id: str, private: bool = False, token: Optional[str] = None):
+    def __init__(
+        self, repo_id: str, private: bool = False, token: Optional[str] = None
+    ):
         self.repo_id = repo_id
         self.private = private
         self.token = token
@@ -46,7 +48,9 @@ class DatasetUploader:
                         "language": language,
                         "text": ly_file.read_text(encoding="utf-8", errors="ignore"),
                         "base_work": movement_meta.get("base_work"),
-                        "labels": json.dumps(movement_meta.get("labels", {}), ensure_ascii=False),
+                        "labels": json.dumps(
+                            movement_meta.get("labels", {}), ensure_ascii=False
+                        ),
                     }
                 )
 
@@ -70,22 +74,32 @@ class DatasetUploader:
         processed_dir: str | Path,
         languages: Iterable[str] = ("english", "italiano"),
     ):
-        dataset_dict = self.build_dataset_dict(processed_dir=processed_dir, languages=languages)
+        dataset_dict = self.build_dataset_dict(
+            processed_dir=processed_dir, languages=languages
+        )
         return self.push_dataset_dict(dataset_dict)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Upload processed dataset to HuggingFace Hub")
-    parser.add_argument("--processed-dir", default="data/processed", help="Processed data root")
+    parser = argparse.ArgumentParser(
+        description="Upload processed dataset to HuggingFace Hub"
+    )
+    parser.add_argument(
+        "--processed-dir", default="data/processed", help="Processed data root"
+    )
     parser.add_argument("--repo-id", required=True, help="HuggingFace dataset repo id")
-    parser.add_argument("--private", action="store_true", help="Create/use private repo")
+    parser.add_argument(
+        "--private", action="store_true", help="Create/use private repo"
+    )
     parser.add_argument("--token", default=None, help="HF token (optional)")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    uploader = DatasetUploader(repo_id=args.repo_id, private=args.private, token=args.token)
+    uploader = DatasetUploader(
+        repo_id=args.repo_id, private=args.private, token=args.token
+    )
     result = uploader.upload(processed_dir=args.processed_dir)
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 

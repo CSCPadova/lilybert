@@ -276,9 +276,7 @@ def test_main_cli_dispatches_subcommand(monkeypatch):
     def _fake_run_experiment_main(argv=None):
         captured["argv"] = argv
 
-    monkeypatch.setattr(
-        "lilybert.cli.run_experiment.main", _fake_run_experiment_main
-    )
+    monkeypatch.setattr("lilybert.cli.run_experiment.main", _fake_run_experiment_main)
     main_cli.main(["run-experiment", "--cfg", "job"])
 
     assert captured["argv"] == ["--cfg", "job"]
