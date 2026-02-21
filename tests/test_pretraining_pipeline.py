@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from omegaconf import OmegaConf
+from pathlib import Path
 
 from lilybert.data.preprocessor import AugmentationConfig
+from lilybert.pretraining.trainer import MLMPretrainer
 
 
 def test_augmentation_config_parses_flags_and_languages():
@@ -101,3 +103,32 @@ def test_run_experiment_supports_two_stage_pipeline(monkeypatch):
     assert "stage1" in results
     assert "stage2" in results
     assert "composer" in results["stage2"]
+
+
+def test_count_corpus_tokens_includes_augmented_mutopia_files(tmp_path: Path):
+    italiano_dir = tmp_path / "italiano"
+    english_dir = tmp_path / "english"
+    italiano_dir.mkdir(parents=True)
+    english_dir.mkdir(parents=True)
+
+    (italiano_dir / "piece_a.ly").write_text("c d e", encoding="utf-8")
+    (italiano_dir / "piece_a__transpose_plus2.ly").write_text("f g", encoding="utf-8")
+    (english_dir / "piece_b__absolute.ly").write_text("a b c d", encoding="utf-8")
+
+    files = MLMPretrainer._collect_movement_files(
+        data_dir=str(tmp_path),
+        languages=["italiano", "english"],
+    )
+
+    class _DummyTokenizer:
+        def encode(self, text: str, add_special_tokens: bool = True):
+            tokens = [token for token in text.split() if token]
+            if add_special_tokens:
+                return ["[CLS]"] + tokens + ["[SEP]"]
+            return tokens
+
+    stats = MLMPretrainer.count_corpus_tokens(files, _DummyTokenizer())
+
+    assert stats["file_count"] == 3
+    assert stats["total_tokens"] == 15
+    assert stats["avg_tokens_per_file"] == 5.0

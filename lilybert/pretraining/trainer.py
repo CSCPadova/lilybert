@@ -82,7 +82,9 @@ class MLMPretrainer:
             languages=self.config.languages,
         )
         if not all_files:
-            raise ValueError("No movement files found for Stage-1 pretraining")
+            raise ValueError("No LilyPond files found for Stage-1 pretraining")
+
+        token_stats = self.count_corpus_tokens(all_files, tokenizer)
 
         # Split into 99% train, 1% eval
         train_files, eval_files = self._train_eval_split(
@@ -159,6 +161,8 @@ class MLMPretrainer:
             "num_files_total": len(all_files),
             "num_files_train": len(train_files),
             "num_files_eval": len(eval_files),
+            "total_tokens": token_stats["total_tokens"],
+            "avg_tokens_per_file": token_stats["avg_tokens_per_file"],
             "eval_ratio": 0.01,
             "languages": self.config.languages,
             "max_length": self.config.max_length,
@@ -228,6 +232,42 @@ class MLMPretrainer:
         if vocab_size is not None:
             return int(vocab_size)
         return len(tokenizer.get_vocab())
+
+    @staticmethod
+    def count_corpus_tokens(
+        files: List[Path],
+        tokenizer: PreTrainedTokenizerFast,
+        *,
+        add_special_tokens: bool = True,
+    ) -> Dict[str, float | int]:
+        """Count tokens across a corpus of LilyPond files.
+
+        This utility is intended for corpora like Mutopia pretraining data,
+        where files may include augmented variants and do not need metadata.
+
+        Args:
+            files: List of .ly files to include in the count
+            tokenizer: Loaded tokenizer used for counting
+            add_special_tokens: Whether to include tokenizer special tokens
+
+        Returns:
+            Dictionary with total file count, total tokens, and average tokens/file
+        """
+        total_tokens = 0
+
+        for file_path in files:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            token_ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
+            total_tokens += len(token_ids)
+
+        file_count = len(files)
+        avg_tokens_per_file = total_tokens / file_count if file_count > 0 else 0.0
+
+        return {
+            "file_count": file_count,
+            "total_tokens": total_tokens,
+            "avg_tokens_per_file": avg_tokens_per_file,
+        }
 
     @staticmethod
     def _collect_movement_files(data_dir: str, languages: List[str]) -> List[Path]:
