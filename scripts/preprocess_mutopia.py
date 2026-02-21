@@ -213,9 +213,11 @@ def create_pretraining_corpus(
     Returns:
         Number of files included in corpus
     """
+    ly_files = sorted(preprocessed_dir.rglob("*.ly"))
+    print(f"  Found {len(ly_files)} .ly files to include in corpus...")
     corpus_lines: List[str] = []
 
-    for ly_file in sorted(preprocessed_dir.rglob("*.ly")):
+    for ly_file in tqdm(ly_files, desc="Building corpus"):
         try:
             text = ly_file.read_text(encoding="utf-8").strip()
             if text:
@@ -342,18 +344,20 @@ def main():
         print("STEP 2: BUILDING CORPUS & TRAINING BPE TOKENIZER")
         print("="*60)
 
-        corpus_file = output_dir / "corpus.txt"
-        corpus_count = create_pretraining_corpus(output_dir, corpus_file)
-        print(f"Corpus built: {corpus_count} files")
+        # Build parser-aware token corpus using the tokenizer's own method
+        print("Building parser-tokenized corpus...")
+        tokenizer = LilyPondTokenizer()
+        corpus_lines = tokenizer.build_corpus(output_dir)
 
-        corpus_text = corpus_file.read_text(encoding="utf-8")
-        corpus_lines = [line.strip() for line in corpus_text.split('\n\n') if line.strip()]
+        if not corpus_lines:
+            print("Error: Corpus is empty — no .ly files could be tokenized.")
+            print("Check that Step 1 produced preprocessed files.")
+            sys.exit(1)
 
         print(f"Corpus lines: {len(corpus_lines)}")
         print(f"Training tokenizer with vocab_size={args.vocab_size}...")
 
         # Train tokenizer
-        tokenizer = LilyPondTokenizer()
         trained_tok = tokenizer.train(corpus_lines, vocab_size=args.vocab_size)
 
         # Save tokenizer
