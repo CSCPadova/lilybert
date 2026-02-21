@@ -29,7 +29,7 @@ from lilybert.data.tokenizer import LilyPondTokenizer
 def preprocess_single_file(
     file_path: str,
     output_dir: str,
-    include_augmentation: bool = False,
+    include_augmentation: bool = True,
 ) -> Tuple[str, Optional[str], int, Optional[str]]:
     """Preprocess a single file (worker function for multiprocessing).
 
@@ -84,7 +84,7 @@ def preprocess_mutopia_files(
     input_dir: Path,
     output_dir: Path,
     max_files: int | None = None,
-    include_augmentation: bool = False,
+    include_augmentation: bool = True,
     skip_on_error: bool = True,
     num_workers: int | None = None,
 ) -> Dict[str, Any]:
