@@ -754,9 +754,11 @@ class LilyPondParser:
         if lang_match:
             return lang_match.group(1)
 
-        # Analyze pitch names to infer language
-        english_notes = re.findall(r'\b([a-g](?:is|es|isis|eses)?)\b', content)
-        italian_notes = re.findall(r'\b(do|re|mi|fa|sol|la|si)(?:d|b|diesis|bemolle)?\b', content)
+        # Analyze pitch names to infer language.
+        # Use lookaround instead of \b so that a trailing digit (duration)
+        # does not prevent the match (e.g. "do4", "c4").
+        english_notes = re.findall(r'(?<![a-zA-Z])([a-g](?:is|es|isis|eses)?)(?![a-zA-Z])', content)
+        italian_notes = re.findall(r'(?<![a-zA-Z])((?:do|re|mi|fa|sol|la|si)(?:d|b|diesis|bemolle)?)(?![a-zA-Z])', content)
 
         english_count = len(english_notes)
         italian_count = len(italian_notes)
