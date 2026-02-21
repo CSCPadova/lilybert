@@ -505,7 +505,11 @@ class LilyPondPreprocessor:
             for candidate in current:
                 if not config.include_original and candidate["ops"] == ["base"]:
                     continue
-                normalized_text = candidate["text"].strip() + "\n"
+                candidate_text = candidate["text"].strip()
+                # Ensure \language directive is present for the tokenizer
+                if not re.search(r'\\language\s+"', candidate_text):
+                    candidate_text = f'\\language "{language}"\n{candidate_text}'
+                normalized_text = candidate_text + "\n"
                 key = (language, sha1(normalized_text.encode("utf-8")).hexdigest())
                 if key in seen:
                     continue
@@ -1167,12 +1171,11 @@ class LilyPondPreprocessor:
         text = self._remove_block_command(text, "header")
 
         text = re.sub(r"\\version\s+\"[^\"]*\"", "", text)
-        text = re.sub(r"\\language\s+\"[^\"]*\"", "", text)
+        # \language and \new Staff/Voice/etc. are preserved for the tokenizer
 
         text = re.sub(r"#\(let\b.*?\)", "", text, flags=re.DOTALL)
         text = re.sub(r"#\(define\b.*?\)", "", text, flags=re.DOTALL)
 
-        text = re.sub(r"\\new\s+(ChoirStaff|Staff|PianoStaff|Voice)\b", "", text)
         text = re.sub(
             r"\\set\s+Staff\.(midiInstrument|instrumentName)\s*=\s*[^\n]+", "", text
         )
