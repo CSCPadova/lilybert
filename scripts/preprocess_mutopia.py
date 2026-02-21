@@ -46,11 +46,11 @@ def preprocess_single_file(
         aug_config = None
         if include_augmentation:
             aug_config = AugmentationConfig(
-                languages=["italiano", "english"],
-                enable_transposition=False,
-                enable_absolute_relative=False,
-                enable_articulation_variants=False,
-                enable_barline_variants=False,
+                languages=["italiano", "english", "nederlands"],
+                enable_transposition=True,
+                enable_absolute_relative=True,
+                enable_articulation_variants=True,
+                enable_barline_variants=True,
                 include_original=True,
             )
 
@@ -243,7 +243,7 @@ def main():
     parser.add_argument(
         "--vocab-size",
         type=int,
-        default=8000,
+        default=10000,
         help="BPE vocabulary size"
     )
     parser.add_argument(
@@ -302,7 +302,7 @@ def main():
         input_dir,
         output_dir,
         max_files=args.max_files,
-        include_augmentation=False,
+        include_augmentation=True,
         skip_on_error=args.skip_on_error,
         num_workers=args.num_workers,
     )
