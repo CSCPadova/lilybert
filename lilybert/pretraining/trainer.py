@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+import random
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import torch
+import wandb
 from torch.utils.data import Dataset
 from transformers import (
     BertConfig,
@@ -58,16 +61,37 @@ class MLMPretrainer:
         self.config = config
 
     def run(self) -> Dict[str, Any]:
+        # Initialize wandb
+        wandb_project = os.environ.get("WANDB_PROJECT", "lilybert-pretraining")
+        wandb.init(
+            project=wandb_project,
+            name=f"bert-mlm-{self.config.model_architecture}",
+            config=self.config.to_dict(),
+        )
+
         tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
-        movement_files = self._collect_movement_files(
+        all_files = self._collect_movement_files(
             data_dir=self.config.data_dir,
             languages=self.config.languages,
         )
-        if not movement_files:
+        if not all_files:
             raise ValueError("No movement files found for Stage-1 pretraining")
 
-        dataset = LilyPondMLMDataset(
-            files=movement_files,
+        # Split into 99% train, 1% eval
+        train_files, eval_files = self._train_eval_split(
+            all_files,
+            eval_ratio=0.01,
+            seed=self.config.seed,
+        )
+
+        train_dataset = LilyPondMLMDataset(
+            files=train_files,
+            tokenizer=tokenizer,
+            max_length=self.config.max_length,
+        )
+
+        eval_dataset = LilyPondMLMDataset(
+            files=eval_files,
             tokenizer=tokenizer,
             max_length=self.config.max_length,
         )
@@ -85,11 +109,16 @@ class MLMPretrainer:
             max_steps=self.config.max_steps,
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
-            save_total_limit=2,
+            save_total_limit=3,
             seed=self.config.seed,
             dataloader_num_workers=0,
-            report_to=[],
+            report_to=["wandb"],
             remove_unused_columns=False,
+            evaluation_strategy="steps",
+            eval_steps=1000,
+            save_strategy="steps",
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
         )
 
         collator = DataCollatorForLanguageModeling(
@@ -101,9 +130,9 @@ class MLMPretrainer:
         trainer = Trainer(
             model=model,
             args=training_arguments,
-            train_dataset=dataset,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             data_collator=collator,
-            tokenizer=tokenizer,
         )
         trainer.train()
 
@@ -113,9 +142,15 @@ class MLMPretrainer:
         tokenizer.save_pretrained(str(model_dir / "tokenizer"))
         self.config.save(str(model_dir))
 
+        # Log final summary to wandb
+        wandb.finish()
+
         summary = {
             "model_dir": str(model_dir),
-            "num_files": len(movement_files),
+            "num_files_total": len(all_files),
+            "num_files_train": len(train_files),
+            "num_files_eval": len(eval_files),
+            "eval_ratio": 0.01,
             "languages": self.config.languages,
             "max_length": self.config.max_length,
             "mlm_probability": self.config.mlm_probability,
@@ -126,6 +161,34 @@ class MLMPretrainer:
             encoding="utf-8",
         )
         return summary
+
+    @staticmethod
+    def _train_eval_split(
+        files: List[Path],
+        eval_ratio: float = 0.01,
+        seed: int | None = None,
+    ) -> Tuple[List[Path], List[Path]]:
+        """Split files into train and eval sets.
+
+        Args:
+            files: List of file paths
+            eval_ratio: Fraction of files to use for evaluation (default: 0.01 for 1%)
+            seed: Random seed for reproducibility
+
+        Returns:
+            Tuple of (train_files, eval_files)
+        """
+        if seed is not None:
+            random.seed(seed)
+
+        shuffled = files.copy()
+        random.shuffle(shuffled)
+
+        split_idx = max(1, int(len(shuffled) * (1 - eval_ratio)))
+        train_files = shuffled[:split_idx]
+        eval_files = shuffled[split_idx:]
+
+        return train_files, eval_files
 
     def _build_model_config(self, vocab_size: int) -> BertConfig:
         if self.config.model_architecture != "bert-base":
