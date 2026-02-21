@@ -13,10 +13,9 @@ Parallelization: Uses ProcessPoolExecutor to process multiple files in parallel
 for improved performance on multi-core systems.
 """
 
-import json
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any
 import argparse
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
@@ -30,54 +29,81 @@ def preprocess_single_file(
     file_path: str,
     output_dir: str,
     include_augmentation: bool = True,
-) -> Tuple[str, Optional[str], int, Optional[str]]:
-    """Preprocess a single file (worker function for multiprocessing).
+) -> Dict[str, Any]:
+    """Preprocess a single file and save augmented variants as separate .ly files.
+
+    Each variant is saved under a language subdirectory, e.g.:
+        output_dir/italiano/stem_mvt1.ly
+        output_dir/english/stem_mvt1__absolute.ly
 
     Args:
         file_path: Path to .ly file to preprocess
-        output_dir: Output directory for preprocessed JSON
+        output_dir: Output directory for preprocessed files
         include_augmentation: Whether to use augmentation
 
     Returns:
-        (file_path, italian_text or None, movements_count, error_message or None)
+        Dict with keys: file_path, variants_written, movements_count, error
     """
     try:
-        # Setup augmentation config
-        aug_config = None
-        if include_augmentation:
-            aug_config = AugmentationConfig(
-                languages=["italiano", "english", "nederlands"],
-                enable_transposition=True,
-                enable_absolute_relative=True,
-                enable_articulation_variants=True,
-                enable_barline_variants=True,
-                include_original=True,
-            )
-
-        # Create preprocessor instance (each process gets its own)
-        preprocessor = LilyPondPreprocessor(augmentation_config=aug_config)
-
-        # Preprocess file
-        result = preprocessor.preprocess_file(file_path)
-
-        # Save individual preprocessed file
-        output_path = Path(output_dir) / f"{Path(file_path).stem}_preprocessed.json"
-        output_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2),
-            encoding="utf-8"
+        aug_config = AugmentationConfig() if not include_augmentation else AugmentationConfig(
+            languages=["italiano", "english", "nederlands"],
+            enable_transposition=True,
+            enable_absolute_relative=True,
+            enable_articulation_variants=True,
+            enable_barline_variants=True,
+            include_original=True,
         )
 
-        # Extract Italian text for corpus
-        italian_text = result.get("text", "")
-        movements_count = len(result.get("movements", []))
+        preprocessor = LilyPondPreprocessor(augmentation_config=aug_config)
 
-        if italian_text.strip():
-            return file_path, italian_text, movements_count, None
-        else:
-            return file_path, None, movements_count, "No Italian text extracted"
+        # Parse file into movements
+        path = Path(file_path)
+        raw_text = path.read_text(encoding="utf-8", errors="ignore")
+        movements = preprocessor.process_content(raw_text, path.name, {})
+
+        if not movements:
+            return {
+                "file_path": file_path,
+                "variants_written": 0,
+                "movements_count": 0,
+                "error": "No movements extracted",
+            }
+
+        out_root = Path(output_dir)
+        variants_written = 0
+
+        for movement in movements:
+            variants = preprocessor._build_augmented_variants(movement, aug_config)
+            for variant in variants:
+                language = variant["language"]
+                variant_id = variant["variant_id"]
+                movement_id = movement["movement_id"]
+
+                lang_dir = out_root / language
+                lang_dir.mkdir(parents=True, exist_ok=True)
+
+                if variant_id == "base":
+                    file_name = f"{movement_id}.ly"
+                else:
+                    file_name = f"{movement_id}__{variant_id}.ly"
+
+                (lang_dir / file_name).write_text(variant["text"], encoding="utf-8")
+                variants_written += 1
+
+        return {
+            "file_path": file_path,
+            "variants_written": variants_written,
+            "movements_count": len(movements),
+            "error": None,
+        }
 
     except Exception as e:
-        return file_path, None, 0, str(e)
+        return {
+            "file_path": file_path,
+            "variants_written": 0,
+            "movements_count": 0,
+            "error": str(e),
+        }
 
 
 def preprocess_mutopia_files(
@@ -90,9 +116,8 @@ def preprocess_mutopia_files(
 ) -> Dict[str, Any]:
     """Preprocess Mutopia files for pretraining using multiprocessing.
 
-    Files are NOT split by movement. For pretraining, longer sequences
-    provide better context for the transformer model. If a file fails
-    to preprocess, it is skipped by default.
+    Each input file produces augmented variants saved as separate .ly files
+    under language subdirectories (e.g. output_dir/italiano/, output_dir/english/).
 
     Args:
         input_dir: Directory containing combined .ly files
@@ -113,21 +138,18 @@ def preprocess_mutopia_files(
     if max_files:
         ly_files = ly_files[:max_files]
 
-    stats = {
+    stats: Dict[str, Any] = {
         "total_files": len(ly_files),
         "successful": 0,
         "failed": 0,
         "total_movements": 0,
-        "corpus_lines": 0,
+        "total_variants": 0,
         "errors": [],
-        "corpus_file": str(output_dir / "corpus.txt"),
         "num_workers": num_workers or os.cpu_count() or 1,
     }
 
     if len(ly_files) == 0:
         return stats
-
-    corpus_lines: List[str] = []
 
     # Use ProcessPoolExecutor for parallel processing
     num_workers = num_workers or os.cpu_count() or 1
@@ -147,38 +169,33 @@ def preprocess_mutopia_files(
         # Process results with progress bar
         for future in tqdm(futures, desc="Preprocessing Mutopia files", total=len(ly_files)):
             try:
-                file_path, italian_text, movements_count, error = future.result()
+                result = future.result()
 
-                if error:
+                if result["error"]:
                     stats["failed"] += 1
                     stats["errors"].append({
-                        "file": file_path,
-                        "error": error
+                        "file": result["file_path"],
+                        "error": result["error"],
                     })
 
                     if not skip_on_error:
-                        raise Exception(f"Preprocessing failed for {file_path}: {error}")
+                        raise Exception(
+                            f"Preprocessing failed for {result['file_path']}: {result['error']}"
+                        )
                 else:
-                    if italian_text:
-                        corpus_lines.append(italian_text)
-
-                    stats["total_movements"] += movements_count
+                    stats["total_movements"] += result["movements_count"]
+                    stats["total_variants"] += result["variants_written"]
                     stats["successful"] += 1
 
             except Exception as e:
                 stats["failed"] += 1
                 stats["errors"].append({
                     "file": "unknown",
-                    "error": str(e)
+                    "error": str(e),
                 })
 
                 if not skip_on_error:
                     raise
-
-    # Save corpus file for tokenizer training
-    corpus_path = output_dir / "corpus.txt"
-    corpus_path.write_text("\n\n".join(corpus_lines), encoding="utf-8")
-    stats["corpus_lines"] = len(corpus_lines)
 
     return stats
 
@@ -187,29 +204,25 @@ def create_pretraining_corpus(
     preprocessed_dir: Path,
     output_file: Path,
 ) -> int:
-    """Create corpus from preprocessed JSON files.
+    """Create corpus from augmented .ly files across all language subdirectories.
 
     Args:
-        preprocessed_dir: Directory with preprocessed JSON files
+        preprocessed_dir: Directory with language subdirectories containing .ly files
         output_file: Output corpus file
 
     Returns:
-        Number of lines in corpus
+        Number of files included in corpus
     """
     corpus_lines: List[str] = []
 
-    for json_file in preprocessed_dir.glob("*_preprocessed.json"):
+    for ly_file in sorted(preprocessed_dir.rglob("*.ly")):
         try:
-            data = json.loads(json_file.read_text(encoding="utf-8"))
-
-            # Add preprocessed text
-            if "text" in data and data["text"].strip():
-                corpus_lines.append(data["text"])
-
+            text = ly_file.read_text(encoding="utf-8").strip()
+            if text:
+                corpus_lines.append(text)
         except Exception as e:
-            print(f"Warning: Error reading {json_file}: {e}")
+            print(f"Warning: Error reading {ly_file}: {e}")
 
-    # Save corpus
     output_file.write_text("\n\n".join(corpus_lines), encoding="utf-8")
 
     return len(corpus_lines)
@@ -310,7 +323,7 @@ def main():
     print(f"\nFiles processed: {stats['successful']}")
     print(f"Failed: {stats['failed']}")
     print(f"Total movements found: {stats['total_movements']}")
-    print(f"Corpus lines (full files): {stats['corpus_lines']}")
+    print(f"Total variants written: {stats['total_variants']}")
     print(f"Workers used: {stats['num_workers']}")
 
     if stats['errors']:
@@ -326,14 +339,12 @@ def main():
     # Step 2: Optionally train tokenizer
     if args.train_tokenizer:
         print("\n" + "="*60)
-        print("STEP 2: TRAINING BPE TOKENIZER")
+        print("STEP 2: BUILDING CORPUS & TRAINING BPE TOKENIZER")
         print("="*60)
 
-        # Read corpus
         corpus_file = output_dir / "corpus.txt"
-        if not corpus_file.exists():
-            print(f"Error: Corpus file not found: {corpus_file}")
-            sys.exit(1)
+        corpus_count = create_pretraining_corpus(output_dir, corpus_file)
+        print(f"Corpus built: {corpus_count} files")
 
         corpus_text = corpus_file.read_text(encoding="utf-8")
         corpus_lines = [line.strip() for line in corpus_text.split('\n\n') if line.strip()]
