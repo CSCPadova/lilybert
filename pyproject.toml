@@ -63,7 +63,7 @@ dev = [
 "Repository" = "https://github.com/CSCPadova/lilybert"
 
 [project.scripts]
-lilybert = "lilybert.cli:main"
+lilybert = "lilybert.__main__:main"
 
 [tool.hatchling.build.targets.wheel]
 packages = ["lilybert"]

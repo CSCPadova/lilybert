@@ -7,32 +7,43 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lilybert.config import BaseModelConfig, BaseTrainingConfig, LoggingConfig, PathConfig
 from lilybert.models import TrainingMode
 
 
 @dataclass
 class TrainingConfig:
-    """Configuration for grouped stratified cross-validation training."""
+    """Configuration for grouped stratified cross-validation training.
 
-    pretrained_model: str = "bert-base"
+    Default values for paths, model, and training hyper-parameters are
+    inherited from ``lilybert.config`` so that there is a single source
+    of truth.
+    """
+
+    # --- paths (from PathConfig) ---
+    data_dir: str = PathConfig.data_dir
+    labels_path: str = PathConfig.labels_path
+    tokenizer_path: str = PathConfig.tokenizer_path
+    output_dir: str = "outputs/cv"
+
+    # --- model (from BaseModelConfig) ---
+    pretrained_model: str = BaseModelConfig.pretrained_model
     mode: TrainingMode = TrainingMode.FULL_FINETUNE
     task: str = "composer"
-    data_dir: str = "data/processed"
-    labels_path: str = "data/labels/labels_v1.json"
-    tokenizer_path: str = "artifacts/tokenizer"
-
-    max_length: int = 512
+    max_length: int = BaseModelConfig.max_length
     stride: int = 256
+    seed: int = BaseModelConfig.seed
 
-    learning_rate: float = 2e-5
-    lr: Optional[float] = None
-    epochs: int = 20
-    num_train_epochs: int = 20
-    batch_size: int = 16
-    per_device_train_batch_size: int = 16
-    per_device_eval_batch_size: int = 16
-    weight_decay: float = 0.01
-    warmup_ratio: float = 0.1
+    # --- training (from BaseTrainingConfig) ---
+    learning_rate: float = BaseTrainingConfig.learning_rate
+    num_train_epochs: int = BaseTrainingConfig.num_train_epochs
+    per_device_train_batch_size: int = BaseTrainingConfig.per_device_train_batch_size
+    per_device_eval_batch_size: int = BaseTrainingConfig.per_device_eval_batch_size
+    weight_decay: float = BaseTrainingConfig.weight_decay
+    warmup_ratio: float = BaseTrainingConfig.warmup_ratio
+    lora_r: int = BaseTrainingConfig.lora_r
+    lora_alpha: int = BaseTrainingConfig.lora_alpha
+
     lr_scheduler_type: str = "linear"
     grad_clip_norm: Optional[float] = 1.0
     early_stopping_patience: int = 5
@@ -42,19 +53,20 @@ class TrainingConfig:
     eval_steps: int = 200
     log_steps: int = 20
 
-    lora_r: int = 16
-    lora_alpha: int = 32
     n_folds: int = 5
-    seed: int = 42
 
     pretokenized_path: Optional[str] = None
-    output_dir: str = "outputs/cv"
     language: str = "english"
-    wandb_enabled: bool = False
-    wandb_project: str = "lilybert"
-    wandb_entity: Optional[str] = None
-    wandb_mode: str = "online"
-    wandb_run_name: Optional[str] = None
+
+    # --- logging (from LoggingConfig) ---
+    wandb_enabled: bool = LoggingConfig.wandb_enabled
+    wandb_project: str = LoggingConfig.wandb_project
+    wandb_entity: Optional[str] = LoggingConfig.wandb_entity
+    wandb_mode: str = LoggingConfig.wandb_mode
+    wandb_run_name: Optional[str] = LoggingConfig.wandb_run_name
+    tensorboard_enabled: bool = LoggingConfig.tensorboard_enabled
+    tensorboard_log_dir: str = LoggingConfig.tensorboard_log_dir
+
     log_per_class_metrics: bool = True
     top_k: List[int] = field(default_factory=lambda: [1, 5])
 
@@ -62,27 +74,9 @@ class TrainingConfig:
     use_lora: bool = True
 
     def __post_init__(self) -> None:
-        if self.lr is not None:
-            self.learning_rate = float(self.lr)
         self.num_train_epochs = int(self.num_train_epochs)
-        self.epochs = int(
-            self.epochs if self.epochs is not None else self.num_train_epochs
-        )
-        self.batch_size = int(
-            self.batch_size
-            if self.batch_size is not None
-            else self.per_device_train_batch_size
-        )
-        self.per_device_train_batch_size = int(
-            self.per_device_train_batch_size
-            if self.per_device_train_batch_size is not None
-            else self.batch_size
-        )
-        self.per_device_eval_batch_size = int(
-            self.per_device_eval_batch_size
-            if self.per_device_eval_batch_size is not None
-            else self.per_device_train_batch_size
-        )
+        self.per_device_train_batch_size = int(self.per_device_train_batch_size)
+        self.per_device_eval_batch_size = int(self.per_device_eval_batch_size)
         self._validate_config()
 
     def _validate_config(self) -> None:
@@ -131,16 +125,17 @@ class TrainingConfig:
             if mode_value.startswith("TrainingMode."):
                 mode_value = mode_value.split(".", 1)[1].lower()
             data["mode"] = TrainingMode(mode_value)
+        # Drop legacy alias keys that no longer exist as fields
+        for legacy_key in ("lr", "epochs", "batch_size"):
+            data.pop(legacy_key, None)
         return cls(**data)
 
     @classmethod
     def for_quick_test(cls) -> "TrainingConfig":
         return cls(
             num_train_epochs=1,
-            epochs=1,
             per_device_train_batch_size=2,
             per_device_eval_batch_size=2,
-            batch_size=2,
             n_folds=2,
             early_stopping_patience=2,
         )
@@ -149,10 +144,8 @@ class TrainingConfig:
     def for_production(cls) -> "TrainingConfig":
         return cls(
             num_train_epochs=5,
-            epochs=5,
             per_device_train_batch_size=8,
             per_device_eval_batch_size=8,
-            batch_size=8,
             n_folds=5,
             early_stopping_patience=5,
         )

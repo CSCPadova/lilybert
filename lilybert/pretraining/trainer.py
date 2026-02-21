@@ -9,8 +9,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import torch
-import wandb
 from torch.utils.data import Dataset
+
+try:
+    import wandb
+except Exception:  # pragma: no cover - optional runtime dependency
+    wandb = None
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -61,13 +65,16 @@ class MLMPretrainer:
         self.config = config
 
     def run(self) -> Dict[str, Any]:
-        # Initialize wandb
-        wandb_project = os.environ.get("WANDB_PROJECT", "lilybert-pretraining")
-        wandb.init(
-            project=wandb_project,
-            name=f"bert-mlm-{self.config.model_architecture}",
-            config=self.config.to_dict(),
-        )
+        # Initialize logging backends
+        if self.config.wandb_enabled and wandb is not None:
+            wandb.init(
+                project=self.config.wandb_project,
+                entity=self.config.wandb_entity,
+                mode=self.config.wandb_mode,
+                name=self.config.wandb_run_name
+                or f"bert-mlm-{self.config.model_architecture}",
+                config=self.config.to_dict(),
+            )
 
         tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
         all_files = self._collect_movement_files(
@@ -99,7 +106,7 @@ class MLMPretrainer:
         model_config = self._build_model_config(vocab_size=self._vocab_size(tokenizer))
         model = BertForMaskedLM(model_config)
 
-        training_arguments = TrainingArguments(
+        ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
             num_train_epochs=self.config.num_train_epochs,
@@ -112,13 +119,16 @@ class MLMPretrainer:
             save_total_limit=3,
             seed=self.config.seed,
             dataloader_num_workers=0,
-            report_to=["wandb"],
+            report_to=self._report_to(),
             remove_unused_columns=False,
             eval_strategy="steps",
             eval_steps=1000,
             save_strategy="steps",
             metric_for_best_model="eval_loss",
         )
+        if self.config.tensorboard_enabled:
+            ta_kwargs["logging_dir"] = self.config.tensorboard_log_dir
+        training_arguments = TrainingArguments(**ta_kwargs)
 
         collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
@@ -141,8 +151,8 @@ class MLMPretrainer:
         tokenizer.save_pretrained(str(model_dir / "tokenizer"))
         self.config.save(str(model_dir))
 
-        # Log final summary to wandb
-        wandb.finish()
+        if self.config.wandb_enabled and wandb is not None:
+            wandb.finish()
 
         summary = {
             "model_dir": str(model_dir),
@@ -188,6 +198,14 @@ class MLMPretrainer:
         eval_files = shuffled[split_idx:]
 
         return train_files, eval_files
+
+    def _report_to(self) -> List[str]:
+        backends: List[str] = []
+        if self.config.wandb_enabled and wandb is not None:
+            backends.append("wandb")
+        if self.config.tensorboard_enabled:
+            backends.append("tensorboard")
+        return backends or ["none"]
 
     def _build_model_config(self, vocab_size: int) -> BertConfig:
         if self.config.model_architecture != "bert-base":

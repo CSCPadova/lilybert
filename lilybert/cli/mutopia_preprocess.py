@@ -230,7 +230,7 @@ def create_pretraining_corpus(
     return len(corpus_lines)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Preprocess combined Mutopia files for lilyBERT pretraining"
     )
@@ -295,7 +295,7 @@ def main():
         help="Print detailed progress information"
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)

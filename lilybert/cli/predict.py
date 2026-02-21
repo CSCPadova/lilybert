@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
-from .pipeline import InferencePipeline
+from lilybert.inference.pipeline import InferencePipeline
 
 
 def build_parser() -> argparse.ArgumentParser:

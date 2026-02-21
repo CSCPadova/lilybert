@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 
 
 def test_training_cli_runs_cv(monkeypatch, capsys, tmp_path):
-    from lilybert.training import cli as training_cli
+    from lilybert.cli import train as training_cli
 
     class _DummyTrainer:
         def __init__(self, config):
@@ -47,7 +47,7 @@ def test_training_cli_runs_cv(monkeypatch, capsys, tmp_path):
 
 
 def test_evaluation_cli_reports_single_label_metrics(monkeypatch, capsys, tmp_path):
-    from lilybert.evaluation import cli as eval_cli
+    from lilybert.cli import evaluate as eval_cli
 
     y_true = np.array([0, 1, 1, 0])
     y_pred = np.array([0, 1, 0, 0])
@@ -76,7 +76,7 @@ def test_evaluation_cli_reports_single_label_metrics(monkeypatch, capsys, tmp_pa
 
 
 def test_run_experiment_script_module_exists(monkeypatch):
-    from lilybert.scripts import run_experiment
+    from lilybert.cli import run_experiment
 
     called = {}
 
@@ -97,7 +97,7 @@ def test_run_experiment_script_module_exists(monkeypatch):
 
 
 def test_run_experiment_hydra_config(monkeypatch):
-    from lilybert.scripts import run_experiment
+    from lilybert.cli import run_experiment
 
     seen = []
 
@@ -150,12 +150,12 @@ def test_run_experiment_hydra_config(monkeypatch):
     assert set(results.keys()) == {"composer", "key_scale"}
     assert len(seen) == 2
     assert seen[0].n_folds == 3
-    assert seen[0].batch_size == 4
+    assert seen[0].per_device_train_batch_size == 4
     assert seen[0].tokenizer_path == "artifacts/tokenizer_english"
 
 
 def test_run_experiment_invalid_tokenizer_notation_mode(monkeypatch):
-    from lilybert.scripts import run_experiment
+    from lilybert.cli import run_experiment
 
     class _DummyTrainer:
         def __init__(self, config):
@@ -187,7 +187,7 @@ def test_run_experiment_invalid_tokenizer_notation_mode(monkeypatch):
 
 
 def test_generate_tables_creates_markdown_table(tmp_path):
-    from scripts import generate_tables
+    from lilybert.cli import generate_tables
 
     results = {
         "composer": {
@@ -236,7 +236,7 @@ def test_generate_tables_creates_markdown_table(tmp_path):
 
 
 def test_generate_tables_creates_latex_table(tmp_path):
-    from scripts import generate_tables
+    from lilybert.cli import generate_tables
 
     results = {
         "composer": {
@@ -269,7 +269,7 @@ def test_generate_tables_creates_latex_table(tmp_path):
 
 
 def test_main_cli_dispatches_subcommand(monkeypatch):
-    from lilybert import cli as main_cli
+    from lilybert import __main__ as main_cli
 
     captured = {}
 
@@ -277,19 +277,19 @@ def test_main_cli_dispatches_subcommand(monkeypatch):
         captured["argv"] = argv
 
     monkeypatch.setattr(
-        "lilybert.scripts.run_experiment.main", _fake_run_experiment_main
+        "lilybert.cli.run_experiment.main", _fake_run_experiment_main
     )
     main_cli.main(["run-experiment", "--cfg", "job"])
 
     assert captured["argv"] == ["--cfg", "job"]
 
 
-def test_main_cli_does_not_expose_meta_subcommands():
-    from lilybert import cli as main_cli
+def test_main_cli_exposes_all_subcommands():
+    from lilybert import __main__ as main_cli
 
     parser = main_cli.build_parser()
     help_text = parser.format_help()
 
-    assert "upload-dataset" not in help_text
-    assert "upload-model" not in help_text
-    assert "generate-tables" not in help_text
+    assert "upload-dataset" in help_text
+    assert "upload-model" in help_text
+    assert "generate-tables" in help_text

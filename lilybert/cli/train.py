@@ -6,8 +6,8 @@ import argparse
 import json
 from typing import Sequence
 
-from .config import TrainingConfig
-from .trainer import StratifiedKFoldTrainer
+from lilybert.training.config import TrainingConfig
+from lilybert.training.trainer import StratifiedKFoldTrainer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--wandb-mode", default="online")
     parser.add_argument("--wandb-run-name", default=None)
+    parser.add_argument("--tensorboard", action="store_true")
+    parser.add_argument("--tensorboard-log-dir", default="outputs/tensorboard")
     return parser
 
 
@@ -43,11 +45,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         tokenizer_path=args.tokenizer_path,
         n_folds=args.n_folds,
         num_train_epochs=args.epochs,
-        epochs=args.epochs,
         max_steps=args.max_steps,
         eval_steps=args.eval_steps,
         log_steps=args.log_steps,
-        batch_size=args.batch_size,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         lr_scheduler_type=args.lr_scheduler_type,
@@ -61,6 +61,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         wandb_entity=args.wandb_entity,
         wandb_mode=args.wandb_mode,
         wandb_run_name=args.wandb_run_name,
+        tensorboard_enabled=args.tensorboard,
+        tensorboard_log_dir=args.tensorboard_log_dir,
     )
     trainer = StratifiedKFoldTrainer(config=config)
     results = trainer.run()

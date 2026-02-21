@@ -1,11 +1,33 @@
-"""Packaged CLI modules for lilyBERT workflows."""
+"""CLI subcommand modules for lilyBERT workflows."""
 
-from . import preprocess, pretokenize, pretrain, run_experiment, train_tokenizer
+from . import (
+    evaluate,
+    generate_tables,
+    combine,
+    mutopia_preprocess,
+    predict,
+    preprocess,
+    pretokenize,
+    pretrain,
+    run_experiment,
+    train,
+    train_tokenizer,
+    upload_dataset,
+    upload_model,
+)
 
 __all__ = [
+    "evaluate",
+    "generate_tables",
+    "combine",
+    "mutopia_preprocess",
+    "predict",
     "preprocess",
     "pretokenize",
     "pretrain",
-    "train_tokenizer",
     "run_experiment",
+    "train",
+    "train_tokenizer",
+    "upload_dataset",
+    "upload_model",
 ]

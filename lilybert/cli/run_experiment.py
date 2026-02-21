@@ -189,13 +189,15 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
         "pretokenized_path": dataset_cfg.get("pretokenized_path", None),
         "n_folds": training_cfg.get("n_folds", 5),
         "num_train_epochs": training_cfg.get("num_train_epochs", 20),
-        "epochs": training_cfg.get("num_train_epochs", 20),
         "max_steps": training_cfg.get("max_steps", 0),
         "eval_steps": training_cfg.get("eval_steps", 200),
         "log_steps": training_cfg.get("log_steps", 20),
-        "batch_size": training_cfg.get("batch_size", 16),
-        "per_device_train_batch_size": training_cfg.get("batch_size", 16),
-        "per_device_eval_batch_size": training_cfg.get("batch_size", 16),
+        "per_device_train_batch_size": training_cfg.get(
+            "per_device_train_batch_size", training_cfg.get("batch_size", 16)
+        ),
+        "per_device_eval_batch_size": training_cfg.get(
+            "per_device_train_batch_size", training_cfg.get("batch_size", 16)
+        ),
         "learning_rate": training_cfg.get("learning_rate", 2e-5),
         "weight_decay": training_cfg.get("weight_decay", 0.01),
         "warmup_ratio": training_cfg.get("warmup_ratio", 0.1),

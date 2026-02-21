@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.upload_dataset import DatasetUploader
-from scripts.upload_model import ModelUploader
+from lilybert.cli.upload_dataset import DatasetUploader
+from lilybert.cli.upload_model import ModelUploader
 
 
 class _DummyPushDatasetDict:
@@ -99,7 +99,7 @@ def test_model_uploader_saves_and_uploads_folder(tmp_path: Path, monkeypatch):
             }
             return {"commit_url": f"https://huggingface.co/{repo_id}/commit/123"}
 
-    monkeypatch.setattr("scripts.upload_model.HfApi", lambda token=None: _DummyApi())
+    monkeypatch.setattr("lilybert.cli.upload_model.HfApi", lambda token=None: _DummyApi())
 
     uploader = ModelUploader(repo_id="org/test-model", private=False, token="abc")
     result = uploader.upload(

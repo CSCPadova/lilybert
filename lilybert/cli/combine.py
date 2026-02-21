@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 r"""
-Combine Mutopia LilyPond files by resolving \include directives.
+Combine LilyPond files by resolving \include directives.
 
-This script recursively walks through the MutopiaProject/ftp directory,
-finds all .ly files, resolves their \include directives, and saves
-flattened single .ly files to data/mutopia/.
+Recursively finds .ly files in a directory, resolves their \include
+directives, and saves flattened single-file .ly outputs.
+
+Supports two discovery modes:
+  - Generic (default): recursively finds all .ly files in --input-dir
+  - Mutopia (--mutopia): uses Mutopia-specific heuristics to pick
+    main score files from the composer/work directory structure
 
 Utilities:
   - Resolves \include directives recursively
@@ -245,6 +249,98 @@ def find_main_ly_files(directory: Path) -> list[tuple[Path, str]]:
     return ly_files
 
 
+def find_all_ly_files(directory: Path) -> list[tuple[Path, str]]:
+    """Find all .ly files recursively in a directory.
+
+    Args:
+        directory: Root directory to search
+
+    Returns:
+        List of (file_path, output_name) tuples
+    """
+    ly_files = []
+    for ly_path in sorted(directory.rglob("*.ly")):
+        if ly_path.name.startswith("."):
+            continue
+        ly_files.append((ly_path, ly_path.stem))
+    return ly_files
+
+
+def combine_ly_files(
+    input_dir: Path,
+    output_dir: Path,
+    mutopia: bool = False,
+    max_files: Optional[int] = None,
+    validate: bool = True,
+    update_notation: bool = True,
+) -> dict:
+    """Combine LilyPond files by resolving includes.
+
+    Args:
+        input_dir: Root directory containing .ly files
+        output_dir: Output directory for combined files
+        mutopia: Use Mutopia-specific file discovery heuristics
+        max_files: Maximum number of files to process
+        validate: Whether to validate output files
+        update_notation: Whether to run convert-ly on output
+
+    Returns:
+        Dictionary with statistics
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if mutopia:
+        ly_files = find_main_ly_files(input_dir)
+    else:
+        ly_files = find_all_ly_files(input_dir)
+
+    if max_files:
+        ly_files = ly_files[:max_files]
+
+    stats = {
+        "total_files": len(ly_files),
+        "successful": 0,
+        "failed": 0,
+        "validation_failed": 0,
+        "convert_ly_failed": 0,
+        "errors": [],
+    }
+
+    combiner = LilyPondCombiner(validate=validate, update_notation=update_notation)
+
+    for file_path, output_name in tqdm(ly_files, desc="Combining LilyPond files"):
+        try:
+            combined_content, error = combiner.combine_file(file_path)
+
+            if error:
+                stats["failed"] += 1
+                stats["validation_failed"] += 1
+                stats["errors"].append(
+                    {"file": str(file_path), "error": f"Combine error: {error}"}
+                )
+                continue
+
+            output_path = output_dir / f"{output_name}.ly"
+            output_path.write_text(combined_content, encoding="utf-8")
+
+            if update_notation:
+                success, error = combiner.update_notation_with_convert_ly(output_path)
+                if not success:
+                    stats["convert_ly_failed"] += 1
+                    if error != "convert-ly not available":
+                        stats["errors"].append(
+                            {"file": str(file_path), "error": f"convert-ly: {error}"}
+                        )
+
+            stats["successful"] += 1
+
+        except Exception as e:
+            stats["failed"] += 1
+            stats["errors"].append({"file": str(file_path), "error": str(e)})
+
+    return stats
+
+
 def process_mutopia_dataset(
     mutopia_ftp_dir: Path,
     output_dir: Path,
@@ -325,67 +421,72 @@ def process_mutopia_dataset(
     return stats
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Combine Mutopia LilyPond files by resolving includes"
+        description="Combine LilyPond files by resolving \\include directives"
     )
     parser.add_argument(
-        "--mutopia-dir",
-        default="./MutopiaProject/ftp",
-        help="Path to MutopiaProject/ftp directory"
+        "--input-dir",
+        required=True,
+        help="Root directory containing .ly files",
     )
     parser.add_argument(
         "--output-dir",
-        default="./data/mutopia",
-        help="Output directory for combined files"
+        default="./data/combined",
+        help="Output directory for combined files (default: ./data/combined)",
+    )
+    parser.add_argument(
+        "--mutopia",
+        action="store_true",
+        help="Use Mutopia-specific heuristics to pick main score files",
     )
     parser.add_argument(
         "--max-files",
         type=int,
         default=None,
-        help="Maximum number of files to process (for testing)"
+        help="Maximum number of files to process (for testing)",
     )
     parser.add_argument(
         "--validate",
         action="store_true",
         default=True,
-        help="Validate output files with parser (default: True)"
+        help="Validate output files with parser (default: True)",
     )
     parser.add_argument(
         "--no-validate",
         action="store_false",
         dest="validate",
-        help="Skip validation (faster but may include invalid files)"
+        help="Skip validation (faster but may include invalid files)",
     )
     parser.add_argument(
         "--update-notation",
         action="store_true",
         default=True,
-        help="Update notation with convert-ly (default: True)"
+        help="Update notation with convert-ly (default: True)",
     )
     parser.add_argument(
         "--no-update-notation",
         action="store_false",
         dest="update_notation",
-        help="Skip convert-ly notation updates (faster)"
+        help="Skip convert-ly notation updates (faster)",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Print detailed progress information"
+        help="Print detailed progress information",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    mutopia_dir = Path(args.mutopia_dir)
+    input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)
 
-    # Validate input directory
-    if not mutopia_dir.exists():
-        print(f"Error: Mutopia directory not found: {mutopia_dir}")
+    if not input_dir.exists():
+        print(f"Error: Input directory not found: {input_dir}")
         sys.exit(1)
 
-    print(f"Mutopia FTP dir: {mutopia_dir.resolve()}")
+    mode_label = "Mutopia" if args.mutopia else "generic"
+    print(f"Input dir: {input_dir.resolve()} (mode: {mode_label})")
     print(f"Output dir: {output_dir.resolve()}")
     print(f"Parser validation: {args.validate} (PARSER_AVAILABLE={PARSER_AVAILABLE})")
     print(f"convert-ly updates: {args.update_notation}")
@@ -393,37 +494,36 @@ def main():
     if args.max_files:
         print(f"Processing max {args.max_files} files")
 
-    # Process files
-    stats = process_mutopia_dataset(
-        mutopia_dir,
-        output_dir,
+    stats = combine_ly_files(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        mutopia=args.mutopia,
         max_files=args.max_files,
         validate=args.validate,
-        update_notation=args.update_notation
+        update_notation=args.update_notation,
     )
 
-    # Print statistics
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("PROCESSING STATISTICS")
-    print("="*60)
+    print("=" * 60)
     print(f"Total files found: {stats['total_files']}")
     print(f"Successfully combined: {stats['successful']}")
     print(f"Validation failed: {stats.get('validation_failed', 0)}")
     print(f"convert-ly failed: {stats.get('convert_ly_failed', 0)}")
     print(f"Failed: {stats['failed']}")
 
-    if stats['errors']:
-        error_count = len(stats['errors'])
+    if stats["errors"]:
+        error_count = len(stats["errors"])
         show_count = 10 if args.verbose else 5
         print(f"\nErrors ({error_count} total):")
-        for error in stats['errors'][:show_count]:
+        for error in stats["errors"][:show_count]:
             print(f"  - {error['file']}: {error['error']}")
         if error_count > show_count:
             print(f"  ... and {error_count - show_count} more errors")
 
     print(f"\nCombined files saved to: {output_dir.resolve()}")
 
-    return 0 if stats['failed'] == 0 else 1
+    return 0 if stats["failed"] == 0 else 1
 
 
 if __name__ == "__main__":

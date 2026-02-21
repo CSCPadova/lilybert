@@ -26,7 +26,7 @@ def test_augmentation_config_parses_flags_and_languages():
 
 
 def test_run_experiment_supports_two_stage_pipeline(monkeypatch):
-    from lilybert.scripts import run_experiment
+    from lilybert.cli import run_experiment
 
     class _DummyPretrainer:
         def __init__(self, config):

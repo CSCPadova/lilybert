@@ -189,7 +189,7 @@ def test_pipeline_majority_aggregation(tmp_path: Path):
 
 
 def test_cli_build_parser():
-    from lilybert.inference.cli import build_parser
+    from lilybert.cli.predict import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["--checkpoint", "/tmp/ckpt", "--input-dir", "/tmp/data"])

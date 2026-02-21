@@ -21,6 +21,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="lilybert")
+    parser.add_argument("--wandb-entity", default=None)
+    parser.add_argument("--wandb-mode", default="online")
+    parser.add_argument("--wandb-run-name", default=None)
+    parser.add_argument("--tensorboard", action="store_true")
+    parser.add_argument("--tensorboard-log-dir", default="outputs/tensorboard")
     return parser
 
 
@@ -39,6 +46,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         num_train_epochs=args.epochs,
         learning_rate=args.learning_rate,
         seed=args.seed,
+        wandb_enabled=args.wandb,
+        wandb_project=args.wandb_project,
+        wandb_entity=args.wandb_entity,
+        wandb_mode=args.wandb_mode,
+        wandb_run_name=args.wandb_run_name,
+        tensorboard_enabled=args.tensorboard,
+        tensorboard_log_dir=args.tensorboard_log_dir,
     )
 
     summary = MLMPretrainer(config=config).run()

@@ -6,34 +6,53 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
+from lilybert.config import BaseModelConfig, BaseTrainingConfig, LoggingConfig, PathConfig
+
 
 @dataclass
 class PretrainingConfig:
-    """Configuration values for LilyPond MLM pretraining."""
+    """Configuration values for LilyPond MLM pretraining.
 
-    data_dir: str = "data/processed"
-    tokenizer_path: str = "artifacts/tokenizer"
+    Default values for paths, model, and training hyper-parameters are
+    inherited from ``lilybert.config`` where applicable, with
+    pretraining-specific overrides for learning rate, warmup, and epochs.
+    """
+
+    # --- paths (from PathConfig) ---
+    data_dir: str = PathConfig.data_dir
+    tokenizer_path: str = PathConfig.tokenizer_path
     output_dir: str = "outputs/pretraining"
     languages: List[str] = field(default_factory=lambda: ["italiano", "english"])
 
-    model_architecture: str = "bert-base"
+    # --- model architecture (from BaseModelConfig + pretraining-specific) ---
+    model_architecture: str = BaseModelConfig.pretrained_model
     hidden_size: int = 768
     num_hidden_layers: int = 12
     num_attention_heads: int = 12
     intermediate_size: int = 3072
-    max_position_embeddings: int = 512
+    max_position_embeddings: int = BaseModelConfig.max_length
 
-    max_length: int = 512
+    # --- training (overrides for pretraining stage) ---
+    max_length: int = BaseModelConfig.max_length
     mlm_probability: float = 0.15
-    per_device_train_batch_size: int = 16
+    per_device_train_batch_size: int = BaseTrainingConfig.per_device_train_batch_size
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
-    weight_decay: float = 0.01
+    weight_decay: float = BaseTrainingConfig.weight_decay
     warmup_ratio: float = 0.06
     max_steps: int = -1
     logging_steps: int = 50
     save_steps: int = 500
-    seed: int = 42
+    seed: int = BaseModelConfig.seed
+
+    # --- logging (from LoggingConfig) ---
+    wandb_enabled: bool = LoggingConfig.wandb_enabled
+    wandb_project: str = LoggingConfig.wandb_project
+    wandb_entity: str | None = LoggingConfig.wandb_entity
+    wandb_mode: str = LoggingConfig.wandb_mode
+    wandb_run_name: str | None = LoggingConfig.wandb_run_name
+    tensorboard_enabled: bool = LoggingConfig.tensorboard_enabled
+    tensorboard_log_dir: str = LoggingConfig.tensorboard_log_dir
 
     def __post_init__(self) -> None:
         self.languages = [str(language).strip().lower() for language in self.languages]

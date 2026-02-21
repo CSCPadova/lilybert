@@ -8,7 +8,7 @@ from typing import Sequence
 
 import numpy as np
 
-from .metrics import ClassificationMetrics
+from lilybert.evaluation.metrics import ClassificationMetrics
 
 
 def build_parser() -> argparse.ArgumentParser:

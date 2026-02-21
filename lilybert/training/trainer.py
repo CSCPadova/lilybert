@@ -68,6 +68,7 @@ class StratifiedKFoldTrainer:
         )
         self.window_aggregator = WindowAggregator()
         self.classification_metrics = ClassificationMetrics(top_k=config.top_k)
+        self._tb_writer = None
 
     def run(self) -> Dict[str, Any]:
         metadata = self._load_metadata()
@@ -840,6 +841,14 @@ class StratifiedKFoldTrainer:
         total_steps: int,
         num_classes: int,
     ):
+        # Tensorboard
+        if self.config.tensorboard_enabled:
+            from torch.utils.tensorboard import SummaryWriter
+
+            tb_dir = Path(self.config.tensorboard_log_dir) / f"fold{fold_index}"
+            tb_dir.mkdir(parents=True, exist_ok=True)
+            self._tb_writer = SummaryWriter(log_dir=str(tb_dir))
+
         if not self.config.wandb_enabled or wandb is None:
             return None
 
@@ -889,20 +898,23 @@ class StratifiedKFoldTrainer:
                 total_norm += p.grad.data.norm(2).item() ** 2
         return total_norm**0.5
 
-    @staticmethod
-    def _log_wandb(run: Any, payload: Dict[str, Any], step: int) -> None:
-        if run is None:
-            return
-        run.log(payload, step=step)
+    def _log_wandb(self, run: Any, payload: Dict[str, Any], step: int) -> None:
+        if run is not None:
+            run.log(payload, step=step)
+        if self._tb_writer is not None:
+            for key, value in payload.items():
+                if isinstance(value, (int, float)):
+                    self._tb_writer.add_scalar(key, value, global_step=step)
 
-    @staticmethod
-    def _finish_wandb_run(run: Any, summary: Dict[str, Any]) -> None:
-        if run is None:
-            return
-        for key, value in summary.items():
-            if isinstance(value, (int, float)):
-                run.summary[key] = float(value)
-        run.finish()
+    def _finish_wandb_run(self, run: Any, summary: Dict[str, Any]) -> None:
+        if run is not None:
+            for key, value in summary.items():
+                if isinstance(value, (int, float)):
+                    run.summary[key] = float(value)
+            run.finish()
+        if self._tb_writer is not None:
+            self._tb_writer.close()
+            self._tb_writer = None
 
     def _infer_num_classes(
         self,
