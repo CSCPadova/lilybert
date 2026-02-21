@@ -285,6 +285,11 @@ def main():
         help="Number of parallel workers (default: CPU count)"
     )
     parser.add_argument(
+        "--skip-preprocess",
+        action="store_true",
+        help="Skip preprocessing step and only train tokenizer on existing preprocessed files"
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print detailed progress information"
@@ -307,36 +312,37 @@ def main():
         print(f"Processing max {args.max_files} files")
 
     # Step 1: Preprocess files
-    print("\n" + "="*60)
-    print("STEP 1: PREPROCESSING MUTOPIA FILES")
-    print("="*60)
-    print(f"\nNote: Files are NOT split by movement. For pretraining (MLM),")
-    print(f"longer sequences provide better transformer context.")
+    if not args.skip_preprocess:
+        print("\n" + "="*60)
+        print("STEP 1: PREPROCESSING MUTOPIA FILES")
+        print("="*60)
+        print(f"\nNote: Files are NOT split by movement. For pretraining (MLM),")
+        print(f"longer sequences provide better transformer context.")
 
-    stats = preprocess_mutopia_files(
-        input_dir,
-        output_dir,
-        max_files=args.max_files,
-        include_augmentation=True,
-        skip_on_error=args.skip_on_error,
-        num_workers=args.num_workers,
-    )
+        stats = preprocess_mutopia_files(
+            input_dir,
+            output_dir,
+            max_files=args.max_files,
+            include_augmentation=True,
+            skip_on_error=args.skip_on_error,
+            num_workers=args.num_workers,
+        )
 
-    print(f"\nFiles processed: {stats['successful']}")
-    print(f"Failed: {stats['failed']}")
-    print(f"Total movements found: {stats['total_movements']}")
-    print(f"Total variants written: {stats['total_variants']}")
-    print(f"Workers used: {stats['num_workers']}")
+        print(f"\nFiles processed: {stats['successful']}")
+        print(f"Failed: {stats['failed']}")
+        print(f"Total movements found: {stats['total_movements']}")
+        print(f"Total variants written: {stats['total_variants']}")
+        print(f"Workers used: {stats['num_workers']}")
 
-    if stats['errors']:
-        error_count = len(stats['errors'])
-        show_count = 10 if args.verbose else 5
-        print(f"\nErrors ({error_count} total):")
-        for error in stats['errors'][:show_count]:
-            file_display = error['file'].split('/')[-1] if error['file'] else 'unknown'
-            print(f"  - {file_display}: {error['error'][:60]}")
-        if error_count > show_count:
-            print(f"  ... and {error_count - show_count} more errors")
+        if stats['errors']:
+            error_count = len(stats['errors'])
+            show_count = 10 if args.verbose else 5
+            print(f"\nErrors ({error_count} total):")
+            for error in stats['errors'][:show_count]:
+                file_display = error['file'].split('/')[-1] if error['file'] else 'unknown'
+                print(f"  - {file_display}: {error['error'][:60]}")
+            if error_count > show_count:
+                print(f"  ... and {error_count - show_count} more errors")
 
     # Step 2: Optionally train tokenizer
     if args.train_tokenizer:
