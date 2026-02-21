@@ -232,3 +232,5 @@ temp/
 scratch/
 artifacts/
 parsed-failure-docs/
+MutopiaProject/
+data/mutopia*
