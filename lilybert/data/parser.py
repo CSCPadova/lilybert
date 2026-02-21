@@ -883,4 +883,3 @@ class LilyPondParser:
         )
 
         return content
-

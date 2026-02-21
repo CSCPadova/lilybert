@@ -63,7 +63,7 @@ for file_name in os.listdir(LABELS_PATH):
 
     for mf in labels.get("musical_form", []):
         musical_form_counter[mf] += 1
-    
+
     for i in labels.get("midi_instruments",[]):
         midi_instrument_counter[i] += 1
 
@@ -149,19 +149,19 @@ def plot_horizontal_bar(df, x_col, y_col, title, xlabel, ylabel, filename, base_
     # Scale figure height based on number of rows
     height = max(base_height, 0.25 * len(df))  # 0.25 inch per label
     plt.figure(figsize=(width, height))
-    
+
     ax = df.plot(x=x_col, y=y_col, kind="barh", legend=False)
     plt.title(title, fontsize=16)
     plt.xlabel(xlabel, fontsize=14)
     plt.ylabel(ylabel, fontsize=14)
-    
+
     # Invert y-axis so highest counts are at the top
     ax.invert_yaxis()
-    
+
     # Shrink tick label font sizes
     ax.tick_params(axis="y", labelsize=12)  # y-axis labels (composer/movement names)
     ax.tick_params(axis="x", labelsize=12)  # x-axis labels (counts)
-    
+
     plt.tight_layout()
     if SAVE_FIGS:
         plt.savefig(os.path.join(FIG_DIR, filename), dpi=300)
@@ -217,7 +217,7 @@ composer_df = pd.DataFrame(composer_counter.items(), columns=["composer", "count
 print("\n============================")
 print(" Composer Frequency")
 print("============================")
-with pd.option_context('display.max_rows', None,):   
+with pd.option_context('display.max_rows', None,):
     print(composer_df)
 
 plot_horizontal_bar(composer_df, "composer", "count",
@@ -254,11 +254,10 @@ movement_df = pd.DataFrame(movement_name_counter.items(), columns=["movement", "
 print("\n============================")
 print(" Movement Title Frequency")
 print("============================")
-with pd.option_context('display.max_rows', None,): 
+with pd.option_context('display.max_rows', None,):
     print(movement_df)
 
 plot_horizontal_bar(movement_df, "movement", "count",
                     "Movement Title Frequency (e.g., Allegro, Largo, Bourrée)",
                     "Count", "Movement Title", "movement_frequency.png",
                     base_height=12, width=10)
-

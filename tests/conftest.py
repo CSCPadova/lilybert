@@ -25,7 +25,7 @@ def sample_lilypond_content():
   \\time 4/4
   \\key c \\major
   \\clef treble
-  
+
   c4 d e f |
   g2 g |
   a4 a a a |
