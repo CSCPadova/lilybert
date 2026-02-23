@@ -116,7 +116,7 @@ ITALIAN_TO_ENGLISH_NOTES = {
     "si": "b",
 }
 
-DEFAULT_AUGMENTATION_LANGUAGES = ["italiano", "english"]
+DEFAULT_AUGMENTATION_LANGUAGES = ["italiano", "english", "nederlands"]
 AVAILABLE_LILYPOND_LANGUAGES = {
     "nederlands",
     "english",

@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--languages",
-        default="italiano,english",
+        default="italiano,english,nederlands",
         help="Comma-separated LilyPond languages to write (e.g. english,italiano,nederlands)",
     )
     parser.add_argument(

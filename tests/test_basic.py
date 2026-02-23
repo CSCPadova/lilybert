@@ -558,5 +558,47 @@ class TestIntegration:
             assert "[SIMUL_END]" in entry["structure_markers"]
 
 
+class TestDefaultAugmentationLanguages:
+    """Verify that preprocessor defaults to three languages: italiano, english, nederlands."""
+
+    def test_default_augmentation_languages_include_three_languages(self):
+        """AugmentationConfig() default includes italiano, english, and nederlands."""
+        from lilybert.data.preprocessor import AugmentationConfig
+
+        config = AugmentationConfig()
+        assert config.languages == ["italiano", "english", "nederlands"]
+
+    def test_augmentation_config_from_mapping_default_languages(self):
+        """AugmentationConfig.from_mapping with no languages uses the 3-language default."""
+        from lilybert.data.preprocessor import AugmentationConfig
+
+        config = AugmentationConfig.from_mapping({})
+        assert config.languages == ["italiano", "english", "nederlands"]
+
+    def test_augmented_variants_produce_all_three_languages(self):
+        """_build_augmented_variants produces variants for all three default languages."""
+        from lilybert.data.preprocessor import AugmentationConfig
+
+        preprocessor = LilyPondPreprocessor()
+        movement = {
+            "italiano_text": r'\relative do { do re mi fa sol }',
+            "english_text": r'\relative c { c d e f g }',
+        }
+        config = AugmentationConfig()
+        variants = preprocessor._build_augmented_variants(movement, config)
+        variant_languages = {v["language"] for v in variants}
+        assert "italiano" in variant_languages
+        assert "english" in variant_languages
+        assert "nederlands" in variant_languages
+
+    def test_preprocess_cli_default_languages(self):
+        """CLI default --languages flag includes all three languages."""
+        from lilybert.cli.preprocess import build_parser
+
+        args = build_parser().parse_args([])
+        languages = [lang.strip() for lang in args.languages.split(",")]
+        assert languages == ["italiano", "english", "nederlands"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-s"])

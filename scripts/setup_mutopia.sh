@@ -12,7 +12,7 @@ REPO_URL="https://github.com/MutopiaProject/MutopiaProject.git"
 REPO_DIR="MutopiaProject"
 OUTPUT_DIR="data/mutopia"
 PREPROCESSED_DIR="data/mutopia_preprocessed"
-TOKENIZER_DIR="artifacts/tokenizer"
+TOKENIZER_DIR="artifacts/mutopia_tokenizer"
 SHARD_DIR="artifacts/pretokenized"
 SHARD_SIZE=8192
 VOCAB_SIZE=10000
@@ -86,7 +86,7 @@ if $DO_SHARD; then
         --data-dir "$PREPROCESSED_DIR" \
         --tokenizer-path "$TOKENIZER_DIR" \
         --output-dir "$SHARD_DIR" \
-        --languages italiano,english \
+        --languages italiano,english,nederlands \
         --shard-size "$SHARD_SIZE"
 
     echo ""
