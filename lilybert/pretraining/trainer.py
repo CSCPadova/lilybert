@@ -25,6 +25,8 @@ from transformers import (
 )
 from tqdm.auto import tqdm
 
+from lilybert.data.sharded_dataset import ShardedMLMDataset
+
 from .config import PretrainingConfig
 
 
@@ -78,34 +80,59 @@ class MLMPretrainer:
             )
 
         tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
-        all_files = self._collect_movement_files(
-            data_dir=self.config.data_dir,
-            languages=self.config.languages,
-        )
-        if not all_files:
-            raise ValueError("No LilyPond files found for Stage-1 pretraining")
 
-        token_stats = self.count_corpus_tokens(all_files, tokenizer)
-        print(f"Token stats: {token_stats}")
+        if self.config.pretokenized_shards_dir:
+            shards_dir = Path(self.config.pretokenized_shards_dir)
+            train_manifest = shards_dir / "train" / "manifest.json"
+            eval_manifest = shards_dir / "eval" / "manifest.json"
+            if not train_manifest.exists():
+                raise FileNotFoundError(
+                    f"Train manifest not found: {train_manifest}"
+                )
+            if not eval_manifest.exists():
+                raise FileNotFoundError(
+                    f"Eval manifest not found: {eval_manifest}"
+                )
+            train_dataset = ShardedMLMDataset(manifest_path=str(train_manifest))
+            eval_dataset = ShardedMLMDataset(manifest_path=str(eval_manifest))
+            print(
+                f"Loaded sharded MLM data: "
+                f"train={len(train_dataset)}, eval={len(eval_dataset)}"
+            )
+            token_stats = {
+                "file_count": len(train_dataset) + len(eval_dataset),
+                "total_tokens": 0,
+                "avg_tokens_per_file": 0,
+            }
+        else:
+            all_files = self._collect_movement_files(
+                data_dir=self.config.data_dir,
+                languages=self.config.languages,
+            )
+            if not all_files:
+                raise ValueError("No LilyPond files found for Stage-1 pretraining")
 
-        # Split into 99% train, 1% eval
-        train_files, eval_files = self._train_eval_split(
-            all_files,
-            eval_ratio=0.01,
-            seed=self.config.seed,
-        )
+            token_stats = self.count_corpus_tokens(all_files, tokenizer)
+            print(f"Token stats: {token_stats}")
 
-        train_dataset = LilyPondMLMDataset(
-            files=train_files,
-            tokenizer=tokenizer,
-            max_length=self.config.max_length,
-        )
+            # Split into 99% train, 1% eval
+            train_files, eval_files = self._train_eval_split(
+                all_files,
+                eval_ratio=0.01,
+                seed=self.config.seed,
+            )
 
-        eval_dataset = LilyPondMLMDataset(
-            files=eval_files,
-            tokenizer=tokenizer,
-            max_length=self.config.max_length,
-        )
+            train_dataset = LilyPondMLMDataset(
+                files=train_files,
+                tokenizer=tokenizer,
+                max_length=self.config.max_length,
+            )
+
+            eval_dataset = LilyPondMLMDataset(
+                files=eval_files,
+                tokenizer=tokenizer,
+                max_length=self.config.max_length,
+            )
 
         model_config = self._build_model_config(vocab_size=self._vocab_size(tokenizer))
         model = BertForMaskedLM(model_config)
@@ -122,7 +149,7 @@ class MLMPretrainer:
             save_steps=self.config.save_steps,
             save_total_limit=3,
             seed=self.config.seed,
-            dataloader_num_workers=0,
+            dataloader_num_workers=self.config.dataloader_num_workers,
             report_to=self._report_to(),
             remove_unused_columns=False,
             eval_strategy="steps",
@@ -160,12 +187,12 @@ class MLMPretrainer:
 
         summary = {
             "model_dir": str(model_dir),
-            "num_files_total": len(all_files),
-            "num_files_train": len(train_files),
-            "num_files_eval": len(eval_files),
+            "num_samples_train": len(train_dataset),
+            "num_samples_eval": len(eval_dataset),
             "total_tokens": token_stats["total_tokens"],
             "avg_tokens_per_file": token_stats["avg_tokens_per_file"],
             "eval_ratio": 0.01,
+            "pretokenized_shards": self.config.pretokenized_shards_dir is not None,
             "languages": self.config.languages,
             "max_length": self.config.max_length,
             "mlm_probability": self.config.mlm_probability,

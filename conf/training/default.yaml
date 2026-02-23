@@ -18,3 +18,6 @@ log_per_class_metrics: false
 top_k:
   - 1
   - 5
+sharded_data_dir: null
+use_fsdp: false
+dataloader_num_workers: 0

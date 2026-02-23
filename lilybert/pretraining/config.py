@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from lilybert.config import (
     BaseModelConfig,
@@ -49,6 +49,8 @@ class PretrainingConfig:
     logging_steps: int = 50
     save_steps: int = 500
     seed: int = BaseModelConfig.seed
+    pretokenized_shards_dir: Optional[str] = None
+    dataloader_num_workers: int = 0
 
     # --- logging (from LoggingConfig) ---
     wandb_enabled: bool = LoggingConfig.wandb_enabled

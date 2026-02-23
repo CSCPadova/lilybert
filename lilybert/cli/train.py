@@ -28,6 +28,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pretokenized", default=None, help="Path to .npz from pretokenize"
     )
+    parser.add_argument(
+        "--sharded-data-dir",
+        default=None,
+        help="Path to sharded pretokenized directory (contains manifest.json)",
+    )
+    parser.add_argument(
+        "--use-fsdp",
+        action="store_true",
+        help="Use FSDP instead of DDP for distributed training",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="Number of DataLoader workers (default: 0)",
+    )
     parser.add_argument("--output-dir", default="outputs/cv")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="lilybert")
@@ -57,6 +73,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         model_selection_metric=args.model_selection_metric,
         model_selection_mode=args.model_selection_mode,
         pretokenized_path=args.pretokenized,
+        sharded_data_dir=args.sharded_data_dir,
+        use_fsdp=args.use_fsdp,
+        dataloader_num_workers=args.num_workers,
         output_dir=args.output_dir,
         wandb_enabled=args.wandb,
         wandb_project=args.wandb_project,

@@ -21,6 +21,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--pretokenized-shards-dir",
+        default=None,
+        help="Path to sharded pretokenized MLM data (contains train/ and eval/ subdirs)",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="Number of DataLoader workers (default: 0)",
+    )
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="lilybert")
     parser.add_argument("--wandb-entity", default=None)
@@ -46,6 +57,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         num_train_epochs=args.epochs,
         learning_rate=args.learning_rate,
         seed=args.seed,
+        pretokenized_shards_dir=args.pretokenized_shards_dir,
+        dataloader_num_workers=args.num_workers,
         wandb_enabled=args.wandb,
         wandb_project=args.wandb_project,
         wandb_entity=args.wandb_entity,

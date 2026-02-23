@@ -61,7 +61,13 @@ class TrainingConfig:
     n_folds: int = 5
 
     pretokenized_path: Optional[str] = None
+    sharded_data_dir: Optional[str] = None
     language: str = "english"
+
+    # --- distributed ---
+    use_fsdp: bool = False
+    fsdp_sharding_strategy: str = "FULL_SHARD"
+    dataloader_num_workers: int = 0
 
     # --- logging (from LoggingConfig) ---
     wandb_enabled: bool = LoggingConfig.wandb_enabled

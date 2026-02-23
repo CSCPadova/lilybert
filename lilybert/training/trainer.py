@@ -15,15 +15,24 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from sklearn.metrics import (
     confusion_matrix,
     multilabel_confusion_matrix,
     precision_recall_fscore_support,
 )
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast, get_scheduler
+
+try:
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp import ShardingStrategy
+except ImportError:
+    FSDP = None  # type: ignore[assignment,misc]
+    ShardingStrategy = None  # type: ignore[assignment,misc]
 
 try:
     import wandb
@@ -32,6 +41,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
 
 from lilybert.data import BaroqueMusicClassificationDataset
 from lilybert.data.pretokenized_dataset import PreTokenizedDataset
+from lilybert.data.sharded_dataset import ShardedDataset
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 from lilybert.models import (
     ComposerClassifier,
@@ -44,6 +54,14 @@ from lilybert.models import (
 
 from .config import TrainingConfig
 from .cross_validation import build_grouped_stratified_folds
+from .distributed import (
+    DistributedContext,
+    cleanup_distributed,
+    gather_objects,
+    gather_tensors,
+    is_distributed,
+    setup_distributed,
+)
 
 ModelFactory = Callable[[int, bool], torch.nn.Module]
 
@@ -63,18 +81,32 @@ class StratifiedKFoldTrainer:
         self.config = config
         self.tokenizer = tokenizer
         self.model_factory = model_factory
-        self.device = torch.device(
-            device or ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+
+        # Distributed setup
+        self.dist_ctx: Optional[DistributedContext] = None
+        if is_distributed():
+            self.dist_ctx = setup_distributed()
+            self.device = torch.device(f"cuda:{self.dist_ctx.local_rank}")
+        else:
+            self.device = torch.device(
+                device or ("cuda" if torch.cuda.is_available() else "cpu")
+            )
+
         self.window_aggregator = WindowAggregator()
         self.classification_metrics = ClassificationMetrics(top_k=config.top_k)
         self._tb_writer = None
 
+    @property
+    def _is_main(self) -> bool:
+        return self.dist_ctx is None or self.dist_ctx.is_main_process
+
     def run(self) -> Dict[str, Any]:
         metadata = self._load_metadata()
-        print(f"Loaded metadata for {len(metadata)} movements")
+        if self._is_main:
+            print(f"Loaded metadata for {len(metadata)} movements")
         sample_ids, labels, groups = self._prepare_cv_samples(metadata)
-        print(f"Prepared {len(sample_ids)} samples for {self.config.n_folds}-fold CV")
+        if self._is_main:
+            print(f"Prepared {len(sample_ids)} samples for {self.config.n_folds}-fold CV")
 
         folds = build_grouped_stratified_folds(
             sample_ids=sample_ids,
@@ -86,13 +118,15 @@ class StratifiedKFoldTrainer:
 
         fold_metrics: List[Dict[str, Any]] = []
         for fold_index, fold in enumerate(folds, start=1):
-            print(
-                f"\n--- Fold {fold_index}/{self.config.n_folds} "
-                f"(train={len(fold['train_ids'])}, val={len(fold['val_ids'])}) ---"
-            )
-            print("Building train dataset...")
+            if self._is_main:
+                print(
+                    f"\n--- Fold {fold_index}/{self.config.n_folds} "
+                    f"(train={len(fold['train_ids'])}, val={len(fold['val_ids'])}) ---"
+                )
+                print("Building train dataset...")
             train_dataset = self._build_dataset(fold["train_ids"], metadata)
-            print("Building val dataset...")
+            if self._is_main:
+                print("Building val dataset...")
             val_dataset = self._build_dataset(fold["val_ids"], metadata)
             metrics = self._train_and_evaluate_fold(
                 fold_index=fold_index,
@@ -115,7 +149,12 @@ class StratifiedKFoldTrainer:
             "std": summary_std,
             "results_path": str(results_path),
         }
-        results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        if self._is_main:
+            results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+
+        if self.dist_ctx is not None:
+            cleanup_distributed()
+
         return results
 
     def _load_metadata(self) -> Dict[str, Dict[str, Any]]:
@@ -155,6 +194,15 @@ class StratifiedKFoldTrainer:
         movement_ids: Sequence[str],
         metadata: Dict[str, Dict[str, Any]],
     ):
+        if self.config.sharded_data_dir:
+            manifest_path = str(
+                Path(self.config.sharded_data_dir) / "manifest.json"
+            )
+            return ShardedDataset(
+                manifest_path=manifest_path,
+                movement_ids=movement_ids,
+            )
+
         if self.config.pretokenized_path:
             return PreTokenizedDataset(
                 npz_path=self.config.pretokenized_path,
@@ -184,6 +232,23 @@ class StratifiedKFoldTrainer:
         )
         return self.tokenizer
 
+    def _wrap_model(self, model: torch.nn.Module) -> torch.nn.Module:
+        """Wrap model with DDP or FSDP when running distributed."""
+        if self.dist_ctx is None:
+            return model
+
+        if self.config.use_fsdp:
+            if FSDP is None:
+                raise ImportError(
+                    "FSDP requires PyTorch >= 1.12. "
+                    "Install a compatible version or set use_fsdp=False."
+                )
+            strategy_name = self.config.fsdp_sharding_strategy.upper()
+            strategy = getattr(ShardingStrategy, strategy_name, ShardingStrategy.FULL_SHARD)
+            return FSDP(model, sharding_strategy=strategy)
+
+        return DDP(model, device_ids=[self.dist_ctx.local_rank])
+
     def _train_and_evaluate_fold(
         self,
         fold_index: int,
@@ -195,17 +260,41 @@ class StratifiedKFoldTrainer:
         model = self._build_model(num_classes=num_classes, multi_label=multi_label).to(
             self.device
         )
+        model = self._wrap_model(model)
 
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=self.config.per_device_train_batch_size,
-            shuffle=True,
-        )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=self.config.per_device_eval_batch_size,
-            shuffle=False,
-        )
+        # DataLoader setup — use DistributedSampler when distributed
+        if self.dist_ctx is not None:
+            train_sampler = DistributedSampler(
+                train_dataset, shuffle=True, seed=self.config.seed,
+            )
+            val_sampler = DistributedSampler(val_dataset, shuffle=False)
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=self.config.per_device_train_batch_size,
+                sampler=train_sampler,
+                num_workers=self.config.dataloader_num_workers,
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=self.config.per_device_eval_batch_size,
+                sampler=val_sampler,
+                num_workers=self.config.dataloader_num_workers,
+            )
+        else:
+            train_sampler = None
+            val_sampler = None
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=self.config.per_device_train_batch_size,
+                shuffle=True,
+                num_workers=self.config.dataloader_num_workers,
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=self.config.per_device_eval_batch_size,
+                shuffle=False,
+                num_workers=self.config.dataloader_num_workers,
+            )
 
         optimizer = AdamW(
             model.parameters(),
@@ -238,10 +327,14 @@ class StratifiedKFoldTrainer:
         label_map = self._index_to_label_map(train_dataset)
         class_names = [label_map.get(i, f"class_{i}") for i in range(num_classes)]
 
-        run = self._start_wandb_run(
-            fold_index=fold_index,
-            total_steps=total_steps,
-            num_classes=num_classes,
+        run = (
+            self._start_wandb_run(
+                fold_index=fold_index,
+                total_steps=total_steps,
+                num_classes=num_classes,
+            )
+            if self._is_main
+            else None
         )
 
         step = 0
@@ -254,13 +347,24 @@ class StratifiedKFoldTrainer:
         }
         best_checkpoint_dir: Optional[Path] = None
 
-        pbar = tqdm(total=total_steps, desc=f"Fold {fold_index}", unit="step")
+        pbar = tqdm(
+            total=total_steps,
+            desc=f"Fold {fold_index}",
+            unit="step",
+            disable=not self._is_main,
+        )
+        epoch_counter = 0
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch_counter)
         train_iterator = iter(train_loader)
         while step < total_steps:
             model.train()
             try:
                 batch = next(train_iterator)
             except StopIteration:
+                epoch_counter += 1
+                if train_sampler is not None:
+                    train_sampler.set_epoch(epoch_counter)
                 train_iterator = iter(train_loader)
                 batch = next(train_iterator)
 
@@ -299,18 +403,19 @@ class StratifiedKFoldTrainer:
                     else float(optimizer.param_groups[0]["lr"])
                 )
                 pbar.set_postfix(loss=f"{window_avg:.4f}", lr=f"{current_lr:.2e}")
-                self._log_wandb(
-                    run,
-                    {
-                        "train/loss": window_avg,
-                        "train/learning_rate": current_lr,
-                        "train/grad_norm": grad_norm,
-                        "train/epoch": epoch,
-                        "fold": float(fold_index),
-                        "global_step": float(step),
-                    },
-                    step=step,
-                )
+                if self._is_main:
+                    self._log_wandb(
+                        run,
+                        {
+                            "train/loss": window_avg,
+                            "train/learning_rate": current_lr,
+                            "train/grad_norm": grad_norm,
+                            "train/epoch": epoch,
+                            "fold": float(fold_index),
+                            "global_step": float(step),
+                        },
+                        step=step,
+                    )
 
             should_eval = (step % self.config.eval_steps == 0) or (step == total_steps)
             if should_eval:
@@ -319,22 +424,24 @@ class StratifiedKFoldTrainer:
                     val_loader,
                     multi_label,
                     return_details=True,
+                    dataset_size=len(val_dataset),
                 )
-                log_payload = {
-                    "fold": float(fold_index),
-                    "global_step": float(step),
-                    "train/epoch": epoch,
-                    **{f"val/{k}": float(v) for k, v in val_metrics.items()},
-                }
-                self._log_wandb(run, log_payload, step=step)
-                if self.config.log_per_class_metrics:
-                    self._log_wandb_eval_diagnostics(
-                        run=run,
-                        eval_details=eval_details,
-                        class_names=class_names,
-                        multi_label=multi_label,
-                        step=step,
-                    )
+                if self._is_main:
+                    log_payload = {
+                        "fold": float(fold_index),
+                        "global_step": float(step),
+                        "train/epoch": epoch,
+                        **{f"val/{k}": float(v) for k, v in val_metrics.items()},
+                    }
+                    self._log_wandb(run, log_payload, step=step)
+                    if self.config.log_per_class_metrics:
+                        self._log_wandb_eval_diagnostics(
+                            run=run,
+                            eval_details=eval_details,
+                            class_names=class_names,
+                            multi_label=multi_label,
+                            step=step,
+                        )
                 score_key = "avg_f1_micro" if multi_label else "avg_accuracy"
                 score_val = val_metrics.get(score_key, 0.0)
                 pbar.set_postfix(
@@ -354,20 +461,27 @@ class StratifiedKFoldTrainer:
                     best_selection_value = selection_value
                     best_selection_step = int(step)
                     patience_count = 0
-                    best_checkpoint_dir = self._save_best_checkpoint(
-                        model=model,
-                        optimizer=optimizer,
-                        scheduler=scheduler,
-                        fold_index=fold_index,
-                        step=step,
-                        val_loss=val_loss,
-                        selection_metric=selection_metric,
-                        selection_mode=selection_mode,
-                        selection_value=selection_value,
-                        train_dataset=train_dataset,
-                        num_classes=num_classes,
-                        multi_label=multi_label,
-                    )
+                    if self._is_main:
+                        # Extract underlying model from DDP/FSDP wrapper
+                        raw_model = (
+                            model.module
+                            if hasattr(model, "module")
+                            else model
+                        )
+                        best_checkpoint_dir = self._save_best_checkpoint(
+                            model=raw_model,
+                            optimizer=optimizer,
+                            scheduler=scheduler,
+                            fold_index=fold_index,
+                            step=step,
+                            val_loss=val_loss,
+                            selection_metric=selection_metric,
+                            selection_mode=selection_mode,
+                            selection_value=selection_value,
+                            train_dataset=train_dataset,
+                            num_classes=num_classes,
+                            multi_label=multi_label,
+                        )
                 else:
                     patience_count += 1
                     if patience_count >= self.config.early_stopping_patience:
@@ -380,16 +494,17 @@ class StratifiedKFoldTrainer:
         val_metrics["best_selection_mode"] = selection_mode
         val_metrics["best_selection_value"] = float(best_selection_value)
         val_metrics["best_selection_step"] = float(best_selection_step)
-        if best_checkpoint_dir is not None:
-            val_metrics["best_checkpoint_dir"] = str(best_checkpoint_dir)
-            self._upload_checkpoint_to_wandb(
-                run=run,
-                checkpoint_dir=best_checkpoint_dir,
-                fold_index=fold_index,
-                step=best_selection_step,
-                val_loss=best_val_loss,
-            )
-        self._finish_wandb_run(run, val_metrics)
+        if self._is_main:
+            if best_checkpoint_dir is not None:
+                val_metrics["best_checkpoint_dir"] = str(best_checkpoint_dir)
+                self._upload_checkpoint_to_wandb(
+                    run=run,
+                    checkpoint_dir=best_checkpoint_dir,
+                    fold_index=fold_index,
+                    step=best_selection_step,
+                    val_loss=best_val_loss,
+                )
+            self._finish_wandb_run(run, val_metrics)
         return val_metrics
 
     def _save_best_checkpoint(
@@ -509,6 +624,7 @@ class StratifiedKFoldTrainer:
         val_loader: DataLoader,
         multi_label: bool,
         return_details: bool = False,
+        dataset_size: int = 0,
     ) -> Any:
         model.eval()
 
@@ -531,6 +647,25 @@ class StratifiedKFoldTrainer:
                 probs_per_window.extend(list(logits))
                 labels_per_window.extend(list(labels.detach().cpu().numpy()))
                 movement_ids_per_window.extend(list(batch["movement_id"]))
+
+        # Gather predictions across ranks in distributed mode
+        if self.dist_ctx is not None:
+            all_probs_lists = gather_objects(probs_per_window, self.dist_ctx.world_size)
+            all_labels_lists = gather_objects(labels_per_window, self.dist_ctx.world_size)
+            all_mids_lists = gather_objects(movement_ids_per_window, self.dist_ctx.world_size)
+            all_losses_lists = gather_objects(losses, self.dist_ctx.world_size)
+
+            # Flatten gathered lists
+            probs_per_window = [p for rank_list in all_probs_lists for p in rank_list]
+            labels_per_window = [l for rank_list in all_labels_lists for l in rank_list]
+            movement_ids_per_window = [m for rank_list in all_mids_lists for m in rank_list]
+            losses = [lo for rank_list in all_losses_lists for lo in rank_list]
+
+            # Truncate padding from DistributedSampler
+            if dataset_size > 0 and len(probs_per_window) > dataset_size:
+                probs_per_window = probs_per_window[:dataset_size]
+                labels_per_window = labels_per_window[:dataset_size]
+                movement_ids_per_window = movement_ids_per_window[:dataset_size]
 
         average_metrics = self._aggregate_metrics(
             probs_per_window,
