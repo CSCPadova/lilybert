@@ -234,3 +234,5 @@ artifacts/
 parsed-failure-docs/
 MutopiaProject/
 data/mutopia*
+logs/
+wandb/

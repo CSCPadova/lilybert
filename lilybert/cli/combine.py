@@ -26,12 +26,7 @@ from typing import Optional, Set
 
 from tqdm import tqdm
 
-try:
-    from lilybert.data.parser import LilyPondParser
-
-    PARSER_AVAILABLE = True
-except ImportError:
-    PARSER_AVAILABLE = False
+from lilybert.data.parser import LilyPondParser
 
 
 class LilyPondCombiner:
@@ -51,7 +46,7 @@ class LilyPondCombiner:
         self.included_files: Set[str] = set()
         self.validate = validate
         self.update_notation = update_notation
-        self.parser = LilyPondParser() if (validate and PARSER_AVAILABLE) else None
+        self.parser = LilyPondParser() if validate else None
 
     def resolve_includes(
         self, file_path: Path, depth: int = 0, base_dir: Optional[Path] = None
@@ -108,6 +103,7 @@ class LilyPondCombiner:
                     included_content = self.resolve_includes(
                         include_path, depth + 1, base_dir
                     )
+                    # TODO: decide whether to add comments around included content for clarity
                     lines.append(f"% === BEGIN INCLUDE: {include_file} ===")
                     lines.append(included_content.rstrip())
                     lines.append(f"% === END INCLUDE: {include_file} ===")
@@ -484,7 +480,7 @@ def main(argv=None):
     mode_label = "Mutopia" if args.mutopia else "generic"
     print(f"Input dir: {input_dir.resolve()} (mode: {mode_label})")
     print(f"Output dir: {output_dir.resolve()}")
-    print(f"Parser validation: {args.validate} (PARSER_AVAILABLE={PARSER_AVAILABLE})")
+    print(f"Parser validation: {args.validate}")
     print(f"convert-ly updates: {args.update_notation}")
 
     if args.max_files:
