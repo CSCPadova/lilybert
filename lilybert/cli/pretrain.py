@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Number of DataLoader workers (default: 0)",
     )
-    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--wandb-project", default="lilybert")
     parser.add_argument("--wandb-entity", default=None)
     parser.add_argument("--wandb-mode", default="online")
