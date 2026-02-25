@@ -70,3 +70,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     summary = MLMPretrainer(config=config).run()
     print(json.dumps(summary, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
