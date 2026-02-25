@@ -65,8 +65,10 @@ class MLMPretrainer:
         self.config = config
 
     def run(self) -> Dict[str, Any]:
+        is_main = int(os.environ.get("RANK", 0)) == 0
+
         # Initialize wandb before HF Trainer so it reuses the existing run
-        if self.config.wandb_enabled:
+        if self.config.wandb_enabled and is_main:
             wandb.init(
                 project=self.config.wandb_project,
                 entity=self.config.wandb_entity,
@@ -92,10 +94,11 @@ class MLMPretrainer:
                 )
             train_dataset = ShardedMLMDataset(manifest_path=str(train_manifest))
             eval_dataset = ShardedMLMDataset(manifest_path=str(eval_manifest))
-            print(
-                f"Loaded sharded MLM data: "
-                f"train={len(train_dataset)}, eval={len(eval_dataset)}"
-            )
+            if is_main:
+                print(
+                    f"Loaded sharded MLM data: "
+                    f"train={len(train_dataset)}, eval={len(eval_dataset)}"
+                )
             token_stats = {
                 "file_count": len(train_dataset) + len(eval_dataset),
                 "total_tokens": 0,
@@ -110,7 +113,8 @@ class MLMPretrainer:
                 raise ValueError("No LilyPond files found for Stage-1 pretraining")
 
             token_stats = self.count_corpus_tokens(all_files, tokenizer)
-            print(f"Token stats: {token_stats}")
+            if is_main:
+                print(f"Token stats: {token_stats}")
 
             # Split into 99% train, 1% eval
             train_files, eval_files = self._train_eval_split(
@@ -147,8 +151,8 @@ class MLMPretrainer:
             save_total_limit=3,
             seed=self.config.seed,
             dataloader_num_workers=self.config.dataloader_num_workers,
-            report_to=self._report_to(),
-            disable_tqdm=False,
+            report_to=self._report_to() if is_main else ["none"],
+            disable_tqdm=not is_main,
             remove_unused_columns=False,
             eval_strategy="steps",
             eval_steps=1000,
@@ -180,7 +184,7 @@ class MLMPretrainer:
         tokenizer.save_pretrained(str(model_dir / "tokenizer"))
         self.config.save(str(model_dir))
 
-        if self.config.wandb_enabled:
+        if self.config.wandb_enabled and is_main:
             wandb.finish()
 
         summary = {
