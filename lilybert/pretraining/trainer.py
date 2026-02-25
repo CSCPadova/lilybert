@@ -11,12 +11,7 @@ from typing import Any, Dict, List, Tuple
 import torch
 from torch.utils.data import Dataset
 
-try:
-    import wandb
-except Exception as exc:  # pragma: no cover - optional runtime dependency
-    wandb = None
-    import warnings
-    warnings.warn(f"wandb import failed: {exc}")
+import wandb
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -70,9 +65,8 @@ class MLMPretrainer:
         self.config = config
 
     def run(self) -> Dict[str, Any]:
-        # Initialize logging backends
-        print(f"wandb_enabled={self.config.wandb_enabled}, wandb={wandb}")
-        if self.config.wandb_enabled and wandb is not None:
+        # Initialize wandb before HF Trainer so it reuses the existing run
+        if self.config.wandb_enabled:
             wandb.init(
                 project=self.config.wandb_project,
                 entity=self.config.wandb_entity,
@@ -154,6 +148,7 @@ class MLMPretrainer:
             seed=self.config.seed,
             dataloader_num_workers=self.config.dataloader_num_workers,
             report_to=self._report_to(),
+            disable_tqdm=False,
             remove_unused_columns=False,
             eval_strategy="steps",
             eval_steps=1000,
@@ -185,7 +180,7 @@ class MLMPretrainer:
         tokenizer.save_pretrained(str(model_dir / "tokenizer"))
         self.config.save(str(model_dir))
 
-        if self.config.wandb_enabled and wandb is not None:
+        if self.config.wandb_enabled:
             wandb.finish()
 
         summary = {
@@ -237,7 +232,7 @@ class MLMPretrainer:
 
     def _report_to(self) -> List[str]:
         backends: List[str] = []
-        if self.config.wandb_enabled and wandb is not None:
+        if self.config.wandb_enabled:
             backends.append("wandb")
         if self.config.tensorboard_enabled:
             backends.append("tensorboard")
