@@ -13,8 +13,10 @@ from torch.utils.data import Dataset
 
 try:
     import wandb
-except Exception:  # pragma: no cover - optional runtime dependency
+except Exception as exc:  # pragma: no cover - optional runtime dependency
     wandb = None
+    import warnings
+    warnings.warn(f"wandb import failed: {exc}")
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -69,6 +71,7 @@ class MLMPretrainer:
 
     def run(self) -> Dict[str, Any]:
         # Initialize logging backends
+        print(f"wandb_enabled={self.config.wandb_enabled}, wandb={wandb}")
         if self.config.wandb_enabled and wandb is not None:
             wandb.init(
                 project=self.config.wandb_project,
