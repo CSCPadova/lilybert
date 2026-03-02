@@ -7,10 +7,12 @@ Multi-label tasks show F1 (micro), F1 (macro), and subset accuracy.
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Dict, Mapping, Optional
+
+import typer
+from typing_extensions import Annotated
 
 SINGLE_LABEL_TASKS = {"composer", "section_nomenclature", "key_scale"}
 MULTI_LABEL_TASKS = {"musical_form", "instruments"}
@@ -215,37 +217,25 @@ def _split_tasks(
 # ---------------------------------------------------------------------------
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Generate summary tables from experiment results"
-    )
-    parser.add_argument("--results", required=True, help="Path to results JSON")
-    parser.add_argument(
-        "--output",
-        default="outputs/tables/results",
-        help="Output path (without extension; .md and .tex are generated)",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["markdown", "latex", "both"],
-        default="both",
-        help="Output format (default: both)",
-    )
-    return parser
+def main(
+    results: Annotated[str, typer.Option(help="Path to results JSON")],
+    output: Annotated[
+        str,
+        typer.Option(
+            help="Output path (without extension; .md and .tex are generated)"
+        ),
+    ] = "outputs/tables/results",
+    format: Annotated[
+        str,
+        typer.Option(help="Output format (markdown/latex/both)"),
+    ] = "both",
+) -> None:
+    base = Path(output)
 
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
-    base = Path(args.output)
-
-    if args.format in ("markdown", "both"):
-        md_path = generate_markdown_table(args.results, base.with_suffix(".md"))
+    if format in ("markdown", "both"):
+        md_path = generate_markdown_table(results, base.with_suffix(".md"))
         print(f"Markdown: {md_path}")
 
-    if args.format in ("latex", "both"):
-        tex_path = generate_latex_table(args.results, base.with_suffix(".tex"))
+    if format in ("latex", "both"):
+        tex_path = generate_latex_table(results, base.with_suffix(".tex"))
         print(f"LaTeX:    {tex_path}")
-
-
-if __name__ == "__main__":
-    main()

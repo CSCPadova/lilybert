@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
+
+import typer
+from typing_extensions import Annotated
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -257,29 +259,6 @@ def run_from_config(cfg: DictConfig) -> Dict[str, Any]:
     return results
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Run cross-validated experiments from Hydra YAML configuration"
-    )
-    parser.add_argument(
-        "--config-dir",
-        default="conf",
-        help="Path to Hydra config directory (root-level by default)",
-    )
-    parser.add_argument(
-        "--config-name",
-        default="experiment",
-        help="Hydra config name",
-    )
-    parser.add_argument(
-        "--cfg",
-        choices=["job"],
-        default=None,
-        help="Print composed config and exit",
-    )
-    return parser
-
-
 def _resolve_config_dir(config_dir: str) -> Path:
     path = Path(config_dir)
     if path.is_absolute():
@@ -306,19 +285,31 @@ def load_config(
         return hydra.compose(config_name=config_name, overrides=list(overrides or []))
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    parser = build_parser()
-    args, overrides = parser.parse_known_args(argv)
+def main(
+    config_dir: Annotated[
+        str,
+        typer.Option(help="Path to Hydra config directory (root-level by default)"),
+    ] = "conf",
+    config_name: Annotated[
+        str, typer.Option(help="Hydra config name")
+    ] = "experiment",
+    cfg: Annotated[
+        Optional[str],
+        typer.Option(help="Print composed config and exit (use 'job')"),
+    ] = None,
+    ctx: typer.Context = None,
+) -> None:
+    overrides = ctx.args if ctx else []
 
-    cfg = load_config(
-        config_dir=args.config_dir,
-        config_name=args.config_name,
+    composed = load_config(
+        config_dir=config_dir,
+        config_name=config_name,
         overrides=overrides,
     )
 
-    if args.cfg == "job":
-        print(OmegaConf.to_yaml(cfg))
+    if cfg == "job":
+        print(OmegaConf.to_yaml(composed))
         return
 
-    results = run_from_config(cfg)
+    results = run_from_config(composed)
     print(json.dumps(results, indent=2, ensure_ascii=False))

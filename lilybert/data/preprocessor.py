@@ -22,10 +22,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import ly.document
 import ly.lex
+import ly.lex.scheme
 import ly.pitch
 from ly.pitch.abs2rel import abs2rel
 from ly.pitch.rel2abs import rel2abs
 from ly.pitch.translate import translate
+from ly.pitch.transform import inversion as ly_inversion
+from ly.pitch.transform import retrograde as ly_retrograde
 from ly.pitch.transpose import Transposer, transpose
 from transformers import PreTrainedTokenizer
 
@@ -41,6 +44,7 @@ def _preprocess_dataset_file_worker(
     max_sequence_length: int,
     add_special_tokens: bool,
     normalize_notation: bool,
+    strip_sections: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Process one raw file and return augmented movement payloads."""
     try:
@@ -51,6 +55,7 @@ def _preprocess_dataset_file_worker(
             add_special_tokens=add_special_tokens,
             normalize_notation=normalize_notation,
             augmentation_config=aug_cfg,
+            strip_sections=strip_sections,
         )
         labels_entry = labels_map.get(Path(path).name, {})
         movements = pre.process_content(text, Path(path).name, labels_entry)
@@ -78,45 +83,19 @@ def _preprocess_dataset_file_worker(
         return {"ok": False, "error": str(exc), "file": path}
 
 
-ITALIAN_TO_ENGLISH_NOTES = {
-    "dodd": "cisis",
-    "dobb": "ceses",
-    "redd": "disis",
-    "rebb": "deses",
-    "midd": "eisis",
-    "mibb": "eeses",
-    "fadd": "fisis",
-    "fabb": "feses",
-    "soldd": "gisis",
-    "solbb": "geses",
-    "ladd": "aisis",
-    "labb": "aeses",
-    "sidd": "bisis",
-    "sibb": "beses",
-    "dod": "cis",
-    "dob": "ces",
-    "red": "dis",
-    "reb": "des",
-    "mid": "eis",
-    "mib": "ees",
-    "fad": "fis",
-    "fab": "fes",
-    "sold": "gis",
-    "solb": "ges",
-    "lad": "ais",
-    "lab": "aes",
-    "sid": "bis",
-    "sib": "bes",
-    "do": "c",
-    "re": "d",
-    "mi": "e",
-    "fa": "f",
-    "sol": "g",
-    "la": "a",
-    "si": "b",
-}
-
 DEFAULT_AUGMENTATION_LANGUAGES = ["italiano", "english", "nederlands"]
+
+STRIPPABLE_SECTIONS = frozenset({
+    "header",
+    "comments",
+    "layout",
+    "midi",
+    "version",
+    "scheme",
+    "markup",
+    "overrides",
+    "pagebreaks",
+})
 AVAILABLE_LILYPOND_LANGUAGES = {
     "nederlands",
     "english",
@@ -131,29 +110,15 @@ AVAILABLE_LILYPOND_LANGUAGES = {
     "catalan",
 }
 
-TRANSPOSITION_TARGETS_ENGLISH = [
-    "c",
-    "bs",
-    "df",
-    "cs",
-    "d",
-    "ef",
-    "ds",
-    "ff",
-    "e",
-    "es",
-    "f",
-    "gf",
-    "fs",
-    "g",
-    "af",
-    "gs",
-    "a",
-    "bf",
-    "as",
-    "cf",
-    "b",
-]
+def _generate_transposition_targets(language: str = "english") -> List[str]:
+    """Generate all chromatic pitch targets using ly.pitch."""
+    writer = ly.pitch.pitchWriter(language)
+    targets = []
+    for note in range(7):
+        for alter in (Fraction(0), Fraction(-1, 2), Fraction(1, 2)):
+            name = writer(note, alter)
+            targets.append(name)
+    return targets
 
 
 @dataclass
@@ -167,6 +132,8 @@ class AugmentationConfig:
     enable_absolute_relative: bool = False
     enable_articulation_variants: bool = False
     enable_barline_variants: bool = False
+    enable_retrograde: bool = False
+    enable_inversion: bool = False
     include_original: bool = True
 
     @classmethod
@@ -197,6 +164,8 @@ class AugmentationConfig:
                 raw.get("enable_articulation_variants", False)
             ),
             enable_barline_variants=bool(raw.get("enable_barline_variants", False)),
+            enable_retrograde=bool(raw.get("enable_retrograde", False)),
+            enable_inversion=bool(raw.get("enable_inversion", False)),
             include_original=bool(raw.get("include_original", True)),
         )
 
@@ -211,20 +180,195 @@ class LilyPondPreprocessor:
         add_special_tokens: bool = False,
         normalize_notation: bool = True,
         augmentation_config: Optional[Dict[str, Any] | AugmentationConfig] = None,
+        strip_sections: Optional[List[str]] = None,
     ):
         self.tokenizer = tokenizer
         self.max_sequence_length = max_sequence_length
         self.add_special_tokens = add_special_tokens
         self.normalize_notation = normalize_notation
+        self.strip_sections: frozenset[str] = (
+            frozenset(strip_sections) if strip_sections is not None else frozenset()
+        )
         self.parser = LilyPondParser()
         self.labels_path = "data/labels/labels_v1.json"
-        self._note_regex = self._build_note_regex()
         if isinstance(augmentation_config, AugmentationConfig):
             self.augmentation_config = augmentation_config
         else:
             self.augmentation_config = AugmentationConfig.from_mapping(
                 augmentation_config
             )
+
+    def _strip_sections_with_lex(self, text: str) -> str:
+        """Remove configured sections from LilyPond text using ly.lex tokens."""
+        if not self.strip_sections:
+            return text
+
+        state = ly.lex.state("lilypond")
+        tokens = list(state.tokens(text))
+        result: List[str] = []
+        i = 0
+        n = len(tokens)
+
+        while i < n:
+            token = tokens[i]
+            token_str = str(token)
+
+            # --- Comments ---
+            if "comments" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.LineComment):
+                    i += 1
+                    continue
+                if isinstance(token, ly.lex.lilypond.BlockCommentStart):
+                    # Skip until BlockCommentEnd
+                    i += 1
+                    while i < n and not isinstance(
+                        tokens[i], ly.lex.lilypond.BlockCommentEnd
+                    ):
+                        i += 1
+                    i += 1  # skip the end token too
+                    continue
+
+            # --- \header block ---
+            if "header" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Header):
+                    i = self._skip_brace_block_tokens(tokens, i + 1)
+                    continue
+
+            # --- \layout block ---
+            if "layout" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Layout):
+                    i = self._skip_brace_block_tokens(tokens, i + 1)
+                    continue
+
+            # --- \midi block ---
+            if "midi" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Keyword) and token_str == "\\midi":
+                    i = self._skip_brace_block_tokens(tokens, i + 1)
+                    continue
+
+            # --- \version directive ---
+            if "version" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Keyword) and token_str == "\\version":
+                    i += 1
+                    # Skip whitespace
+                    while i < n and isinstance(tokens[i], ly.lex._token.Space):
+                        i += 1
+                    # Skip the quoted string
+                    if i < n and isinstance(tokens[i], ly.lex.lilypond.StringQuotedStart):
+                        i += 1
+                        while i < n and not isinstance(
+                            tokens[i], ly.lex.lilypond.StringQuotedEnd
+                        ):
+                            i += 1
+                        i += 1  # skip closing quote
+                    continue
+
+            # --- Scheme expressions ---
+            if "scheme" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.SchemeStart):
+                    i += 1
+                    if i < n and isinstance(tokens[i], ly.lex.scheme.OpenParen):
+                        # Skip matched parentheses
+                        depth = 1
+                        i += 1
+                        while i < n and depth > 0:
+                            if isinstance(tokens[i], ly.lex.scheme.OpenParen):
+                                depth += 1
+                            elif isinstance(tokens[i], ly.lex.scheme.CloseParen):
+                                depth -= 1
+                            i += 1
+                    else:
+                        # Single scheme value (e.g. #red, #t, #f)
+                        if i < n:
+                            i += 1
+                    continue
+
+            # --- \markup block ---
+            if "markup" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.MarkupStart):
+                    i += 1
+                    # Skip whitespace
+                    while i < n and isinstance(tokens[i], ly.lex._token.Space):
+                        i += 1
+                    if i < n and isinstance(
+                        tokens[i], ly.lex.lilypond.OpenBracketMarkup
+                    ):
+                        # Skip matched braces within markup
+                        depth = 1
+                        i += 1
+                        while i < n and depth > 0:
+                            if isinstance(
+                                tokens[i], ly.lex.lilypond.OpenBracketMarkup
+                            ):
+                                depth += 1
+                            elif isinstance(
+                                tokens[i], ly.lex.lilypond.CloseBracketMarkup
+                            ):
+                                depth -= 1
+                            i += 1
+                    else:
+                        # Single-word markup (no braces)
+                        if i < n:
+                            i += 1
+                    continue
+
+            # --- \override / \revert ---
+            if "overrides" in self.strip_sections:
+                if isinstance(
+                    token, (ly.lex.lilypond.Override, ly.lex.lilypond.Revert)
+                ):
+                    # Skip until newline
+                    i += 1
+                    while i < n and "\n" not in str(tokens[i]):
+                        i += 1
+                    continue
+
+            # --- \set Staff.midiInstrument / instrumentName ---
+            if "overrides" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Keyword) and token_str == "\\set":
+                    # Skip until newline
+                    i += 1
+                    while i < n and "\n" not in str(tokens[i]):
+                        i += 1
+                    continue
+
+            # --- \pageBreak / \break ---
+            if "pagebreaks" in self.strip_sections:
+                if isinstance(token, ly.lex.lilypond.Command) and token_str in (
+                    "\\pageBreak",
+                    "\\break",
+                ):
+                    i += 1
+                    continue
+
+            result.append(token_str)
+            i += 1
+
+        return "".join(result)
+
+    def _skip_brace_block_tokens(self, tokens: list, start: int) -> int:
+        """Advance past whitespace then skip a matched ``{...}`` brace block in token list."""
+        i = start
+        n = len(tokens)
+        # Skip whitespace to find opening brace
+        while i < n and isinstance(tokens[i], ly.lex._token.Space):
+            i += 1
+        if i >= n:
+            return i
+        token_str = str(tokens[i])
+        # Check for opening brace (OpenBracket or SequentialStart)
+        if token_str != "{":
+            return i
+        depth = 1
+        i += 1
+        while i < n and depth > 0:
+            ts = str(tokens[i])
+            if ts == "{":
+                depth += 1
+            elif ts == "}":
+                depth -= 1
+            i += 1
+        return i
 
     def preprocess_file(self, file_path: str) -> Dict[str, Any]:
         """Legacy-compatible entrypoint returning file-level plus movement outputs."""
@@ -318,6 +462,8 @@ class LilyPondPreprocessor:
             "enable_absolute_relative": config.enable_absolute_relative,
             "enable_articulation_variants": config.enable_articulation_variants,
             "enable_barline_variants": config.enable_barline_variants,
+            "enable_retrograde": config.enable_retrograde,
+            "enable_inversion": config.enable_inversion,
             "include_original": config.include_original,
         }
 
@@ -331,6 +477,7 @@ class LilyPondPreprocessor:
                     self.max_sequence_length,
                     self.add_special_tokens,
                     self.normalize_notation,
+                    list(self.strip_sections) if self.strip_sections else None,
                 ): path
                 for path in raw_files
             }
@@ -382,6 +529,8 @@ class LilyPondPreprocessor:
                 "enable_absolute_relative": config.enable_absolute_relative,
                 "enable_articulation_variants": config.enable_articulation_variants,
                 "enable_barline_variants": config.enable_barline_variants,
+                "enable_retrograde": config.enable_retrograde,
+                "enable_inversion": config.enable_inversion,
                 "include_original": config.include_original,
             },
             "metadata_path": str(metadata_path),
@@ -453,9 +602,10 @@ class LilyPondPreprocessor:
                 current = expanded
 
             if config.enable_transposition:
+                transposition_targets = _generate_transposition_targets(language)
                 expanded = []
                 for candidate, target in product(
-                    current, TRANSPOSITION_TARGETS_ENGLISH
+                    current, transposition_targets
                 ):
                     expanded.append(
                         {
@@ -513,6 +663,34 @@ class LilyPondPreprocessor:
                     )
                 current = expanded
 
+            if config.enable_retrograde:
+                expanded = []
+                for candidate in current:
+                    expanded.append(candidate)
+                    expanded.append(
+                        {
+                            "text": self._retrograde_with_python_ly(
+                                candidate["text"], language=language
+                            ),
+                            "ops": [*candidate["ops"], "retrograde"],
+                        }
+                    )
+                current = expanded
+
+            if config.enable_inversion:
+                expanded = []
+                for candidate in current:
+                    expanded.append(candidate)
+                    expanded.append(
+                        {
+                            "text": self._inversion_with_python_ly(
+                                candidate["text"], language=language
+                            ),
+                            "ops": [*candidate["ops"], "inversion"],
+                        }
+                    )
+                current = expanded
+
             for candidate in current:
                 if not config.include_original and candidate["ops"] == ["base"]:
                     continue
@@ -552,9 +730,13 @@ class LilyPondPreprocessor:
             cursor = ly.document.Cursor(document)
             translate(cursor, target_language, default_language=source_language)
             return document.plaintext()
-        except Exception:
-            if target_language == "english" and source_language == "italiano":
-                return self._convert_italian_to_english_notes(text)
+        except Exception as exc:
+            logger.warning(
+                "python-ly translate failed (%s->%s): %s",
+                source_language,
+                target_language,
+                exc,
+            )
             return text
 
     def _convert_relative_absolute(
@@ -640,6 +822,26 @@ class LilyPondPreprocessor:
 
         return " ".join(chunks)
 
+    def _retrograde_with_python_ly(self, text: str, language: str) -> str:
+        try:
+            document = ly.document.Document(text)
+            cursor = ly.document.Cursor(document)
+            ly_retrograde(cursor, language=language)
+            return document.plaintext()
+        except Exception as exc:
+            logger.warning("retrograde failed: %s", exc)
+            return text
+
+    def _inversion_with_python_ly(self, text: str, language: str) -> str:
+        try:
+            document = ly.document.Document(text)
+            cursor = ly.document.Cursor(document)
+            ly_inversion(cursor, language=language)
+            return document.plaintext()
+        except Exception as exc:
+            logger.warning("inversion failed: %s", exc)
+            return text
+
     def process_content(
         self,
         content: str,
@@ -686,7 +888,7 @@ class LilyPondPreprocessor:
                 if not stage7.strip():
                     continue
                 italian = stage7.strip() + "\n"
-                english = self._convert_italian_to_english_notes(italian)
+                english = self._translate_with_python_ly(italian, "italiano", "english")
 
             meta_key = meta_items[idx - 1][0] if idx - 1 < len(meta_items) else None
             meta_value = meta_items[idx - 1][1] if idx - 1 < len(meta_items) else {}
@@ -752,8 +954,8 @@ class LilyPondPreprocessor:
                 {
                     "name": name,
                     "italiano_text": italian_text,
-                    "english_text": self._convert_italian_to_english_notes(
-                        italian_text
+                    "english_text": self._translate_with_python_ly(
+                        italian_text, "italiano", "english"
                     ),
                     "structure_markers": self._extract_structure_markers(italian_text),
                 }
@@ -880,85 +1082,14 @@ class LilyPondPreprocessor:
         }
 
     def _remove_comments_and_cleanup(self, text: str) -> str:
+        # BOM and line-ending normalization
         text = text.replace("\ufeff", "").replace("\r\n", "\n").replace("\r", "\n")
 
-        out: List[str] = []
-        i = 0
-        n = len(text)
-        block_comment_depth = 0
-        scheme_depth = 0
-        markup_depth = 0
-        pending_markup = False
+        # Token-based selective stripping
+        text = self._strip_sections_with_lex(text)
 
-        while i < n:
-            if block_comment_depth > 0:
-                if text.startswith("%{", i):
-                    block_comment_depth += 1
-                    i += 2
-                    continue
-                if text.startswith("%}", i):
-                    block_comment_depth -= 1
-                    i += 2
-                    continue
-                i += 1
-                continue
-
-            if text.startswith("\\markup", i):
-                pending_markup = True
-
-            if text.startswith("#{", i):
-                out.append("#{")
-                i += 2
-                continue
-
-            if text.startswith("#(", i):
-                scheme_depth += 1
-                out.append("#(")
-                i += 2
-                continue
-
-            ch = text[i]
-            if ch == ")" and scheme_depth > 0:
-                scheme_depth -= 1
-                out.append(ch)
-                i += 1
-                continue
-
-            if pending_markup and ch == "{":
-                markup_depth += 1
-                pending_markup = False
-                out.append(ch)
-                i += 1
-                continue
-
-            if ch == "{" and markup_depth > 0:
-                markup_depth += 1
-                out.append(ch)
-                i += 1
-                continue
-
-            if ch == "}" and markup_depth > 0:
-                markup_depth -= 1
-                out.append(ch)
-                i += 1
-                continue
-
-            if scheme_depth == 0 and markup_depth == 0:
-                if text.startswith("%{", i):
-                    block_comment_depth = 1
-                    i += 2
-                    continue
-                if ch == "%":
-                    i += 1
-                    while i < n and text[i] != "\n":
-                        i += 1
-                    continue
-
-            out.append(ch)
-            i += 1
-
-        cleaned = "".join(out)
-        cleaned = re.sub(r"[ \t]+$", "", cleaned, flags=re.MULTILINE)
+        # Whitespace cleanup
+        cleaned = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
         return cleaned.strip() + "\n"
 
@@ -1177,24 +1308,21 @@ class LilyPondPreprocessor:
         return f"{prefix} {value}".strip()
 
     def _strip_engraving(self, text: str) -> str:
-        text = self._remove_block_command(text, "layout")
-        text = self._remove_block_command(text, "midi")
-        text = self._remove_block_command(text, "header")
+        """Strip engraving/non-musical sections using ly.lex-based token stripping.
 
-        text = re.sub(r"\\version\s+\"[^\"]*\"", "", text)
-        # \language and \new Staff/Voice/etc. are preserved for the tokenizer
-
-        text = re.sub(r"#\(let\b.*?\)", "", text, flags=re.DOTALL)
-        text = re.sub(r"#\(define\b.*?\)", "", text, flags=re.DOTALL)
-
-        text = re.sub(
-            r"\\set\s+Staff\.(midiInstrument|instrumentName)\s*=\s*[^\n]+", "", text
-        )
-
-        text = re.sub(r"\\(override|revert)\b[^\n]*", "", text)
-        text = re.sub(r"\\(pageBreak|break)\b", "", text)
-
-        return text
+        Uses the same lex-based mechanism as _strip_sections_with_lex, temporarily
+        applying the full set of engraving-related sections to strip.
+        """
+        # Save current strip_sections, apply engraving-related sections
+        saved = self.strip_sections
+        self.strip_sections = frozenset({
+            "header", "layout", "midi", "version", "scheme",
+            "markup", "overrides", "pagebreaks",
+        })
+        try:
+            return self._strip_sections_with_lex(text)
+        finally:
+            self.strip_sections = saved
 
     def _remove_block_command(self, text: str, command: str) -> str:
         pattern = re.compile(rf"\\{command}\s*\{{", re.I)
@@ -1251,15 +1379,6 @@ class LilyPondPreprocessor:
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
-    def _convert_italian_to_english_notes(self, text: str) -> str:
-        def repl(match: re.Match) -> str:
-            note = match.group(1)
-            suffix = match.group(2) or ""
-            mapped = ITALIAN_TO_ENGLISH_NOTES.get(note, note)
-            return f"{mapped}{suffix}"
-
-        return self._note_regex.sub(repl, text)
-
     def _extract_section_nomenclature(self, meta_key: Optional[str]) -> Optional[str]:
         if not meta_key:
             return None
@@ -1267,11 +1386,6 @@ class LilyPondPreprocessor:
             return meta_key.strip().lower().replace(" ", "_")
         value = meta_key.split(":", 1)[1].strip().lower()
         return re.sub(r"\s+", "_", value)
-
-    def _build_note_regex(self) -> re.Pattern:
-        keys = sorted(ITALIAN_TO_ENGLISH_NOTES.keys(), key=len, reverse=True)
-        base = "|".join(re.escape(k) for k in keys)
-        return re.compile(rf"(?<![A-Za-z\\])({base})([,']*[!?]?\d*\.*)?(?![A-Za-z])")
 
     def _load_labels(self) -> Dict[str, Any]:
         labels_file = Path(self.labels_path)

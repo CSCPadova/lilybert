@@ -1,90 +1,60 @@
-"""CLI entrypoint for lilyBERT grouped CV training."""
+"""CLI entrypoint for lilyBERT grouped CV training.
+
+Uses Hydra for configuration. Pass overrides as positional arguments:
+
+    lilybert train --config-name training/default task=composer n_folds=3
+"""
 
 from __future__ import annotations
 
-import argparse
 import json
-from typing import Sequence
+from pathlib import Path
+from typing import Optional
+
+import typer
+from typing_extensions import Annotated
 
 from lilybert.training.config import TrainingConfig
 from lilybert.training.trainer import StratifiedKFoldTrainer
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run grouped stratified CV training")
-    parser.add_argument("--task", default="composer")
-    parser.add_argument("--data-dir", default="data/processed")
-    parser.add_argument("--tokenizer-path", default="artifacts/tokenizer")
-    parser.add_argument("--n-folds", type=int, default=5)
-    parser.add_argument("--epochs", type=int, default=20)
-    parser.add_argument("--max-steps", type=int, default=0)
-    parser.add_argument("--eval-steps", type=int, default=200)
-    parser.add_argument("--log-steps", type=int, default=20)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--lr-scheduler-type", default="linear")
-    parser.add_argument("--grad-clip-norm", type=float, default=1.0)
-    parser.add_argument("--model-selection-metric", default="auto")
-    parser.add_argument("--model-selection-mode", default="auto")
-    parser.add_argument(
-        "--pretokenized", default=None, help="Path to .npz from pretokenize"
-    )
-    parser.add_argument(
-        "--sharded-data-dir",
-        default=None,
-        help="Path to sharded pretokenized directory (contains manifest.json)",
-    )
-    parser.add_argument(
-        "--use-fsdp",
-        action="store_true",
-        help="Use FSDP instead of DDP for distributed training",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=0,
-        help="Number of DataLoader workers (default: 0)",
-    )
-    parser.add_argument("--output-dir", default="outputs/cv")
-    parser.add_argument("--wandb", action="store_true")
-    parser.add_argument("--wandb-project", default="lilybert")
-    parser.add_argument("--wandb-entity", default=None)
-    parser.add_argument("--wandb-mode", default="online")
-    parser.add_argument("--wandb-run-name", default=None)
-    parser.add_argument("--tensorboard", action="store_true")
-    parser.add_argument("--tensorboard-log-dir", default="outputs/tensorboard")
-    return parser
+def _resolve_config_dir(config_dir: str) -> Path:
+    path = Path(config_dir)
+    if path.is_absolute():
+        return path.resolve()
+    cwd_candidate = (Path.cwd() / path).resolve()
+    if cwd_candidate.exists():
+        return cwd_candidate
+    project_candidate = (Path(__file__).resolve().parents[2] / path).resolve()
+    return project_candidate
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
-    config = TrainingConfig(
-        task=args.task,
-        data_dir=args.data_dir,
-        tokenizer_path=args.tokenizer_path,
-        n_folds=args.n_folds,
-        num_train_epochs=args.epochs,
-        max_steps=args.max_steps,
-        eval_steps=args.eval_steps,
-        log_steps=args.log_steps,
-        per_device_train_batch_size=args.batch_size,
-        per_device_eval_batch_size=args.batch_size,
-        lr_scheduler_type=args.lr_scheduler_type,
-        grad_clip_norm=args.grad_clip_norm,
-        model_selection_metric=args.model_selection_metric,
-        model_selection_mode=args.model_selection_mode,
-        pretokenized_path=args.pretokenized,
-        sharded_data_dir=args.sharded_data_dir,
-        use_fsdp=args.use_fsdp,
-        dataloader_num_workers=args.num_workers,
-        output_dir=args.output_dir,
-        wandb_enabled=args.wandb,
-        wandb_project=args.wandb_project,
-        wandb_entity=args.wandb_entity,
-        wandb_mode=args.wandb_mode,
-        wandb_run_name=args.wandb_run_name,
-        tensorboard_enabled=args.tensorboard,
-        tensorboard_log_dir=args.tensorboard_log_dir,
-    )
+def main(
+    config_dir: Annotated[
+        str, typer.Option(help="Path to Hydra config directory")
+    ] = "conf",
+    config_name: Annotated[
+        str, typer.Option(help="Hydra config name")
+    ] = "training/default",
+    ctx: typer.Context = None,
+) -> None:
+    import hydra
+    from omegaconf import OmegaConf
+
+    overrides = ctx.args if ctx else []
+
+    resolved_dir = _resolve_config_dir(config_dir)
+    if not resolved_dir.exists():
+        raise FileNotFoundError(f"Hydra config directory not found: {resolved_dir}")
+
+    with hydra.initialize_config_dir(
+        version_base=None, config_dir=str(resolved_dir)
+    ):
+        cfg = hydra.compose(config_name=config_name, overrides=list(overrides))
+
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+
+    config = TrainingConfig(**cfg_dict)
     trainer = StratifiedKFoldTrainer(config=config)
     results = trainer.run()
     print(json.dumps(results, indent=2, ensure_ascii=False))

@@ -13,12 +13,14 @@ Parallelization: Uses ProcessPoolExecutor to process multiple files in parallel
 for improved performance on multi-core systems.
 """
 
-import argparse
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+import typer
+from typing_extensions import Annotated
 
 from tqdm import tqdm
 
@@ -241,97 +243,73 @@ def create_pretraining_corpus(
     return len(corpus_lines)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Preprocess combined Mutopia files for lilyBERT pretraining"
-    )
-    parser.add_argument(
-        "--input-dir",
-        default="./data/mutopia",
-        help="Directory containing combined .ly files",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="./data/mutopia_preprocessed",
-        help="Output directory for preprocessed files",
-    )
-    parser.add_argument(
-        "--max-files",
-        type=int,
-        default=None,
-        help="Maximum number of files to process (for testing)",
-    )
-    parser.add_argument(
-        "--train-tokenizer",
-        action="store_true",
-        help="Train BPE tokenizer on preprocessed corpus",
-    )
-    parser.add_argument(
-        "--vocab-size", type=int, default=10000, help="BPE vocabulary size"
-    )
-    parser.add_argument(
-        "--tokenizer-output",
-        default="./artifacts/mutopia_tokenizer",
-        help="Directory to save trained tokenizer",
-    )
-    parser.add_argument(
-        "--skip-on-error",
-        action="store_true",
-        default=True,
-        help="Skip files that fail to preprocess (default: True)",
-    )
-    parser.add_argument(
-        "--fail-on-error",
-        action="store_false",
-        dest="skip_on_error",
-        help="Stop on first preprocessing error",
-    )
-    parser.add_argument(
-        "--num-workers",
-        type=int,
-        default=None,
-        help="Number of parallel workers (default: CPU count)",
-    )
-    parser.add_argument(
-        "--skip-preprocess",
-        action="store_true",
-        help="Skip preprocessing step and only train tokenizer on existing preprocessed files",
-    )
-    parser.add_argument(
-        "--verbose", action="store_true", help="Print detailed progress information"
-    )
+def main(
+    input_dir: Annotated[
+        str, typer.Option(help="Directory containing combined .ly files")
+    ] = "./data/mutopia",
+    output_dir: Annotated[
+        str, typer.Option(help="Output directory for preprocessed files")
+    ] = "./data/mutopia_preprocessed",
+    max_files: Annotated[
+        Optional[int],
+        typer.Option(help="Maximum number of files to process (for testing)"),
+    ] = None,
+    train_tokenizer: Annotated[
+        bool, typer.Option(help="Train BPE tokenizer on preprocessed corpus")
+    ] = False,
+    vocab_size: Annotated[int, typer.Option(help="BPE vocabulary size")] = 10000,
+    tokenizer_output: Annotated[
+        str, typer.Option(help="Directory to save trained tokenizer")
+    ] = "./artifacts/mutopia_tokenizer",
+    skip_on_error: Annotated[
+        bool,
+        typer.Option(
+            "--skip-on-error/--fail-on-error",
+            help="Skip files that fail to preprocess",
+        ),
+    ] = True,
+    num_workers: Annotated[
+        Optional[int],
+        typer.Option(help="Number of parallel workers (default: CPU count)"),
+    ] = None,
+    skip_preprocess: Annotated[
+        bool,
+        typer.Option(
+            help="Skip preprocessing step and only train tokenizer on existing preprocessed files"
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option(help="Print detailed progress information")
+    ] = False,
+) -> None:
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
 
-    args = parser.parse_args(argv)
+    if not input_path.exists():
+        print(f"Error: Input directory not found: {input_path}")
+        raise typer.Exit(code=1)
 
-    input_dir = Path(args.input_dir)
-    output_dir = Path(args.output_dir)
+    print(f"Input dir: {input_path.resolve()}")
+    print(f"Output dir: {output_path.resolve()}")
 
-    # Validate input directory
-    if not input_dir.exists():
-        print(f"Error: Input directory not found: {input_dir}")
-        sys.exit(1)
-
-    print(f"Input dir: {input_dir.resolve()}")
-    print(f"Output dir: {output_dir.resolve()}")
-
-    if args.max_files:
-        print(f"Processing max {args.max_files} files")
+    if max_files:
+        print(f"Processing max {max_files} files")
 
     # Step 1: Preprocess files
-    if not args.skip_preprocess:
+    if not skip_preprocess:
         print("\n" + "=" * 60)
         print("STEP 1: PREPROCESSING MUTOPIA FILES")
         print("=" * 60)
-        print(f"\nNote: Files are NOT split by movement. For pretraining (MLM),")
-        print(f"longer sequences provide better transformer context.")
+        print("\nNote: Files are NOT split by movement. For pretraining (MLM),")
+        print("longer sequences provide better transformer context.")
 
         stats = preprocess_mutopia_files(
-            input_dir,
-            output_dir,
-            max_files=args.max_files,
+            input_path,
+            output_path,
+            max_files=max_files,
             include_augmentation=True,
-            skip_on_error=args.skip_on_error,
-            num_workers=args.num_workers,
+            skip_on_error=skip_on_error,
+            num_workers=num_workers,
         )
 
         print(f"\nFiles processed: {stats['successful']}")
@@ -342,7 +320,7 @@ def main(argv=None):
 
         if stats["errors"]:
             error_count = len(stats["errors"])
-            show_count = 10 if args.verbose else 5
+            show_count = 10 if verbose else 5
             print(f"\nErrors ({error_count} total):")
             for error in stats["errors"][:show_count]:
                 file_display = (
@@ -353,48 +331,38 @@ def main(argv=None):
                 print(f"  ... and {error_count - show_count} more errors")
 
     # Step 2: Optionally train tokenizer
-    if args.train_tokenizer:
+    if train_tokenizer:
         print("\n" + "=" * 60)
         print("STEP 2: BUILDING CORPUS & TRAINING BPE TOKENIZER")
         print("=" * 60)
 
-        # Build parser-aware token corpus using the tokenizer's own method
         print("Building parser-tokenized corpus...")
         tokenizer = LilyPondTokenizer()
-        corpus_lines = tokenizer.build_corpus(output_dir)
+        corpus_lines = tokenizer.build_corpus(output_path)
 
         if not corpus_lines:
             print("Error: Corpus is empty — no .ly files could be tokenized.")
             print("Check that Step 1 produced preprocessed files.")
-            sys.exit(1)
+            raise typer.Exit(code=1)
 
         print(f"Corpus lines: {len(corpus_lines)}")
-        print(f"Training tokenizer with vocab_size={args.vocab_size}...")
+        print(f"Training tokenizer with vocab_size={vocab_size}...")
 
-        # Train tokenizer
-        trained_tok = tokenizer.train(corpus_lines, vocab_size=args.vocab_size)
+        trained_tok = tokenizer.train(corpus_lines, vocab_size=vocab_size)
 
-        # Save tokenizer
-        tokenizer_dir = Path(args.tokenizer_output)
+        tokenizer_dir = Path(tokenizer_output)
         trained_tok.save_pretrained(str(tokenizer_dir))
 
         print(f"Tokenizer saved to: {tokenizer_dir.resolve()}")
 
-        # Get vocab size
         try:
-            vocab_size = trained_tok.vocab_size
+            final_vocab_size = trained_tok.vocab_size
         except Exception:
-            vocab_size = len(trained_tok.get_vocab())
+            final_vocab_size = len(trained_tok.get_vocab())
 
-        print(f"Vocab size: {vocab_size}")
+        print(f"Vocab size: {final_vocab_size}")
 
     print("\n" + "=" * 60)
     print("PREPROCESSING COMPLETE")
     print("=" * 60)
-    print(f"Preprocessed files saved to: {output_dir.resolve()}")
-
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    print(f"Preprocessed files saved to: {output_path.resolve()}")

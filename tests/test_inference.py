@@ -188,13 +188,11 @@ def test_pipeline_majority_aggregation(tmp_path: Path):
 # --- CLI tests ---
 
 
-def test_cli_build_parser():
-    from lilybert.cli.predict import build_parser
+def test_cli_default_options():
+    import inspect
+    from lilybert.cli.predict import main as predict_main
 
-    parser = build_parser()
-    args = parser.parse_args(["--checkpoint", "/tmp/ckpt", "--input-dir", "/tmp/data"])
-    assert args.checkpoint == "/tmp/ckpt"
-    assert args.input_dir == "/tmp/data"
-    assert args.task == "composer"
-    assert args.format == "json"
-    assert args.aggregation == "average"
+    sig = inspect.signature(predict_main)
+    assert sig.parameters["task"].default == "composer"
+    assert sig.parameters["format"].default == "json"
+    assert sig.parameters["aggregation"].default == "average"

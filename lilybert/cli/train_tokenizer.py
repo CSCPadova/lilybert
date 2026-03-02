@@ -2,65 +2,54 @@
 
 from __future__ import annotations
 
-import argparse
 import json
-from typing import Sequence
+from typing import Optional
+
+import typer
+from typing_extensions import Annotated
 
 from lilybert.data.tokenizer import LilyPondTokenizer
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Train parser-aware BPE tokenizer")
-    parser.add_argument(
-        "--processed-dir",
-        default="data/processed",
-        help="Processed movement root (expects italiano/english subdirs or .ly files)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="artifacts/tokenizer",
-        help="Directory to save trained tokenizer files",
-    )
-    parser.add_argument(
-        "--vocab-size",
-        type=int,
-        default=8000,
-        help="Target BPE vocabulary size",
-    )
-    parser.add_argument(
-        "--notation-mode",
-        choices=["english", "italiano", "both"],
-        default="both",
-        help="Which processed notation variants to include in tokenizer corpus",
-    )
-    parser.add_argument(
-        "--languages",
-        default=None,
-        help="Optional comma-separated explicit language folders to include",
-    )
-    return parser
-
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
-
+def main(
+    processed_dir: Annotated[
+        str,
+        typer.Option(
+            help="Processed movement root (expects italiano/english subdirs or .ly files)"
+        ),
+    ] = "data/processed",
+    output_dir: Annotated[
+        str, typer.Option(help="Directory to save trained tokenizer files")
+    ] = "artifacts/tokenizer",
+    vocab_size: Annotated[int, typer.Option(help="Target BPE vocabulary size")] = 8000,
+    notation_mode: Annotated[
+        str,
+        typer.Option(
+            help="Which processed notation variants to include in tokenizer corpus (english/italiano/both)"
+        ),
+    ] = "both",
+    languages: Annotated[
+        Optional[str],
+        typer.Option(help="Optional comma-separated explicit language folders to include"),
+    ] = None,
+) -> None:
     tokenizer = LilyPondTokenizer()
-    languages = None
-    if args.languages:
-        languages = [lang.strip() for lang in args.languages.split(",") if lang.strip()]
+    lang_list = None
+    if languages:
+        lang_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
     corpus = tokenizer.build_corpus(
-        args.processed_dir,
-        notation_mode=args.notation_mode,
-        languages=languages,
+        processed_dir,
+        notation_mode=notation_mode,
+        languages=lang_list,
     )
-    fast_tokenizer = tokenizer.train(corpus=corpus, vocab_size=args.vocab_size)
-    saved_dir = tokenizer.save(args.output_dir)
+    fast_tokenizer = tokenizer.train(corpus=corpus, vocab_size=vocab_size)
+    saved_dir = tokenizer.save(output_dir)
 
     summary = {
-        "processed_dir": args.processed_dir,
+        "processed_dir": processed_dir,
         "output_dir": str(saved_dir),
-        "notation_mode": args.notation_mode,
-        "languages": languages,
+        "notation_mode": notation_mode,
+        "languages": lang_list,
         "num_corpus_samples": len(corpus),
         "vocab_size": fast_tokenizer.vocab_size,
     }

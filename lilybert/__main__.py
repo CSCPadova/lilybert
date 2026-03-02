@@ -6,127 +6,85 @@ This module serves as both the ``lilybert`` console-script entry point
 
 from __future__ import annotations
 
-import argparse
-from typing import Callable, Sequence
+import typer
 
-from lilybert.cli import (
-    combine,
-    evaluate,
-    generate_tables,
-    mutopia_preprocess,
-    predict,
-    preprocess,
-    pretokenize,
-    pretrain,
-    run_experiment,
-    train,
-    train_tokenizer,
-    upload_dataset,
-    upload_model,
+app = typer.Typer(
+    name="lilybert",
+    help="lilyBERT command line interface",
+    no_args_is_help=True,
 )
 
-Handler = Callable[[Sequence[str] | None], None]
 
-
-def _add_subcommand(
-    subparsers: argparse._SubParsersAction,
-    name: str,
-    help_text: str,
-    handler: Handler,
-    aliases: Sequence[str] | None = None,
-) -> None:
-    parser = subparsers.add_parser(name, help=help_text, aliases=list(aliases or []))
-    parser.set_defaults(_handler=handler)
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="lilybert", description="lilyBERT command line interface"
+def _register_commands() -> None:
+    """Lazily import and register all subcommand modules."""
+    from lilybert.cli import (
+        combine,
+        evaluate,
+        generate_tables,
+        mutopia_preprocess,
+        predict,
+        preprocess,
+        pretokenize,
+        pretrain,
+        run_experiment,
+        train,
+        train_tokenizer,
+        upload_dataset,
+        upload_model,
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
 
     # --- core pipeline ---
-    _add_subcommand(
-        subparsers, "preprocess", "Run preprocessing pipeline", preprocess.main
+    app.command(name="preprocess", help="Run preprocessing pipeline")(preprocess.main)
+    app.command(name="train-tokenizer", help="Train parser-aware tokenizer")(
+        train_tokenizer.main
     )
-    _add_subcommand(
-        subparsers,
-        "train-tokenizer",
-        "Train parser-aware tokenizer",
-        train_tokenizer.main,
+    app.command(
+        name="pretrain",
+        help="Run Stage-1 MLM pretraining",
+        context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+    )(pretrain.main)
+    app.command(name="pretokenize", help="Pre-tokenize movement files for fast training")(
+        pretokenize.main
     )
-    _add_subcommand(
-        subparsers,
-        "pretrain",
-        "Run Stage-1 MLM pretraining",
-        pretrain.main,
-    )
-    _add_subcommand(
-        subparsers,
-        "pretokenize",
-        "Pre-tokenize movement files for fast training",
-        pretokenize.main,
-    )
-    _add_subcommand(subparsers, "train", "Run grouped CV training", train.main)
-    _add_subcommand(
-        subparsers, "evaluate", "Run classification evaluation", evaluate.main
-    )
-    _add_subcommand(
-        subparsers,
-        "run-experiment",
-        "Run Hydra-configured experiments",
-        run_experiment.main,
-    )
-    _add_subcommand(
-        subparsers,
-        "predict",
-        "Run batch inference on LilyPond files",
-        predict.main,
+    app.command(
+        name="train",
+        help="Run grouped CV training",
+        context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+    )(train.main)
+    app.command(name="evaluate", help="Run classification evaluation")(evaluate.main)
+    app.command(
+        name="run-experiment",
+        help="Run Hydra-configured experiments",
+        context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+    )(run_experiment.main)
+    app.command(name="predict", help="Run batch inference on LilyPond files")(
+        predict.main
     )
 
     # --- data preparation ---
-    _add_subcommand(
-        subparsers,
-        "combine",
-        "Combine LilyPond files by resolving includes",
-        combine.main,
+    app.command(name="combine", help="Combine LilyPond files by resolving includes")(
+        combine.main
     )
-    _add_subcommand(
-        subparsers,
-        "mutopia-preprocess",
-        "Preprocess combined Mutopia files for pretraining",
-        mutopia_preprocess.main,
-    )
+    app.command(
+        name="mutopia-preprocess",
+        help="Preprocess combined Mutopia files for pretraining",
+    )(mutopia_preprocess.main)
+
     # --- reporting & hub ---
-    _add_subcommand(
-        subparsers,
-        "generate-tables",
-        "Generate result tables from experiment JSON",
-        generate_tables.main,
+    app.command(
+        name="generate-tables", help="Generate result tables from experiment JSON"
+    )(generate_tables.main)
+    app.command(name="upload-dataset", help="Upload processed dataset to HuggingFace Hub")(
+        upload_dataset.main
     )
-    _add_subcommand(
-        subparsers,
-        "upload-dataset",
-        "Upload processed dataset to HuggingFace Hub",
-        upload_dataset.main,
-    )
-    _add_subcommand(
-        subparsers,
-        "upload-model",
-        "Upload model to HuggingFace Hub",
-        upload_model.main,
+    app.command(name="upload-model", help="Upload model to HuggingFace Hub")(
+        upload_model.main
     )
 
-    return parser
 
-
-def main(argv: Sequence[str] | None = None) -> None:
-    parser = build_parser()
-    args, passthrough = parser.parse_known_args(argv)
-    normalized = list(passthrough)
-    if normalized and normalized[0] == "--":
-        normalized = normalized[1:]
-    args._handler(normalized)
+def main() -> None:
+    _register_commands()
+    app()
 
 
 if __name__ == "__main__":

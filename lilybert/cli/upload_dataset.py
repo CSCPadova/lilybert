@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence
+from typing import Dict, Iterable, Optional
+
+import typer
+from typing_extensions import Annotated
 
 from datasets import Dataset, DatasetDict
 
@@ -80,29 +82,16 @@ class DatasetUploader:
         return self.push_dataset_dict(dataset_dict)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Upload processed dataset to HuggingFace Hub"
-    )
-    parser.add_argument(
-        "--processed-dir", default="data/processed", help="Processed data root"
-    )
-    parser.add_argument("--repo-id", required=True, help="HuggingFace dataset repo id")
-    parser.add_argument(
-        "--private", action="store_true", help="Create/use private repo"
-    )
-    parser.add_argument("--token", default=None, help="HF token (optional)")
-    return parser
-
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+def main(
+    repo_id: Annotated[str, typer.Option(help="HuggingFace dataset repo id")],
+    processed_dir: Annotated[
+        str, typer.Option(help="Processed data root")
+    ] = "data/processed",
+    private: Annotated[bool, typer.Option(help="Create/use private repo")] = False,
+    token: Annotated[Optional[str], typer.Option(help="HF token (optional)")] = None,
+) -> None:
     uploader = DatasetUploader(
-        repo_id=args.repo_id, private=args.private, token=args.token
+        repo_id=repo_id, private=private, token=token
     )
-    result = uploader.upload(processed_dir=args.processed_dir)
+    result = uploader.upload(processed_dir=processed_dir)
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
-
-
-if __name__ == "__main__":
-    main()

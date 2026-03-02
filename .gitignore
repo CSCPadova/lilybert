@@ -236,3 +236,9 @@ MutopiaProject/
 data/mutopia*
 logs/
 wandb/
+BaroqueMusic/
+_BaroqueMusic/
+_BaroqueMusic_v2/
+lilypond-export/
+oll-core/
+openlilylib/

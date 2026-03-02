@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional
+
+import typer
+from typing_extensions import Annotated
 
 from huggingface_hub import HfApi
 from transformers import AutoModel, AutoTokenizer
@@ -53,41 +55,26 @@ class ModelUploader:
         )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Upload model artifacts to HuggingFace Hub"
-    )
-    parser.add_argument("--model-dir", required=True, help="Local model directory")
-    parser.add_argument(
-        "--tokenizer-dir", required=True, help="Local tokenizer directory"
-    )
-    parser.add_argument("--repo-id", required=True, help="HuggingFace model repo id")
-    parser.add_argument(
-        "--private", action="store_true", help="Create/use private repo"
-    )
-    parser.add_argument("--token", default=None, help="HF token (optional)")
-    parser.add_argument(
-        "--output-dir", default="artifacts/hub_model", help="Temp output dir"
-    )
-    return parser
-
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
-    model = AutoModel.from_pretrained(args.model_dir)
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir)
+def main(
+    model_dir: Annotated[str, typer.Option(help="Local model directory")],
+    tokenizer_dir: Annotated[str, typer.Option(help="Local tokenizer directory")],
+    repo_id: Annotated[str, typer.Option(help="HuggingFace model repo id")],
+    private: Annotated[bool, typer.Option(help="Create/use private repo")] = False,
+    token: Annotated[Optional[str], typer.Option(help="HF token (optional)")] = None,
+    output_dir: Annotated[
+        str, typer.Option(help="Temp output dir")
+    ] = "artifacts/hub_model",
+) -> None:
+    model = AutoModel.from_pretrained(model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
 
     uploader = ModelUploader(
-        repo_id=args.repo_id, private=args.private, token=args.token
+        repo_id=repo_id, private=private, token=token
     )
     result = uploader.upload(
         model=model,
         tokenizer=tokenizer,
-        config={"source_model_dir": str(Path(args.model_dir))},
-        output_dir=args.output_dir,
+        config={"source_model_dir": str(Path(model_dir))},
+        output_dir=output_dir,
     )
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
-
-
-if __name__ == "__main__":
-    main()

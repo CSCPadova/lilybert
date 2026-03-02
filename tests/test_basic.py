@@ -593,10 +593,12 @@ class TestDefaultAugmentationLanguages:
 
     def test_preprocess_cli_default_languages(self):
         """CLI default --languages flag includes all three languages."""
-        from lilybert.cli.preprocess import build_parser
+        import inspect
+        from lilybert.cli.preprocess import main as preprocess_main
 
-        args = build_parser().parse_args([])
-        languages = [lang.strip() for lang in args.languages.split(",")]
+        sig = inspect.signature(preprocess_main)
+        default = sig.parameters["languages"].default
+        languages = [lang.strip() for lang in default.split(",")]
         assert languages == ["italiano", "english", "nederlands"]
 
 

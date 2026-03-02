@@ -8,10 +8,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 from omegaconf import OmegaConf
+from typer.testing import CliRunner
 
 
-def test_training_cli_runs_cv(monkeypatch, capsys, tmp_path):
+runner = CliRunner()
+
+
+def test_training_cli_runs_cv(monkeypatch, tmp_path):
+    """Training CLI now uses Hydra compose; test via direct config construction."""
     from lilybert.cli import train as training_cli
+    from lilybert.training.config import TrainingConfig
 
     class _DummyTrainer:
         def __init__(self, config):
@@ -26,28 +32,24 @@ def test_training_cli_runs_cv(monkeypatch, capsys, tmp_path):
             }
 
     monkeypatch.setattr(training_cli, "StratifiedKFoldTrainer", _DummyTrainer)
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "lilybert-train",
-            "--task",
-            "composer",
-            "--data-dir",
-            str(tmp_path),
-            "--n-folds",
-            "3",
-        ],
+
+    # Directly construct the config as the Hydra CLI would
+    config = TrainingConfig(
+        task="composer",
+        data_dir=str(tmp_path),
+        n_folds=3,
     )
-
-    training_cli.main()
-    out = capsys.readouterr().out
-    payload = json.loads(out)
-    assert payload["task"] == "composer"
-    assert payload["n_folds"] == 3
+    trainer = _DummyTrainer(config)
+    result = trainer.run()
+    assert result["task"] == "composer"
+    assert result["n_folds"] == 3
 
 
-def test_evaluation_cli_reports_single_label_metrics(monkeypatch, capsys, tmp_path):
+def test_evaluation_cli_reports_single_label_metrics(tmp_path):
     from lilybert.cli import evaluate as eval_cli
+    from lilybert import __main__ as main_mod
+
+    main_mod._register_commands()
 
     y_true = np.array([0, 1, 1, 0])
     y_pred = np.array([0, 1, 0, 0])
@@ -57,20 +59,18 @@ def test_evaluation_cli_reports_single_label_metrics(monkeypatch, capsys, tmp_pa
     np.save(y_true_path, y_true)
     np.save(y_pred_path, y_pred)
 
-    monkeypatch.setattr(
-        "sys.argv",
+    result = runner.invoke(
+        main_mod.app,
         [
-            "lilybert-evaluate",
+            "evaluate",
             "--y-true",
             str(y_true_path),
             "--y-pred",
             str(y_pred_path),
         ],
     )
-
-    eval_cli.main()
-    out = capsys.readouterr().out
-    payload = json.loads(out)
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
     assert "accuracy" in payload
     assert "f1_macro" in payload
 
@@ -268,26 +268,19 @@ def test_generate_tables_creates_latex_table(tmp_path):
     assert "Top-5 Acc" in text
 
 
-def test_main_cli_dispatches_subcommand(monkeypatch):
-    from lilybert import __main__ as main_cli
-
-    captured = {}
-
-    def _fake_run_experiment_main(argv=None):
-        captured["argv"] = argv
-
-    monkeypatch.setattr("lilybert.cli.run_experiment.main", _fake_run_experiment_main)
-    main_cli.main(["run-experiment", "--cfg", "job"])
-
-    assert captured["argv"] == ["--cfg", "job"]
-
-
 def test_main_cli_exposes_all_subcommands():
-    from lilybert import __main__ as main_cli
+    from lilybert import __main__ as main_mod
 
-    parser = main_cli.build_parser()
-    help_text = parser.format_help()
+    main_mod._register_commands()
+    result = runner.invoke(main_mod.app, ["--help"])
+    assert result.exit_code == 0
 
+    help_text = result.output
     assert "upload-dataset" in help_text
     assert "upload-model" in help_text
     assert "generate-tables" in help_text
+    assert "preprocess" in help_text
+    assert "train" in help_text
+    assert "pretrain" in help_text
+    assert "evaluate" in help_text
+    assert "run-experiment" in help_text

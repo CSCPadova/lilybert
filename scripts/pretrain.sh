@@ -34,16 +34,22 @@
 
 set -euo pipefail
 
+OUTPUT_DIR=outputs/pretrain
+TOKENIZER_PATH=artifacts/tokenizer
+SHARDS_DIR=artifacts/pretokenized/mlm
+export WANDB_PROJECT=lilybert
+export WANDB_RUN_NAME=pretrain
+
 # --- Validate required arguments ---
-if [ -z "${OUTPUT_DIR:-}" ]; then
-    echo "ERROR: OUTPUT_DIR is not set" >&2; exit 1
-fi
-if [ -z "${TOKENIZER_PATH:-}" ]; then
-    echo "ERROR: TOKENIZER_PATH is not set" >&2; exit 1
-fi
-if [ -z "${SHARDS_DIR:-}" ]; then
-    echo "ERROR: SHARDS_DIR is not set" >&2; exit 1
-fi
+# if [ -z "${OUTPUT_DIR:-}" ]; then
+#     echo "ERROR: OUTPUT_DIR is not set" >&2; exit 1
+# fi
+# if [ -z "${TOKENIZER_PATH:-}" ]; then
+#     echo "ERROR: TOKENIZER_PATH is not set" >&2; exit 1
+# fi
+# if [ -z "${SHARDS_DIR:-}" ]; then
+#     echo "ERROR: SHARDS_DIR is not set" >&2; exit 1
+# fi
 
 # --- Detect GPUs ---
 if [ -n "${NUM_GPUS:-}" ]; then
@@ -96,12 +102,12 @@ echo "---"
 
 if [ "$NGPUS" -gt 1 ]; then
     echo "Launching distributed training with torchrun (${NGPUS} GPUs)"
-    torchrun \
+    uv run torchrun \
         --nproc_per_node="$NGPUS" \
         --master_port="${MASTER_PORT:-29500}" \
         -m lilybert.cli.pretrain \
         "${PRETRAIN_ARGS[@]}"
 else
     echo "Launching single-GPU training"
-    python -m lilybert.cli.pretrain "${PRETRAIN_ARGS[@]}"
+    uv run python -m lilybert.cli.pretrain "${PRETRAIN_ARGS[@]}"
 fi

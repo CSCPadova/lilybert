@@ -17,12 +17,14 @@ Utilities:
   - Skips invalid files
 """
 
-import argparse
 import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Set
+
+import typer
+from typing_extensions import Annotated
 
 from tqdm import tqdm
 
@@ -413,86 +415,62 @@ def process_mutopia_dataset(
     return stats
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Combine LilyPond files by resolving \\include directives"
-    )
-    parser.add_argument(
-        "--input-dir",
-        required=True,
-        help="Root directory containing .ly files",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="./data/combined",
-        help="Output directory for combined files (default: ./data/combined)",
-    )
-    parser.add_argument(
-        "--mutopia",
-        action="store_true",
-        help="Use Mutopia-specific heuristics to pick main score files",
-    )
-    parser.add_argument(
-        "--max-files",
-        type=int,
-        default=None,
-        help="Maximum number of files to process (for testing)",
-    )
-    parser.add_argument(
-        "--validate",
-        action="store_true",
-        default=True,
-        help="Validate output files with parser (default: True)",
-    )
-    parser.add_argument(
-        "--no-validate",
-        action="store_false",
-        dest="validate",
-        help="Skip validation (faster but may include invalid files)",
-    )
-    parser.add_argument(
-        "--update-notation",
-        action="store_true",
-        default=True,
-        help="Update notation with convert-ly (default: True)",
-    )
-    parser.add_argument(
-        "--no-update-notation",
-        action="store_false",
-        dest="update_notation",
-        help="Skip convert-ly notation updates (faster)",
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Print detailed progress information",
-    )
+def main(
+    input_dir: Annotated[
+        str, typer.Option(help="Root directory containing .ly files")
+    ],
+    output_dir: Annotated[
+        str, typer.Option(help="Output directory for combined files")
+    ] = "./data/combined",
+    mutopia: Annotated[
+        bool,
+        typer.Option(help="Use Mutopia-specific heuristics to pick main score files"),
+    ] = False,
+    max_files: Annotated[
+        Optional[int],
+        typer.Option(help="Maximum number of files to process (for testing)"),
+    ] = None,
+    validate: Annotated[
+        bool,
+        typer.Option(
+            "--validate/--no-validate",
+            help="Validate output files with parser",
+        ),
+    ] = True,
+    update_notation: Annotated[
+        bool,
+        typer.Option(
+            "--update-notation/--no-update-notation",
+            help="Update notation with convert-ly",
+        ),
+    ] = True,
+    verbose: Annotated[
+        bool, typer.Option(help="Print detailed progress information")
+    ] = False,
+) -> None:
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
 
-    args = parser.parse_args(argv)
+    if not input_path.exists():
+        print(f"Error: Input directory not found: {input_path}")
+        raise typer.Exit(code=1)
 
-    input_dir = Path(args.input_dir)
-    output_dir = Path(args.output_dir)
+    mode_label = "Mutopia" if mutopia else "generic"
+    print(f"Input dir: {input_path.resolve()} (mode: {mode_label})")
+    print(f"Output dir: {output_path.resolve()}")
+    print(f"Parser validation: {validate}")
+    print(f"convert-ly updates: {update_notation}")
 
-    if not input_dir.exists():
-        print(f"Error: Input directory not found: {input_dir}")
-        sys.exit(1)
-
-    mode_label = "Mutopia" if args.mutopia else "generic"
-    print(f"Input dir: {input_dir.resolve()} (mode: {mode_label})")
-    print(f"Output dir: {output_dir.resolve()}")
-    print(f"Parser validation: {args.validate}")
-    print(f"convert-ly updates: {args.update_notation}")
-
-    if args.max_files:
-        print(f"Processing max {args.max_files} files")
+    if max_files:
+        print(f"Processing max {max_files} files")
 
     stats = combine_ly_files(
-        input_dir=input_dir,
-        output_dir=output_dir,
-        mutopia=args.mutopia,
-        max_files=args.max_files,
-        validate=args.validate,
-        update_notation=args.update_notation,
+        input_dir=input_path,
+        output_dir=output_path,
+        mutopia=mutopia,
+        max_files=max_files,
+        validate=validate,
+        update_notation=update_notation,
     )
 
     print("\n" + "=" * 60)
@@ -506,17 +484,11 @@ def main(argv=None):
 
     if stats["errors"]:
         error_count = len(stats["errors"])
-        show_count = 10 if args.verbose else 5
+        show_count = 10 if verbose else 5
         print(f"\nErrors ({error_count} total):")
         for error in stats["errors"][:show_count]:
             print(f"  - {error['file']}: {error['error']}")
         if error_count > show_count:
             print(f"  ... and {error_count - show_count} more errors")
 
-    print(f"\nCombined files saved to: {output_dir.resolve()}")
-
-    return 0 if stats["failed"] == 0 else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    print(f"\nCombined files saved to: {output_path.resolve()}")

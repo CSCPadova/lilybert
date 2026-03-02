@@ -10,11 +10,13 @@ Supports two modes:
 
 from __future__ import annotations
 
-import argparse
 import json
 import random
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Optional
+
+import typer
+from typing_extensions import Annotated
 
 import numpy as np
 from transformers import PreTrainedTokenizerFast
@@ -23,59 +25,76 @@ from lilybert.data import BaroqueMusicClassificationDataset
 from lilybert.data.sharding import ShardWriter
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Pre-tokenize movement files for fast training"
-    )
-    parser.add_argument(
-        "--stage",
-        choices=["classification", "mlm"],
-        default="classification",
-        help="Pretokenization stage (default: classification)",
-    )
-    parser.add_argument("--task", default="composer")
-    parser.add_argument("--data-dir", default="data/processed")
-    parser.add_argument("--tokenizer-path", default="artifacts/tokenizer")
-    parser.add_argument("--output-dir", default="artifacts/pretokenized")
-    parser.add_argument("--max-length", type=int, default=512)
-    parser.add_argument("--stride", type=int, default=256)
-    parser.add_argument("--language", default="english")
-    parser.add_argument(
-        "--languages",
-        default=None,
-        help="Comma-separated list of languages (MLM stage only, default: same as --language)",
-    )
-    parser.add_argument(
-        "--shard-size",
-        type=int,
-        default=0,
-        help="Samples per shard. 0 = single-file legacy mode (default: 0)",
-    )
-    parser.add_argument(
-        "--include-structure-markers",
-        action="store_true",
-        help="Persist structure_markers from movement metadata in pretokenized cache metadata",
-    )
-    parser.add_argument(
-        "--eval-ratio",
-        type=float,
-        default=0.01,
-        help="Fraction of data for eval split (MLM stage only, default: 0.01)",
-    )
-    parser.add_argument("--seed", type=int, default=42)
-    return parser
-
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
-
-    if args.stage == "mlm":
-        _pretokenize_mlm(args)
+def main(
+    stage: Annotated[
+        str,
+        typer.Option(help="Pretokenization stage (classification/mlm)"),
+    ] = "classification",
+    task: Annotated[str, typer.Option()] = "composer",
+    data_dir: Annotated[str, typer.Option()] = "data/processed",
+    tokenizer_path: Annotated[str, typer.Option()] = "artifacts/tokenizer",
+    output_dir: Annotated[str, typer.Option()] = "artifacts/pretokenized",
+    max_length: Annotated[int, typer.Option()] = 512,
+    stride: Annotated[int, typer.Option()] = 256,
+    language: Annotated[str, typer.Option()] = "english",
+    languages: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Comma-separated list of languages (MLM stage only, default: same as --language)"
+        ),
+    ] = None,
+    shard_size: Annotated[
+        int,
+        typer.Option(help="Samples per shard. 0 = single-file legacy mode"),
+    ] = 0,
+    include_structure_markers: Annotated[
+        bool,
+        typer.Option(
+            help="Persist structure_markers from movement metadata in pretokenized cache metadata"
+        ),
+    ] = False,
+    eval_ratio: Annotated[
+        float,
+        typer.Option(help="Fraction of data for eval split (MLM stage only)"),
+    ] = 0.01,
+    seed: Annotated[int, typer.Option()] = 42,
+) -> None:
+    if stage == "mlm":
+        _pretokenize_mlm(
+            data_dir=data_dir,
+            tokenizer_path=tokenizer_path,
+            output_dir=output_dir,
+            max_length=max_length,
+            language=language,
+            languages=languages,
+            shard_size=shard_size,
+            eval_ratio=eval_ratio,
+            seed=seed,
+        )
     else:
-        if args.shard_size > 0:
-            _pretokenize_classification_sharded(args)
+        if shard_size > 0:
+            _pretokenize_classification_sharded(
+                task=task,
+                data_dir=data_dir,
+                tokenizer_path=tokenizer_path,
+                output_dir=output_dir,
+                max_length=max_length,
+                stride=stride,
+                language=language,
+                shard_size=shard_size,
+                include_structure_markers=include_structure_markers,
+            )
         else:
-            _pretokenize_classification_legacy(args)
+            _pretokenize_classification_legacy(
+                task=task,
+                data_dir=data_dir,
+                tokenizer_path=tokenizer_path,
+                output_dir=output_dir,
+                max_length=max_length,
+                stride=stride,
+                language=language,
+                include_structure_markers=include_structure_markers,
+            )
 
 
 # ------------------------------------------------------------------
@@ -83,34 +102,45 @@ def main(argv: Sequence[str] | None = None) -> None:
 # ------------------------------------------------------------------
 
 
-def _pretokenize_classification_sharded(args: argparse.Namespace) -> None:
-    data_dir = Path(args.data_dir)
-    metadata_path = data_dir / "metadata.json"
+def _pretokenize_classification_sharded(
+    *,
+    task: str,
+    data_dir: str,
+    tokenizer_path: str,
+    output_dir: str,
+    max_length: int,
+    stride: int,
+    language: str,
+    shard_size: int,
+    include_structure_markers: bool,
+) -> None:
+    data_path = Path(data_dir)
+    metadata_path = data_path / "metadata.json"
     if not metadata_path.exists():
-        raise FileNotFoundError(f"metadata.json not found in {data_dir}")
+        raise FileNotFoundError(f"metadata.json not found in {data_path}")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
-    language_dir = data_dir / args.language
+    language_dir = data_path / language
     if not language_dir.exists():
         raise FileNotFoundError(f"Language directory not found: {language_dir}")
     movement_files = sorted(str(p) for p in language_dir.glob("*.ly"))
     if not movement_files:
         raise FileNotFoundError(f"No .ly files found in {language_dir}")
 
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.tokenizer_path)
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
     print(
-        f"Building dataset for task={args.task}, "
+        f"Building dataset for task={task}, "
         f"{len(movement_files)} files, "
-        f"max_length={args.max_length}, stride={args.stride}"
+        f"max_length={max_length}, stride={stride}"
     )
     dataset = BaroqueMusicClassificationDataset(
         movement_files=movement_files,
         metadata=metadata,
         tokenizer=tokenizer,
-        max_length=args.max_length,
-        stride=args.stride,
-        task=args.task,
-        include_structure_markers=args.include_structure_markers,
+        max_length=max_length,
+        stride=stride,
+        task=task,
+        include_structure_markers=include_structure_markers,
     )
 
     n = len(dataset)
@@ -125,11 +155,11 @@ def _pretokenize_classification_sharded(args: argparse.Namespace) -> None:
     )
     num_classes = sample0["label"].shape[0] if is_multi_label else 0
 
-    output_dir = Path(args.output_dir) / args.task
+    out_dir = Path(output_dir) / task
     writer = ShardWriter(
-        output_dir=output_dir,
-        shard_size=args.shard_size,
-        max_length=args.max_length,
+        output_dir=out_dir,
+        shard_size=shard_size,
+        max_length=max_length,
         multi_label=is_multi_label,
         num_classes=num_classes,
         has_labels=True,
@@ -154,19 +184,19 @@ def _pretokenize_classification_sharded(args: argparse.Namespace) -> None:
     manifest = writer.finalize(
         label_to_index=dataset.label_to_index,
         config={
-            "task": args.task,
-            "max_length": args.max_length,
-            "stride": args.stride,
-            "tokenizer_path": args.tokenizer_path,
-            "language": args.language,
-            "data_dir": args.data_dir,
-            "shard_size": args.shard_size,
-            "include_structure_markers": args.include_structure_markers,
+            "task": task,
+            "max_length": max_length,
+            "stride": stride,
+            "tokenizer_path": tokenizer_path,
+            "language": language,
+            "data_dir": data_dir,
+            "shard_size": shard_size,
+            "include_structure_markers": include_structure_markers,
         },
     )
     print(
         f"Done: {manifest.total_samples} samples across "
-        f"{len(manifest.shards)} shards in {output_dir}"
+        f"{len(manifest.shards)} shards in {out_dir}"
     )
 
 
@@ -175,37 +205,47 @@ def _pretokenize_classification_sharded(args: argparse.Namespace) -> None:
 # ------------------------------------------------------------------
 
 
-def _pretokenize_classification_legacy(args: argparse.Namespace) -> None:
+def _pretokenize_classification_legacy(
+    *,
+    task: str,
+    data_dir: str,
+    tokenizer_path: str,
+    output_dir: str,
+    max_length: int,
+    stride: int,
+    language: str,
+    include_structure_markers: bool,
+) -> None:
     """Original single-file pretokenization (backward compatible)."""
-    data_dir = Path(args.data_dir)
-    metadata_path = data_dir / "metadata.json"
+    data_path = Path(data_dir)
+    metadata_path = data_path / "metadata.json"
     if not metadata_path.exists():
-        raise FileNotFoundError(f"metadata.json not found in {data_dir}")
+        raise FileNotFoundError(f"metadata.json not found in {data_path}")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
-    language_dir = data_dir / args.language
+    language_dir = data_path / language
     if not language_dir.exists():
         raise FileNotFoundError(f"Language directory not found: {language_dir}")
     movement_files = sorted(str(p) for p in language_dir.glob("*.ly"))
     if not movement_files:
         raise FileNotFoundError(f"No .ly files found in {language_dir}")
 
-    print(f"Loading tokenizer from {args.tokenizer_path}")
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.tokenizer_path)
+    print(f"Loading tokenizer from {tokenizer_path}")
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
 
     print(
-        f"Building dataset for task={args.task}, "
+        f"Building dataset for task={task}, "
         f"{len(movement_files)} files, "
-        f"max_length={args.max_length}, stride={args.stride}"
+        f"max_length={max_length}, stride={stride}"
     )
     dataset = BaroqueMusicClassificationDataset(
         movement_files=movement_files,
         metadata=metadata,
         tokenizer=tokenizer,
-        max_length=args.max_length,
-        stride=args.stride,
-        task=args.task,
-        include_structure_markers=args.include_structure_markers,
+        max_length=max_length,
+        stride=stride,
+        task=task,
+        include_structure_markers=include_structure_markers,
     )
 
     n = len(dataset)
@@ -215,11 +255,11 @@ def _pretokenize_classification_legacy(args: argparse.Namespace) -> None:
 
     print(f"Produced {n} windowed samples")
 
-    input_ids = np.empty((n, args.max_length), dtype=np.int32)
-    attention_mask = np.empty((n, args.max_length), dtype=np.int8)
+    input_ids = np.empty((n, max_length), dtype=np.int32)
+    attention_mask = np.empty((n, max_length), dtype=np.int8)
     movement_ids = []
     base_works = []
-    structure_markers = [] if args.include_structure_markers else None
+    structure_markers = [] if include_structure_markers else None
 
     sample0 = dataset[0]
     is_multi_label = (
@@ -242,13 +282,13 @@ def _pretokenize_classification_legacy(args: argparse.Namespace) -> None:
         )
         movement_ids.append(sample["movement_id"])
         base_works.append(sample["base_work"])
-        if args.include_structure_markers:
+        if include_structure_markers:
             structure_markers.append(sample.get("structure_markers", []))
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
 
-    npz_path = output_dir / f"{args.task}.npz"
+    npz_path = out_path / f"{task}.npz"
     np.savez(
         npz_path,
         input_ids=input_ids,
@@ -262,18 +302,18 @@ def _pretokenize_classification_legacy(args: argparse.Namespace) -> None:
         "movement_ids": movement_ids,
         "base_works": base_works,
         "config": {
-            "task": args.task,
-            "max_length": args.max_length,
-            "stride": args.stride,
-            "tokenizer_path": args.tokenizer_path,
-            "language": args.language,
-            "data_dir": args.data_dir,
-            "include_structure_markers": args.include_structure_markers,
+            "task": task,
+            "max_length": max_length,
+            "stride": stride,
+            "tokenizer_path": tokenizer_path,
+            "language": language,
+            "data_dir": data_dir,
+            "include_structure_markers": include_structure_markers,
         },
     }
-    if args.include_structure_markers:
+    if include_structure_markers:
         meta["structure_markers"] = structure_markers
-    meta_path = output_dir / f"{args.task}_meta.json"
+    meta_path = out_path / f"{task}_meta.json"
     meta_path.write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -297,40 +337,49 @@ def _collect_ly_files(data_dir: Path, languages: List[str]) -> List[Path]:
     return files
 
 
-def _pretokenize_mlm(args: argparse.Namespace) -> None:
-    languages = (
-        args.languages.split(",") if args.languages else [args.language]
-    )
-    data_dir = Path(args.data_dir)
-    all_files = _collect_ly_files(data_dir, languages)
+def _pretokenize_mlm(
+    *,
+    data_dir: str,
+    tokenizer_path: str,
+    output_dir: str,
+    max_length: int,
+    language: str,
+    languages: Optional[str],
+    shard_size: int,
+    eval_ratio: float,
+    seed: int,
+) -> None:
+    lang_list = languages.split(",") if languages else [language]
+    data_path = Path(data_dir)
+    all_files = _collect_ly_files(data_path, lang_list)
     if not all_files:
         raise FileNotFoundError(
-            f"No .ly files found in {data_dir} for languages {languages}"
+            f"No .ly files found in {data_path} for languages {lang_list}"
         )
 
-    print(f"Loading tokenizer from {args.tokenizer_path}")
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.tokenizer_path)
+    print(f"Loading tokenizer from {tokenizer_path}")
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
 
     # Shuffle and split into train / eval
-    rng = random.Random(args.seed)
+    rng = random.Random(seed)
     shuffled = list(all_files)
     rng.shuffle(shuffled)
-    split_idx = max(1, int(len(shuffled) * (1 - args.eval_ratio)))
+    split_idx = max(1, int(len(shuffled) * (1 - eval_ratio)))
     train_files = shuffled[:split_idx]
     eval_files = shuffled[split_idx:]
 
-    shard_size = args.shard_size if args.shard_size > 0 else 8192
+    effective_shard_size = shard_size if shard_size > 0 else 8192
 
     for split_name, files in [("train", train_files), ("eval", eval_files)]:
         print(
             f"Pretokenizing {split_name} split: {len(files)} files, "
-            f"shard_size={shard_size}"
+            f"shard_size={effective_shard_size}"
         )
-        split_dir = Path(args.output_dir) / "mlm" / split_name
+        split_dir = Path(output_dir) / "mlm" / split_name
         writer = ShardWriter(
             output_dir=split_dir,
-            shard_size=shard_size,
-            max_length=args.max_length,
+            shard_size=effective_shard_size,
+            max_length=max_length,
             has_labels=False,
         )
 
@@ -339,7 +388,7 @@ def _pretokenize_mlm(args: argparse.Namespace) -> None:
             encoded = tokenizer(
                 text,
                 truncation=True,
-                max_length=args.max_length,
+                max_length=max_length,
                 padding="max_length",
                 return_tensors="np",
             )
@@ -353,13 +402,13 @@ def _pretokenize_mlm(args: argparse.Namespace) -> None:
         manifest = writer.finalize(
             config={
                 "stage": "mlm",
-                "max_length": args.max_length,
-                "tokenizer_path": args.tokenizer_path,
-                "languages": languages,
+                "max_length": max_length,
+                "tokenizer_path": tokenizer_path,
+                "languages": lang_list,
                 "split": split_name,
-                "shard_size": shard_size,
-                "seed": args.seed,
-                "eval_ratio": args.eval_ratio,
+                "shard_size": effective_shard_size,
+                "seed": seed,
+                "eval_ratio": eval_ratio,
             },
         )
         print(

@@ -44,6 +44,7 @@ dependencies = [
     "tokenizers>=0.13.0",
     "huggingface-hub>=0.16.0",
     "python-ly>=0.9.9",
+    "typer>=0.24.0",
 ]
 
 [project.optional-dependencies]
