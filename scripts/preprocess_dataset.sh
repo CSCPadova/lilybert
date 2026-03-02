@@ -11,8 +11,8 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Preprocess a custom folder of .ly files, then pretokenize and shard them
-# for MLM pretraining.
+# Preprocess a custom folder of .ly files, train a tokenizer on the
+# preprocessed corpus, then pretokenize and shard for MLM pretraining.
 #
 # Usage:
 #   sbatch scripts/preprocess_dataset.sh
@@ -21,10 +21,13 @@ set -euo pipefail
 #   sbatch --export=ALL,INPUT_DIR=data/my_corpus,SHARD_SIZE=4096 \
 #       scripts/preprocess_dataset.sh
 #
-#   # Skip preprocessing (already done), only pretokenize:
+#   # Skip preprocessing (already done), only train tokenizer + pretokenize:
 #   sbatch --export=ALL,SKIP_PREPROCESS=1 scripts/preprocess_dataset.sh
 #
-#   # Skip pretokenization (only preprocess):
+#   # Skip tokenizer training (already trained):
+#   sbatch --export=ALL,SKIP_TOKENIZER=1 scripts/preprocess_dataset.sh
+#
+#   # Skip pretokenization (only preprocess + train tokenizer):
 #   sbatch --export=ALL,SKIP_PRETOKENIZE=1 scripts/preprocess_dataset.sh
 # ---------------------------------------------------------------------------
 
@@ -48,11 +51,15 @@ MAX_LENGTH="2048"
 EVAL_RATIO="0.01"
 SEED="42"
 
+# Tokenizer training settings
+VOCAB_SIZE="${VOCAB_SIZE:-8000}"
+
 # Worker count: SLURM cpus > nproc fallback
 NUM_WORKERS="${NUM_WORKERS:-${SLURM_CPUS_PER_TASK:-$(nproc)}}"
 
 # Stage toggles
 SKIP_PREPROCESS="${SKIP_PREPROCESS:-0}"
+SKIP_TOKENIZER="${SKIP_TOKENIZER:-0}"
 SKIP_PRETOKENIZE="${SKIP_PRETOKENIZE:-0}"
 
 # Augmentation settings
@@ -81,7 +88,9 @@ echo "TOKENIZER_PATH:   ${TOKENIZER_PATH}"
 echo "SHARDS_DIR:       ${SHARDS_DIR}"
 echo "SHARD_SIZE:       ${SHARD_SIZE}"
 echo "MAX_LENGTH:       ${MAX_LENGTH}"
+echo "VOCAB_SIZE:       ${VOCAB_SIZE}"
 echo "SKIP_PREPROCESS:  ${SKIP_PREPROCESS}"
+echo "SKIP_TOKENIZER:   ${SKIP_TOKENIZER}"
 echo "SKIP_PRETOKENIZE: ${SKIP_PRETOKENIZE}"
 echo "============================================"
 
@@ -89,7 +98,7 @@ echo "============================================"
 
 if [[ "${SKIP_PREPROCESS}" == "0" ]]; then
     echo ""
-    echo "[Stage 1/2] Preprocessing .ly files from ${INPUT_DIR} ..."
+    echo "[Stage 1/3] Preprocessing .ly files from ${INPUT_DIR} ..."
     echo ""
 
     PREPROCESS_ARGS=(
@@ -110,17 +119,37 @@ if [[ "${SKIP_PREPROCESS}" == "0" ]]; then
     uv run lilybert mutopia-preprocess "${PREPROCESS_ARGS[@]}"
 
     echo ""
-    echo "[Stage 1/2] Preprocessing complete."
+    echo "[Stage 1/3] Preprocessing complete."
 else
     echo ""
-    echo "[Stage 1/2] Skipped (SKIP_PREPROCESS=1)."
+    echo "[Stage 1/3] Skipped (SKIP_PREPROCESS=1)."
 fi
 
-# ── Stage 2: Pretokenize & shard ──────────────────────────────────────────
+# ── Stage 2: Train tokenizer ─────────────────────────────────────────────
+
+if [[ "${SKIP_TOKENIZER}" == "0" ]]; then
+    echo ""
+    echo "[Stage 2/3] Training tokenizer on preprocessed corpus ..."
+    echo ""
+
+    uv run lilybert train-tokenizer \
+        --processed-dir "${PREPROCESSED_DIR}" \
+        --output-dir "${TOKENIZER_PATH}" \
+        --vocab-size "${VOCAB_SIZE}" \
+        --languages "${LANGUAGES}"
+
+    echo ""
+    echo "[Stage 2/3] Tokenizer training complete."
+else
+    echo ""
+    echo "[Stage 2/3] Skipped (SKIP_TOKENIZER=1)."
+fi
+
+# ── Stage 3: Pretokenize & shard ──────────────────────────────────────────
 
 if [[ "${SKIP_PRETOKENIZE}" == "0" ]]; then
     echo ""
-    echo "[Stage 2/2] Pretokenizing and sharding ..."
+    echo "[Stage 3/3] Pretokenizing and sharding ..."
     echo ""
 
     uv run lilybert pretokenize \
@@ -135,10 +164,10 @@ if [[ "${SKIP_PRETOKENIZE}" == "0" ]]; then
         --seed "${SEED}"
 
     echo ""
-    echo "[Stage 2/2] Pretokenization complete."
+    echo "[Stage 3/3] Pretokenization complete."
 else
     echo ""
-    echo "[Stage 2/2] Skipped (SKIP_PRETOKENIZE=1)."
+    echo "[Stage 3/3] Skipped (SKIP_PRETOKENIZE=1)."
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────
