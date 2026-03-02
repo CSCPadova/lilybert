@@ -46,7 +46,6 @@ SHARDS_DIR="artifacts/pretokenized/mlm"
 SHARD_SIZE="8192"
 MAX_LENGTH="2048"
 EVAL_RATIO="0.01"
-LANGUAGE="english,italiano,nederlands"  # comma-separated list of languages to include
 SEED="42"
 
 # Worker count: SLURM cpus > nproc fallback
@@ -56,8 +55,14 @@ NUM_WORKERS="${NUM_WORKERS:-${SLURM_CPUS_PER_TASK:-$(nproc)}}"
 SKIP_PREPROCESS="${SKIP_PREPROCESS:-0}"
 SKIP_PRETOKENIZE="${SKIP_PRETOKENIZE:-0}"
 
-# Include augmentation during preprocessing
-INCLUDE_AUGMENTATION="1"
+# Augmentation settings
+LANGUAGES="english,italiano,nederlands"
+ENABLE_TRANSPOSITION="${ENABLE_TRANSPOSITION:-0}"
+ENABLE_ABSOLUTE_RELATIVE="${ENABLE_ABSOLUTE_RELATIVE:-0}"
+ENABLE_ARTICULATION_VARIANTS="${ENABLE_ARTICULATION_VARIANTS:-0}"
+ENABLE_BARLINE_VARIANTS="${ENABLE_BARLINE_VARIANTS:-1}"
+ENABLE_RETROGRADE="${ENABLE_RETROGRADE:-0}"
+ENABLE_INVERSION="${ENABLE_INVERSION:-0}"
 
 # ── Logging ────────────────────────────────────────────────────────────────
 
@@ -92,11 +97,15 @@ if [[ "${SKIP_PREPROCESS}" == "0" ]]; then
         --output-dir "${PREPROCESSED_DIR}"
         --num-workers "${NUM_WORKERS}"
         --skip-on-error
+        --languages "${LANGUAGES}"
     )
 
-    if [[ "${INCLUDE_AUGMENTATION}" == "1" ]]; then
-        PREPROCESS_ARGS+=(--include-augmentation)
-    fi
+    [[ "${ENABLE_TRANSPOSITION}" == "1" ]]          && PREPROCESS_ARGS+=(--enable-transposition)
+    [[ "${ENABLE_ABSOLUTE_RELATIVE}" == "1" ]]      && PREPROCESS_ARGS+=(--enable-absolute-relative)
+    [[ "${ENABLE_ARTICULATION_VARIANTS}" == "1" ]]   && PREPROCESS_ARGS+=(--enable-articulation-variants)
+    [[ "${ENABLE_BARLINE_VARIANTS}" == "1" ]]        && PREPROCESS_ARGS+=(--enable-barline-variants)
+    [[ "${ENABLE_RETROGRADE}" == "1" ]]              && PREPROCESS_ARGS+=(--enable-retrograde)
+    [[ "${ENABLE_INVERSION}" == "1" ]]               && PREPROCESS_ARGS+=(--enable-inversion)
 
     uv run lilybert mutopia-preprocess "${PREPROCESS_ARGS[@]}"
 
@@ -122,7 +131,7 @@ if [[ "${SKIP_PRETOKENIZE}" == "0" ]]; then
         --max-length "${MAX_LENGTH}" \
         --shard-size "${SHARD_SIZE}" \
         --eval-ratio "${EVAL_RATIO}" \
-        --language "${LANGUAGE}" \
+        --languages "${LANGUAGES}" \
         --seed "${SEED}"
 
     echo ""

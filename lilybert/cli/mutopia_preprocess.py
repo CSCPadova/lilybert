@@ -14,7 +14,6 @@ for improved performance on multi-core systems.
 """
 
 import os
-import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,7 +30,7 @@ from lilybert.data.tokenizer import LilyPondTokenizer
 def preprocess_single_file(
     file_path: str,
     output_dir: str,
-    include_augmentation: bool = True,
+    aug_config: Optional[AugmentationConfig] = None,
 ) -> Dict[str, Any]:
     """Preprocess a single file and save augmented variants as separate .ly files.
 
@@ -42,24 +41,14 @@ def preprocess_single_file(
     Args:
         file_path: Path to .ly file to preprocess
         output_dir: Output directory for preprocessed files
-        include_augmentation: Whether to use augmentation
+        aug_config: Augmentation configuration (default: no augmentation)
 
     Returns:
         Dict with keys: file_path, variants_written, movements_count, error
     """
     try:
-        aug_config = (
-            AugmentationConfig()
-            if not include_augmentation
-            else AugmentationConfig(
-                languages=["italiano", "english", "nederlands"],
-                enable_transposition=True,
-                enable_absolute_relative=True,
-                enable_articulation_variants=True,
-                enable_barline_variants=True,
-                include_original=True,
-            )
-        )
+        if aug_config is None:
+            aug_config = AugmentationConfig()
 
         preprocessor = LilyPondPreprocessor(augmentation_config=aug_config)
 
@@ -117,7 +106,7 @@ def preprocess_mutopia_files(
     input_dir: Path,
     output_dir: Path,
     max_files: int | None = None,
-    include_augmentation: bool = True,
+    aug_config: AugmentationConfig | None = None,
     skip_on_error: bool = True,
     num_workers: int | None = None,
 ) -> Dict[str, Any]:
@@ -130,7 +119,7 @@ def preprocess_mutopia_files(
         input_dir: Directory containing combined .ly files
         output_dir: Output directory for preprocessed files
         max_files: Maximum files to process (for testing)
-        include_augmentation: Whether to use augmentation
+        aug_config: Augmentation configuration (default: no augmentation)
         skip_on_error: Skip files that fail to preprocess (default: True)
         num_workers: Number of parallel workers (default: CPU count)
 
@@ -168,7 +157,7 @@ def preprocess_mutopia_files(
                 preprocess_single_file,
                 str(file_path),
                 str(output_dir),
-                include_augmentation,
+                aug_config,
             )
             for file_path in ly_files
         ]
@@ -281,6 +270,31 @@ def main(
     verbose: Annotated[
         bool, typer.Option(help="Print detailed progress information")
     ] = False,
+    # ── Augmentation flags ──────────────────────────────────────────
+    languages: Annotated[
+        str,
+        typer.Option(
+            help="Comma-separated LilyPond languages for augmentation"
+        ),
+    ] = "italiano,english,nederlands",
+    enable_transposition: Annotated[
+        bool, typer.Option(help="Enable transposition augmentation")
+    ] = False,
+    enable_absolute_relative: Annotated[
+        bool, typer.Option(help="Enable absolute/relative pitch conversion")
+    ] = False,
+    enable_articulation_variants: Annotated[
+        bool, typer.Option(help="Enable short/expanded articulation variants")
+    ] = False,
+    enable_barline_variants: Annotated[
+        bool, typer.Option(help="Enable add/remove barline variants")
+    ] = False,
+    enable_retrograde: Annotated[
+        bool, typer.Option(help="Enable retrograde pitch augmentation")
+    ] = False,
+    enable_inversion: Annotated[
+        bool, typer.Option(help="Enable pitch inversion augmentation")
+    ] = False,
 ) -> None:
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -295,6 +309,45 @@ def main(
     if max_files:
         print(f"Processing max {max_files} files")
 
+    # Build augmentation config from CLI flags
+    lang_list = [l.strip() for l in languages.split(",") if l.strip()]
+    aug_config = AugmentationConfig(
+        languages=lang_list,
+        enable_transposition=enable_transposition,
+        enable_absolute_relative=enable_absolute_relative,
+        enable_articulation_variants=enable_articulation_variants,
+        enable_barline_variants=enable_barline_variants,
+        enable_retrograde=enable_retrograde,
+        enable_inversion=enable_inversion,
+        include_original=True,
+    )
+
+    any_aug = (
+        enable_transposition
+        or enable_absolute_relative
+        or enable_articulation_variants
+        or enable_barline_variants
+        or enable_retrograde
+        or enable_inversion
+    )
+    print(f"Languages: {lang_list}")
+    if any_aug:
+        enabled = [
+            name
+            for name, flag in [
+                ("transposition", enable_transposition),
+                ("absolute_relative", enable_absolute_relative),
+                ("articulation_variants", enable_articulation_variants),
+                ("barline_variants", enable_barline_variants),
+                ("retrograde", enable_retrograde),
+                ("inversion", enable_inversion),
+            ]
+            if flag
+        ]
+        print(f"Augmentations: {', '.join(enabled)}")
+    else:
+        print("Augmentations: none (language variants only)")
+
     # Step 1: Preprocess files
     if not skip_preprocess:
         print("\n" + "=" * 60)
@@ -307,7 +360,7 @@ def main(
             input_path,
             output_path,
             max_files=max_files,
-            include_augmentation=True,
+            aug_config=aug_config,
             skip_on_error=skip_on_error,
             num_workers=num_workers,
         )
