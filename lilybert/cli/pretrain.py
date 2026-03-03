@@ -7,6 +7,7 @@ Uses Hydra for configuration. Pass overrides as positional arguments:
 
 from __future__ import annotations
 
+from dataclasses import fields
 import json
 from pathlib import Path
 from typing import Optional
@@ -52,7 +53,22 @@ def main(
         cfg = hydra.compose(config_name=config_name, overrides=list(overrides))
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(cfg_dict, dict):
+        raise TypeError("Expected a dict-like Hydra config for pretraining")
 
-    config = PretrainingConfig(**cfg_dict)
+    allowed_fields = {item.name for item in fields(PretrainingConfig)}
+
+    if isinstance(cfg_dict.get("pretraining"), dict):
+        merged = dict(cfg_dict["pretraining"])
+        for key, value in cfg_dict.items():
+            if key in allowed_fields:
+                merged[key] = value
+        cfg_dict = merged
+
+    config_payload = {
+        key: value for key, value in cfg_dict.items() if key in allowed_fields
+    }
+
+    config = PretrainingConfig(**config_payload)
     summary = MLMPretrainer(config=config).run()
     print(json.dumps(summary, indent=2, ensure_ascii=False))
