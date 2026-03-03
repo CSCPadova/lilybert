@@ -21,7 +21,7 @@ num_train_epochs: 3
 learning_rate: 5e-5
 weight_decay: 0.01
 warmup_ratio: 0.06
-max_steps: 0
+max_steps: -1
 logging_steps: 50
 save_steps: 500
 seed: 42
