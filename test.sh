@@ -39,7 +39,7 @@ export HYDRA_FULL_ERROR=1
 
 export OUTPUT_DIR=/nfsd/voce/machine_learning/experiments/lilybert/outputs/pretrain
 export TOKENIZER_PATH=/nfsd/voce/machine_learning/experiments/lilybert/artifacts/tokenizer
-export SHARDS_DIR=/nfsd/voce/machine_learning/experiments/lilybert/artifacts/pretokenized/mlm/mlm
+export SHARDS_DIR=/nfsd/voce/machine_learning/experiments/lilybert/artifacts/pretokenized/mlm
 export WANDB_PROJECT=lilybert
 export WANDB_RUN_NAME=pretrain
 
@@ -83,23 +83,23 @@ test -d "${TOKENIZER_PATH}"                 || { echo "Missing tokenizer dir"; e
 
 # --- Build command ---
 PRETRAIN_OVERRIDES=(
-  pretokenized_shards_dir="${SHARDS_DIR}"
-  tokenizer_path="${TOKENIZER_PATH}"
-  output_dir="${OUTPUT_DIR}"
-  per_device_train_batch_size="${BATCH_SIZE}"
-  num_train_epochs="${EPOCHS}"
-  max_length="${MAX_LENGTH}"
-  learning_rate="${LEARNING_RATE}"
-  dataloader_num_workers="${NUM_WORKERS}"
+    ++pretokenized_shards_dir="${SHARDS_DIR}"
+    ++tokenizer_path="${TOKENIZER_PATH}"
+    ++output_dir="${OUTPUT_DIR}"
+    ++per_device_train_batch_size="${BATCH_SIZE}"
+    ++num_train_epochs="${EPOCHS}"
+    ++max_length="${MAX_LENGTH}"
+    ++learning_rate="${LEARNING_RATE}"
+    ++dataloader_num_workers="${NUM_WORKERS}"
 )
 
 # --- Optional W&B ---
 if [ -n "${WANDB_PROJECT:-}" ]; then
-    PRETRAIN_OVERRIDES+=(wandb_enabled=true wandb_project="${WANDB_PROJECT}")
-    [ -n "${WANDB_ENTITY:-}" ] && PRETRAIN_OVERRIDES+=(wandb_entity="${WANDB_ENTITY}")
-    [ -n "${WANDB_RUN_NAME:-}" ] && PRETRAIN_OVERRIDES+=(wandb_run_name="${WANDB_RUN_NAME}")
+    PRETRAIN_OVERRIDES+=(++wandb_enabled=true ++wandb_project="${WANDB_PROJECT}")
+    [ -n "${WANDB_ENTITY:-}" ] && PRETRAIN_OVERRIDES+=(++wandb_entity="${WANDB_ENTITY}")
+    [ -n "${WANDB_RUN_NAME:-}" ] && PRETRAIN_OVERRIDES+=(++wandb_run_name="${WANDB_RUN_NAME}")
 else
-    PRETRAIN_OVERRIDES+=(wandb_enabled=false)
+    PRETRAIN_OVERRIDES+=(++wandb_enabled=false)
 fi
 
 # --- Launch ---
@@ -115,7 +115,7 @@ if [ "$NGPUS" -gt 1 ]; then
     uv run torchrun \
         --nproc_per_node="$NGPUS" \
         --master_port="${MASTER_PORT:-29501}" \
-        -m lilybert.cli.pretrain \
+    -m lilybert pretrain \
         --config-name pretraining/default \
         "${PRETRAIN_OVERRIDES[@]}"
 else
