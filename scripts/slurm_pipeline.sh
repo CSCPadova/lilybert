@@ -26,6 +26,8 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G
 #SBATCH --time=48:00:00
+#SBATCH --output=logs/pipeline_%j.out
+#SBATCH --error=logs/pipeline_%j.err
 
 set -euo pipefail
 
@@ -33,17 +35,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Logs go under project root so they are always writable.
-LOG_DIR="${PROJECT_ROOT}/logs"
-mkdir -p "${LOG_DIR}"
-
-# Under SLURM, tee stdout/stderr to log files (sbatch --output/--error
-# default to the submitter's cwd which may be unwritable on compute nodes).
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-    exec > >(tee "${LOG_DIR}/pipeline_${SLURM_JOB_ID}.out") \
-         2> >(tee "${LOG_DIR}/pipeline_${SLURM_JOB_ID}.err" >&2)
-fi
 
 # ── Defaults (override via env before sbatch) ─────────────────────────────
 
