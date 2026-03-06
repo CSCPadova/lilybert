@@ -131,9 +131,7 @@ def test_pipeline_predict_files(tmp_path: Path):
 
 
 def test_pipeline_predict_directory(tmp_path: Path):
-    lang_dir = tmp_path / "english"
-    lang_dir.mkdir()
-    (lang_dir / "mvt1.ly").write_text("a b c d", encoding="utf-8")
+    (tmp_path / "mvt1.ly").write_text("a b c d", encoding="utf-8")
 
     tokenizer = _FakeTokenizer()
     model = _FakeModel(num_classes=2)
@@ -148,7 +146,7 @@ def test_pipeline_predict_directory(tmp_path: Path):
     )
 
     results = pipeline.predict_directory(
-        input_dir=str(tmp_path), language="english", batch_size=4
+        input_dir=str(tmp_path), batch_size=4
     )
     assert len(results) == 1
     assert results[0]["movement_id"] == "mvt1"
@@ -160,7 +158,7 @@ def test_pipeline_predict_directory_missing_raises(tmp_path: Path):
     pipeline = InferencePipeline(model=model, tokenizer=tokenizer, device="cpu")
     with pytest.raises(FileNotFoundError):
         pipeline.predict_directory(
-            input_dir=str(tmp_path / "nonexistent"), language="english"
+            input_dir=str(tmp_path / "nonexistent")
         )
 
 

@@ -32,6 +32,7 @@ from ly.pitch.transform import retrograde as ly_retrograde
 from ly.pitch.transpose import Transposer, transpose
 from transformers import PreTrainedTokenizer
 
+from .lexer import MusicalLexer
 from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
@@ -83,8 +84,6 @@ def _preprocess_dataset_file_worker(
         return {"ok": False, "error": str(exc), "file": path}
 
 
-DEFAULT_AUGMENTATION_LANGUAGES = ["italiano", "english", "nederlands"]
-
 STRIPPABLE_SECTIONS = frozenset({
     "header",
     "comments",
@@ -96,19 +95,6 @@ STRIPPABLE_SECTIONS = frozenset({
     "overrides",
     "pagebreaks",
 })
-AVAILABLE_LILYPOND_LANGUAGES = {
-    "nederlands",
-    "english",
-    "deutsch",
-    "svenska",
-    "italiano",
-    "espanol",
-    "portugues",
-    "vlaams",
-    "norsk",
-    "suomi",
-    "catalan",
-}
 
 def _generate_transposition_targets(language: str = "english") -> List[str]:
     """Generate all chromatic pitch targets using ly.pitch."""
@@ -125,9 +111,6 @@ def _generate_transposition_targets(language: str = "english") -> List[str]:
 class AugmentationConfig:
     """Configurable LilyPond data augmentation knobs for Stage-1 corpus building."""
 
-    languages: List[str] = field(
-        default_factory=lambda: list(DEFAULT_AUGMENTATION_LANGUAGES)
-    )
     enable_transposition: bool = False
     enable_absolute_relative: bool = False
     enable_articulation_variants: bool = False
@@ -139,25 +122,7 @@ class AugmentationConfig:
     @classmethod
     def from_mapping(cls, value: Optional[Dict[str, Any]]) -> "AugmentationConfig":
         raw = value or {}
-        languages = raw.get("languages", DEFAULT_AUGMENTATION_LANGUAGES)
-        if isinstance(languages, str):
-            languages = [lang.strip() for lang in languages.split(",") if lang.strip()]
-
-        normalized_languages = [str(language).strip().lower() for language in languages]
-        if not normalized_languages:
-            normalized_languages = list(DEFAULT_AUGMENTATION_LANGUAGES)
-
-        invalid_languages = sorted(
-            set(normalized_languages) - AVAILABLE_LILYPOND_LANGUAGES
-        )
-        if invalid_languages:
-            raise ValueError(
-                "Unsupported LilyPond language(s): "
-                f"{invalid_languages}. Supported: {sorted(AVAILABLE_LILYPOND_LANGUAGES)}"
-            )
-
         return cls(
-            languages=normalized_languages,
             enable_transposition=bool(raw.get("enable_transposition", False)),
             enable_absolute_relative=bool(raw.get("enable_absolute_relative", False)),
             enable_articulation_variants=bool(
@@ -380,15 +345,11 @@ class LilyPondPreprocessor:
         merged_text = "\n\n".join(m["italiano_text"] for m in movements)
         tokenized = self._tokenize_text(merged_text) if self.tokenizer else None
 
-        self.parser.parse_content(merged_text)
-        statistics = self.parser.get_statistics()
-
         return {
             "text": merged_text,
             "raw_text": raw_text,
             "tokenized": tokenized,
             "metadata": {},
-            "statistics": statistics,
             "file_path": str(path),
             "labels": labels_entry or {"unknown": []},
             "movements": movements,
@@ -441,9 +402,7 @@ class LilyPondPreprocessor:
         labels_map = self._load_labels()
         config = self._resolve_augmentation_config(augmentation_config)
         out_root = Path(output_dir)
-        language_dirs = {lang: out_root / lang for lang in config.languages}
-        for directory in language_dirs.values():
-            directory.mkdir(parents=True, exist_ok=True)
+        out_root.mkdir(parents=True, exist_ok=True)
 
         metadata: Dict[str, Any] = {}
         failures: Dict[str, str] = {}
@@ -457,7 +416,6 @@ class LilyPondPreprocessor:
         max_workers = min(8, (os.cpu_count() or 2))
 
         aug_cfg = {
-            "languages": list(config.languages),
             "enable_transposition": config.enable_transposition,
             "enable_absolute_relative": config.enable_absolute_relative,
             "enable_articulation_variants": config.enable_articulation_variants,
@@ -491,17 +449,13 @@ class LilyPondPreprocessor:
                     movement_id = item["movement_id"]
                     total_movements += 1
 
-                    language = item["language"]
-                    if language not in language_dirs:
-                        continue
-
                     variant_id = item["variant_id"]
                     if variant_id == "base":
                         file_name = f"{movement_id}.ly"
                     else:
                         file_name = f"{movement_id}__{variant_id}.ly"
 
-                    output_path = language_dirs[language] / file_name
+                    output_path = out_root / file_name
                     output_path.write_text(item["text"], encoding="utf-8")
 
                     if variant_id == "base":
@@ -523,7 +477,6 @@ class LilyPondPreprocessor:
         return {
             "files_processed": len(raw_files),
             "movements_written": total_movements,
-            "languages": config.languages,
             "augmentation": {
                 "enable_transposition": config.enable_transposition,
                 "enable_absolute_relative": config.enable_absolute_relative,
@@ -551,168 +504,166 @@ class LilyPondPreprocessor:
         movement: Dict[str, Any],
         config: AugmentationConfig,
     ) -> List[Dict[str, str]]:
+        """Build augmented variants of a movement in English notation.
+
+        All output uses English pitch representation. The source movement
+        is normalised from its original language (typically Italian) to
+        English before any further augmentation is applied.
+        """
         variants: List[Dict[str, str]] = []
         seen = set()
+        language = "english"
 
+        # Normalise to English internal representation
         base_italiano = movement.get("italiano_text", "")
-        for language in config.languages:
-            if language == "italiano":
-                language_text = base_italiano
-            elif language == "english":
-                language_text = movement.get(
-                    "english_text"
-                ) or self._translate_with_python_ly(
-                    base_italiano,
-                    source_language="italiano",
-                    target_language="english",
-                )
-            else:
-                language_text = self._translate_with_python_ly(
-                    base_italiano,
-                    source_language="italiano",
-                    target_language=language,
-                )
+        english_text = movement.get(
+            "english_text"
+        ) or self._translate_with_python_ly(
+            base_italiano,
+            source_language="italiano",
+            target_language="english",
+        )
 
-            current = [{"text": language_text, "ops": ["base"]}]
+        current = [{"text": english_text, "ops": ["base"]}]
 
-            if config.enable_absolute_relative:
-                expanded: List[Dict[str, Any]] = []
-                for candidate in current:
-                    expanded.append(candidate)
-                    expanded.append(
-                        {
-                            "text": self._convert_relative_absolute(
-                                candidate["text"],
-                                language=language,
-                                target_mode="absolute",
-                            ),
-                            "ops": [*candidate["ops"], "absolute"],
-                        }
-                    )
-                    expanded.append(
-                        {
-                            "text": self._convert_relative_absolute(
-                                candidate["text"],
-                                language=language,
-                                target_mode="relative",
-                            ),
-                            "ops": [*candidate["ops"], "relative"],
-                        }
-                    )
-                current = expanded
-
-            if config.enable_transposition:
-                transposition_targets = _generate_transposition_targets(language)
-                expanded = []
-                for candidate, target in product(
-                    current, transposition_targets
-                ):
-                    expanded.append(
-                        {
-                            "text": self._transpose_with_python_ly(
-                                candidate["text"],
-                                language=language,
-                                target_pitch_name=target,
-                            ),
-                            "ops": [*candidate["ops"], f"transpose_{target}"],
-                        }
-                    )
-                current = expanded
-
-            if config.enable_articulation_variants:
-                expanded = []
-                for candidate in current:
-                    expanded.append(candidate)
-                    expanded.append(
-                        {
-                            "text": self._articulation_variant(
-                                candidate["text"], variant="short"
-                            ),
-                            "ops": [*candidate["ops"], "articulation_short"],
-                        }
-                    )
-                    expanded.append(
-                        {
-                            "text": self._articulation_variant(
-                                candidate["text"], variant="expanded"
-                            ),
-                            "ops": [*candidate["ops"], "articulation_expanded"],
-                        }
-                    )
-                current = expanded
-
-            if config.enable_barline_variants:
-                expanded = []
-                for candidate in current:
-                    expanded.append(candidate)
-                    expanded.append(
-                        {
-                            "text": self._barline_variant(
-                                candidate["text"], mode="add"
-                            ),
-                            "ops": [*candidate["ops"], "barline_add"],
-                        }
-                    )
-                    expanded.append(
-                        {
-                            "text": self._barline_variant(
-                                candidate["text"], mode="remove"
-                            ),
-                            "ops": [*candidate["ops"], "barline_remove"],
-                        }
-                    )
-                current = expanded
-
-            if config.enable_retrograde:
-                expanded = []
-                for candidate in current:
-                    expanded.append(candidate)
-                    expanded.append(
-                        {
-                            "text": self._retrograde_with_python_ly(
-                                candidate["text"], language=language
-                            ),
-                            "ops": [*candidate["ops"], "retrograde"],
-                        }
-                    )
-                current = expanded
-
-            if config.enable_inversion:
-                expanded = []
-                for candidate in current:
-                    expanded.append(candidate)
-                    expanded.append(
-                        {
-                            "text": self._inversion_with_python_ly(
-                                candidate["text"], language=language
-                            ),
-                            "ops": [*candidate["ops"], "inversion"],
-                        }
-                    )
-                current = expanded
-
+        if config.enable_absolute_relative:
+            expanded: List[Dict[str, Any]] = []
             for candidate in current:
-                if not config.include_original and candidate["ops"] == ["base"]:
-                    continue
-                candidate_text = candidate["text"].strip()
-                # Ensure \language directive is present for the tokenizer
-                if not re.search(r'\\language\s+"', candidate_text):
-                    candidate_text = f'\\language "{language}"\n{candidate_text}'
-                normalized_text = candidate_text + "\n"
-                key = (language, sha1(normalized_text.encode("utf-8")).hexdigest())
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                op_tags = [tag for tag in candidate["ops"] if tag != "base"]
-                variant_id = "base" if not op_tags else "__".join(op_tags)
-                variants.append(
+                expanded.append(candidate)
+                expanded.append(
                     {
-                        "language": language,
-                        "variant_id": variant_id,
-                        "text": normalized_text,
+                        "text": self._convert_relative_absolute(
+                            candidate["text"],
+                            language=language,
+                            target_mode="absolute",
+                        ),
+                        "ops": [*candidate["ops"], "absolute"],
                     }
                 )
+                expanded.append(
+                    {
+                        "text": self._convert_relative_absolute(
+                            candidate["text"],
+                            language=language,
+                            target_mode="relative",
+                        ),
+                        "ops": [*candidate["ops"], "relative"],
+                    }
+                )
+            current = expanded
+
+        if config.enable_transposition:
+            transposition_targets = _generate_transposition_targets(language)
+            expanded = []
+            for candidate, target in product(
+                current, transposition_targets
+            ):
+                expanded.append(
+                    {
+                        "text": self._transpose_with_python_ly(
+                            candidate["text"],
+                            language=language,
+                            target_pitch_name=target,
+                        ),
+                        "ops": [*candidate["ops"], f"transpose_{target}"],
+                    }
+                )
+            current = expanded
+
+        if config.enable_articulation_variants:
+            expanded = []
+            for candidate in current:
+                expanded.append(candidate)
+                expanded.append(
+                    {
+                        "text": self._articulation_variant(
+                            candidate["text"], variant="short"
+                        ),
+                        "ops": [*candidate["ops"], "articulation_short"],
+                    }
+                )
+                expanded.append(
+                    {
+                        "text": self._articulation_variant(
+                            candidate["text"], variant="expanded"
+                        ),
+                        "ops": [*candidate["ops"], "articulation_expanded"],
+                    }
+                )
+            current = expanded
+
+        if config.enable_barline_variants:
+            expanded = []
+            for candidate in current:
+                expanded.append(candidate)
+                expanded.append(
+                    {
+                        "text": self._barline_variant(
+                            candidate["text"], mode="add"
+                        ),
+                        "ops": [*candidate["ops"], "barline_add"],
+                    }
+                )
+                expanded.append(
+                    {
+                        "text": self._barline_variant(
+                            candidate["text"], mode="remove"
+                        ),
+                        "ops": [*candidate["ops"], "barline_remove"],
+                    }
+                )
+            current = expanded
+
+        if config.enable_retrograde:
+            expanded = []
+            for candidate in current:
+                expanded.append(candidate)
+                expanded.append(
+                    {
+                        "text": self._retrograde_with_python_ly(
+                            candidate["text"], language=language
+                        ),
+                        "ops": [*candidate["ops"], "retrograde"],
+                    }
+                )
+            current = expanded
+
+        if config.enable_inversion:
+            expanded = []
+            for candidate in current:
+                expanded.append(candidate)
+                expanded.append(
+                    {
+                        "text": self._inversion_with_python_ly(
+                            candidate["text"], language=language
+                        ),
+                        "ops": [*candidate["ops"], "inversion"],
+                    }
+                )
+            current = expanded
+
+        for candidate in current:
+            if not config.include_original and candidate["ops"] == ["base"]:
+                continue
+            candidate_text = candidate["text"].strip()
+            # Ensure \language directive is present for the tokenizer
+            if not re.search(r'\\language\s+"', candidate_text):
+                candidate_text = f'\\language "{language}"\n{candidate_text}'
+            normalized_text = candidate_text + "\n"
+            key = sha1(normalized_text.encode("utf-8")).hexdigest()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            op_tags = [tag for tag in candidate["ops"] if tag != "base"]
+            variant_id = "base" if not op_tags else "__".join(op_tags)
+            variants.append(
+                {
+                    "language": language,
+                    "variant_id": variant_id,
+                    "text": normalized_text,
+                }
+            )
 
         return variants
 
@@ -964,24 +915,7 @@ class LilyPondPreprocessor:
         return parts
 
     def _has_musical_content(self, text: str) -> bool:
-        tokens = self.parser._tokenize_music(text)
-        if not tokens:
-            return False
-
-        for token in tokens:
-            element = self.parser._parse_token(token)
-            if element is None:
-                continue
-
-            if element.type in {"note", "chord", "rest"}:
-                return True
-
-            if element.type == "directive":
-                attrs = element.attributes or {}
-                if attrs.get("note_count", 0) > 0:
-                    return True
-
-        return False
+        return MusicalLexer.has_notes(text)
 
     def _extract_referenced_assignment_names(
         self, score_block: str, assignments: Dict[str, str]
@@ -1152,7 +1086,7 @@ class LilyPondPreprocessor:
             if not match:
                 break
             open_idx = match.end() - 1
-            close_idx = self._find_matching_brace(text, open_idx)
+            close_idx = LilyPondParser.find_matching_brace(text, open_idx)
             blocks.append((match.start(), close_idx, text[match.start() : close_idx]))
             search_start = close_idx
         return blocks
@@ -1228,12 +1162,12 @@ class LilyPondPreprocessor:
         if text.startswith("<<", start):
             return self._find_matching_angles(text, start)
         if text[start] == "{":
-            return self._find_matching_brace(text, start)
+            return LilyPondParser.find_matching_brace(text, start)
 
         next_brace = text.find("{", start)
         if text.startswith("\\relative", start) or text.startswith("\\absolute", start):
             if next_brace != -1:
-                return self._find_matching_brace(text, next_brace)
+                return LilyPondParser.find_matching_brace(text, next_brace)
 
         next_line = text.find("\n", start)
         return len(text) if next_line == -1 else next_line
@@ -1337,7 +1271,7 @@ class LilyPondPreprocessor:
 
             out.append(text[cursor : match.start()])
             open_idx = text.find("{", match.start())
-            close_idx = self._find_matching_brace(text, open_idx)
+            close_idx = LilyPondParser.find_matching_brace(text, open_idx)
             cursor = close_idx
 
         return "".join(out)
@@ -1353,7 +1287,7 @@ class LilyPondPreprocessor:
                 break
 
             open_idx = text.find("{", match.start())
-            close_idx = self._find_matching_brace(text, open_idx)
+            close_idx = LilyPondParser.find_matching_brace(text, open_idx)
             blocks.append(text[open_idx + 1 : close_idx - 1].strip())
             cursor = close_idx
 
@@ -1395,17 +1329,6 @@ class LilyPondPreprocessor:
 
         with labels_file.open("r", encoding="utf-8") as handle:
             return json.load(handle)
-
-    def _find_matching_brace(self, text: str, open_idx: int) -> int:
-        depth = 1
-        for i in range(open_idx + 1, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    return i + 1
-        return len(text)
 
     def _find_matching_angles(self, text: str, open_idx: int) -> int:
         depth = 1

@@ -4,9 +4,6 @@ labels_path: data/labels/labels_v1.json
 strip: null
 
 augmentation:
-  languages:
-    - italiano
-    - english
   enable_transposition: false
   enable_absolute_relative: false
   enable_articulation_variants: false
@@ -23,8 +20,6 @@ sharding:
   output_dir: artifacts/pretokenized
   max_length: 512
   stride: 256
-  language: english
-  languages: null
   shard_size: 4096
   include_structure_markers: false
   eval_ratio: 0.01
@@ -36,5 +31,6 @@ bpe:
   vocab_size: 8000
   min_frequency: 0
   number_placeholders: false
-  notation_mode: both
-  languages: null
+  lexer:
+    include_articulations: true
+    include_slurs: true

@@ -27,7 +27,6 @@ class ProbeConfig:
     tokenizer_path: str = "artifacts/tokenizer"
     data_dir: str = "data/processed"
     task: str = "composer"
-    language: str = "english"
     max_length: int = 512
     stride: int = 256
     test_size: float = 0.2
@@ -66,18 +65,17 @@ def _extract_label(meta: Dict[str, Any], task: str) -> Any:
     raise ValueError(f"Unsupported task: {task}")
 
 
-def _collect_samples(data_dir: Path, language: str, task: str) -> List[Tuple[Path, Any]]:
+def _collect_samples(data_dir: Path, task: str) -> List[Tuple[Path, Any]]:
     metadata_path = data_dir / "metadata.json"
     if not metadata_path.exists():
         raise FileNotFoundError(f"metadata.json not found in {data_dir}")
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    language_dir = data_dir / language
-    if not language_dir.exists():
-        raise FileNotFoundError(f"Language directory not found: {language_dir}")
+    if not data_dir.exists():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
     samples: List[Tuple[Path, Any]] = []
-    for file_path in sorted(language_dir.glob("*.ly")):
+    for file_path in sorted(data_dir.glob("*.ly")):
         movement_id = file_path.stem
         meta = metadata.get(movement_id)
         if not meta:
@@ -208,7 +206,7 @@ def _main(cfg: DictConfig) -> None:
     tokenizer = PreTrainedTokenizerFast.from_pretrained(config.tokenizer_path)
     encoder = LilyBERTEncoder.from_pretrained(config.checkpoint_dir)
 
-    samples = _collect_samples(Path(config.data_dir), config.language, task)
+    samples = _collect_samples(Path(config.data_dir), task)
     if len(samples) < 2:
         raise ValueError("Not enough samples for probing")
 

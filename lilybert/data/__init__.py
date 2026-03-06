@@ -1,6 +1,7 @@
 """Data processing and dataset utilities for LilyPond music notation."""
 
 # Always available - core parsing functionality
+from .lexer import LexerConfig, MusicalLexer
 from .parser import LilyPondParser
 
 # Conditional imports for ML-dependent modules
@@ -22,6 +23,8 @@ try:
         "LilyPondParser",
         "LilyPondPreprocessor",
         "LilyPondTokenizer",
+        "MusicalLexer",
+        "LexerConfig",
         "BaroqueMusicDataAPI",
         "MovementRecord",
         "LabelEncoder",
@@ -32,4 +35,4 @@ except ImportError as e:
     import logging
 
     logging.warning(f"ML modules not available: {e}")
-    __all__ = ["LilyPondParser"]
+    __all__ = ["LilyPondParser", "MusicalLexer", "LexerConfig"]

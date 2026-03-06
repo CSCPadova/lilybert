@@ -287,11 +287,10 @@ class InferencePipeline:
     def predict_directory(
         self,
         input_dir: str,
-        language: str = "english",
         batch_size: int = 16,
     ) -> List[Dict[str, Any]]:
         """Run inference on all .ly files in a directory."""
-        dir_path = Path(input_dir) / language if language else Path(input_dir)
+        dir_path = Path(input_dir)
         if not dir_path.exists():
             raise FileNotFoundError(f"Directory not found: {dir_path}")
 

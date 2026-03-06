@@ -25,7 +25,6 @@ class TrainConfig:
     labels_path: str = "data/labels/labels_v1.json"
     tokenizer_path: str = "artifacts/tokenizer"
     output_dir: str = "outputs/cv"
-    language: str = "english"
     n_folds: int = 5
     max_length: int = 512
     stride: int = 256
@@ -58,7 +57,7 @@ class TrainConfig:
     tensorboard_enabled: bool = False
     tensorboard_log_dir: str = "outputs/tensorboard"
 
-    pretraining_languages: list[str] | None = None
+    pretraining_languages: list[str] | None = None  # deprecated, kept for config compat
     mlm_probability: float = 0.15
     model_architecture: str = "bert-base"
     hidden_size: int = 768
@@ -103,7 +102,6 @@ def _main(cfg: DictConfig) -> None:
             data_dir=config.data_dir,
             tokenizer_path=config.tokenizer_path,
             output_dir=config.output_dir,
-            languages=config.pretraining_languages or ["italiano", "english"],
             model_architecture=config.model_architecture,
             hidden_size=config.hidden_size,
             num_hidden_layers=config.num_hidden_layers,
@@ -163,7 +161,6 @@ def _main(cfg: DictConfig) -> None:
         n_folds=config.n_folds,
         pretokenized_path=config.pretokenized_path,
         sharded_data_dir=config.sharded_data_dir,
-        language=config.language,
         use_fsdp=config.use_fsdp,
         fsdp_sharding_strategy=config.fsdp_sharding_strategy,
         dataloader_num_workers=config.dataloader_num_workers,

@@ -8,19 +8,14 @@ from lilybert.data import BaroqueMusicDataAPI
 def test_data_api_raw_and_processed_access(tmp_path: Path):
     data_root = tmp_path / "data"
     raw_dir = data_root / "raw"
-    processed_it = data_root / "processed" / "italiano"
-    processed_en = data_root / "processed" / "english"
-    processed_meta = data_root / "processed" / "metadata.json"
+    processed_dir = data_root / "processed"
+    processed_meta = processed_dir / "metadata.json"
 
     raw_dir.mkdir(parents=True)
-    processed_it.mkdir(parents=True)
-    processed_en.mkdir(parents=True)
+    processed_dir.mkdir(parents=True)
 
     (raw_dir / "sample.ly").write_text("\\relative do' { do4 re4 }", encoding="utf-8")
-    (processed_it / "sample_mvt1.ly").write_text(
-        "\\relative do' { do4 re4 }", encoding="utf-8"
-    )
-    (processed_en / "sample_mvt1.ly").write_text(
+    (processed_dir / "sample_mvt1.ly").write_text(
         "\\relative c' { c4 d4 }", encoding="utf-8"
     )
     processed_meta.write_text(
@@ -35,10 +30,10 @@ def test_data_api_raw_and_processed_access(tmp_path: Path):
     assert raw_files[0].name == "sample.ly"
     assert "\\relative" in api.load_raw_file("sample.ly")
 
-    movements = api.list_movements(language="italiano")
+    movements = api.list_movements()
     assert len(movements) == 1
 
-    record = api.load_movement("sample_mvt1", language="english")
+    record = api.load_movement("sample_mvt1")
     assert record.movement_id == "sample_mvt1"
     assert "c4 d4" in record.text
     assert record.metadata["base_work"] == "sample"
@@ -46,18 +41,18 @@ def test_data_api_raw_and_processed_access(tmp_path: Path):
 
 def test_data_api_augmentations(tmp_path: Path):
     data_root = tmp_path / "data"
-    processed_it = data_root / "processed" / "italiano"
-    processed_it.mkdir(parents=True)
-    (processed_it / "x_mvt1.ly").write_text("do4 re4", encoding="utf-8")
+    processed_dir = data_root / "processed"
+    processed_dir.mkdir(parents=True)
+    (processed_dir / "x_mvt1.ly").write_text("c4 d4", encoding="utf-8")
 
     api = BaroqueMusicDataAPI(data_root=data_root)
 
     def aug_a(text: str) -> str:
-        return text.replace("do", "XX")
+        return text.replace("c", "XX")
 
     def aug_b(text: str) -> str:
         return text + " END"
 
     out = list(api.iter_augmented_movements(augmentations=[aug_a, aug_b]))
     assert len(out) == 1
-    assert "XX4 re4 END" in out[0].text
+    assert "XX4 d4 END" in out[0].text

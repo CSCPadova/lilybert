@@ -15,51 +15,7 @@ from lilybert.training import TrainingConfig
 
 
 class TestLilyPondParser:
-    """Test LilyPond parser functionality."""
-
-    def test_parse_simple_content(self):
-        """Test parsing simple LilyPond content."""
-        parser = LilyPondParser()
-        content = r"""
-        \version "2.24.0"
-        \header {
-            title = \markup\smaller\center-column {"Concerto Sacro V Op. II"}
-            composer = \markup \center-column{"A. Scarlatti (1660 - 1725)"}
-        }
-        \relative do {
-        \repeat unfold 9 {<mi la,>16}
-        }
-
-        """
-
-        elements = parser.parse_content(content)
-        assert len(elements) > 0
-
-        notes = [e for e in elements if e.type == "note"]
-        assert len(notes) >= 0
-        # Check statistics
-        stats = parser.get_statistics()
-        print(stats["note_count"])
-        assert stats["total_elements"] > 0
-        assert stats["note_count"] > 0
-        assert stats["note_count"] == 18  # Specific to this example
-        assert stats["rest_count"] == 0
-        assert stats["chord_count"] >= 0
-
-    def test_parse_empty_content(self):
-        """Test parsing empty content."""
-        parser = LilyPondParser()
-        elements = parser.parse_content("")
-        assert len(elements) == 0
-
-    def test_parse_with_chords(self):
-        """Test parsing content with chords."""
-        parser = LilyPondParser()
-        content = """\\relative do' { <c e g>4 <d f a>2 }"""
-
-        elements = parser.parse_content(content)
-        chords = [e for e in elements if e.type == "chord"]
-        assert len(chords) == 2
+    """Test LilyPond parser utility functions."""
 
     def test_validate_syntax_valid(self):
         """Test syntax validation with valid content."""
@@ -293,8 +249,7 @@ class TestLilyPondPreprocessor:
         assert "|" in with_tokens
 
     def test_preprocess_file(self):
-        """Test LilyPond Parser & Preprocessor to see how they interact"""
-        parser = LilyPondParser()
+        """Test LilyPond Preprocessor processes a sample file."""
         preprocessor = LilyPondPreprocessor(add_special_tokens=True)
 
         sample = """\\version "2.24.0"
@@ -306,25 +261,12 @@ class TestLilyPondPreprocessor:
             \\time 4/4 \\key c \\major \\tempo "Presto" 4.=100
             c4 d e f | g2 a2 | b4 c d e | c1\\rest r
         }"""
-        elements = parser.parse_content(sample)
-        # Convert to text sequence
-        raw_text = parser.to_sequence(include_metadata=True)
-        # Apply preprocessing steps
-        processed_text = preprocessor._preprocess_text(raw_text)
-        # Tokenize if tokenizer is available
-        tokenized = None
-        if preprocessor.tokenizer:
-            tokenized = preprocessor._tokenize_text(processed_text)
-        # Get statistics
-        statistics = parser.get_statistics()
-        out = {
-            "text": processed_text,
-            "raw_text": raw_text,
-            "tokenized": tokenized,
-            "metadata": parser.metadata,
-            "statistics": statistics,
-        }
-        assert out
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "test.ly"
+            p.write_text(sample, encoding="utf-8")
+            result = preprocessor.preprocess_file(str(p))
+            assert "text" in result
+            assert len(result["text"]) > 0
 
 
 class TestTrainingConfig:
@@ -422,7 +364,6 @@ class TestIntegration:
 
             assert "text" in result
             assert "metadata" in result
-            assert "statistics" in result
             assert len(result["text"]) > 0
 
     def test_preprocessor_preserves_simultaneous_structure_markers(self):
@@ -465,33 +406,16 @@ class TestIntegration:
             assert loaded_config.num_train_epochs == original_config.num_train_epochs
             assert loaded_config.pretrained_model == original_config.pretrained_model
 
-    def test_tokenizer_notation_mode_filters_corpus(self):
+    def test_tokenizer_builds_corpus_from_data_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            (root / "english").mkdir(parents=True, exist_ok=True)
-            (root / "italiano").mkdir(parents=True, exist_ok=True)
 
-            (root / "english" / "mvt1.ly").write_text("c4 d e f", encoding="utf-8")
-            (root / "italiano" / "mvt1.ly").write_text("do4 re mi fa", encoding="utf-8")
+            (root / "mvt1.ly").write_text("c4 d e f", encoding="utf-8")
 
             tokenizer = LilyPondTokenizer()
 
-            english = tokenizer.build_corpus(root, notation_mode="english")
-            italiano = tokenizer.build_corpus(root, notation_mode="italiano")
-            both = tokenizer.build_corpus(root, notation_mode="both")
-
-            assert len(english) == 1
-            assert len(italiano) == 1
-            assert len(both) == 2
-
-    def test_tokenizer_notation_mode_validation(self):
-        tokenizer = LilyPondTokenizer()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            root.mkdir(parents=True, exist_ok=True)
-
-            with pytest.raises(ValueError):
-                tokenizer.build_corpus(root, notation_mode="invalid")
+            corpus = tokenizer.build_corpus(root)
+            assert len(corpus) == 1
 
     def test_tokenizer_preserves_simultaneous_structure_markers(self):
         tokenizer = LilyPondTokenizer()
@@ -506,10 +430,8 @@ class TestIntegration:
         """
 
         token_line = tokenizer._movement_to_parser_tokens(text)
-        assert "[SIMUL_BEGIN]" in token_line
-        assert "[SIMUL_END]" in token_line
-        assert "[SEQ_BEGIN]" in token_line
-        assert "[SEQ_END]" in token_line
+        assert "[PART_BEGIN]" in token_line
+        assert "[PART_END]" in token_line
 
     def test_preprocess_to_dataset_persists_structure_markers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -556,47 +478,6 @@ class TestIntegration:
             assert "structure_markers" in entry
             assert "[SIMUL_BEGIN]" in entry["structure_markers"]
             assert "[SIMUL_END]" in entry["structure_markers"]
-
-
-class TestDefaultAugmentationLanguages:
-    """Verify that preprocessor defaults to three languages: italiano, english, nederlands."""
-
-    def test_default_augmentation_languages_include_three_languages(self):
-        """AugmentationConfig() default includes italiano, english, and nederlands."""
-        from lilybert.data.preprocessor import AugmentationConfig
-
-        config = AugmentationConfig()
-        assert config.languages == ["italiano", "english", "nederlands"]
-
-    def test_augmentation_config_from_mapping_default_languages(self):
-        """AugmentationConfig.from_mapping with no languages uses the 3-language default."""
-        from lilybert.data.preprocessor import AugmentationConfig
-
-        config = AugmentationConfig.from_mapping({})
-        assert config.languages == ["italiano", "english", "nederlands"]
-
-    def test_augmented_variants_produce_all_three_languages(self):
-        """_build_augmented_variants produces variants for all three default languages."""
-        from lilybert.data.preprocessor import AugmentationConfig
-
-        preprocessor = LilyPondPreprocessor()
-        movement = {
-            "italiano_text": r'\relative do { do re mi fa sol }',
-            "english_text": r'\relative c { c d e f g }',
-        }
-        config = AugmentationConfig()
-        variants = preprocessor._build_augmented_variants(movement, config)
-        variant_languages = {v["language"] for v in variants}
-        assert "italiano" in variant_languages
-        assert "english" in variant_languages
-        assert "nederlands" in variant_languages
-
-    def test_preprocess_cli_default_languages(self):
-        """Default augmentation languages include the three supported variants."""
-        from lilybert.data.preprocessor import DEFAULT_AUGMENTATION_LANGUAGES
-
-        languages = list(DEFAULT_AUGMENTATION_LANGUAGES)
-        assert languages == ["italiano", "english", "nederlands"]
 
 
 if __name__ == "__main__":

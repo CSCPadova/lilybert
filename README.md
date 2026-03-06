@@ -109,7 +109,6 @@ ly-predict \
   checkpoint=outputs/cv/fold_1/best_checkpoint \
   input_dir=data/processed \
   task=composer \
-  language=english \
   format=json
 ```
 
@@ -128,8 +127,6 @@ ly-probe \
 ## Notes
 
 - Dataset-specific pipelines (Mutopia/Baroque-only CLIs) were removed.
-- `run-experiment` orchestration was removed.
-- Hugging Face upload CLIs were removed.
 - File combination/compilation/LilyPond version updates are expected in separate scripts.
 
 ## Python API

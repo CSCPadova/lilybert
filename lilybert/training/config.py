@@ -58,7 +58,6 @@ class TrainingConfig:
 
     pretokenized_path: Optional[str] = None
     sharded_data_dir: Optional[str] = None
-    language: str = "english"
 
     # --- distributed ---
     use_fsdp: bool = False

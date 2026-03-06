@@ -15,7 +15,6 @@ class MovementRecord:
     """Container for a preprocessed movement sample."""
 
     movement_id: str
-    language: str
     text: str
     metadata: Optional[Dict[str, Any]] = None
 
@@ -25,7 +24,7 @@ class BaroqueMusicDataAPI:
 
     This class supports:
     - raw dataset access (`data/raw/*.ly`)
-    - preprocessed movement access (`data/processed/{italiano,english}/*.ly`)
+    - preprocessed movement access (`data/processed/*.ly`)
     - metadata access (`data/processed/metadata.json`)
     - simple text-based augmentation pipelines
     """
@@ -62,41 +61,37 @@ class BaroqueMusicDataAPI:
         with metadata_path.open("r", encoding="utf-8") as handle:
             return json.load(handle)
 
-    def list_movements(self, language: str = "italiano") -> List[Path]:
-        """List preprocessed movement files for a language variant."""
-        lang_dir = self.processed_dir / language
-        if not lang_dir.exists():
+    def list_movements(self) -> List[Path]:
+        """List preprocessed movement files."""
+        if not self.processed_dir.exists():
             return []
-        return sorted(lang_dir.glob("*.ly"))
+        return sorted(self.processed_dir.glob("*.ly"))
 
     def load_movement(
-        self, movement_id: str, language: str = "italiano"
+        self, movement_id: str,
     ) -> MovementRecord:
-        """Load one movement by movement id and language."""
-        path = self.processed_dir / language / f"{movement_id}.ly"
+        """Load one movement by movement id."""
+        path = self.processed_dir / f"{movement_id}.ly"
         if not path.exists():
             raise FileNotFoundError(f"Movement not found: {path}")
 
         metadata = self.load_metadata().get(movement_id)
         return MovementRecord(
             movement_id=movement_id,
-            language=language,
             text=path.read_text(encoding="utf-8", errors="ignore"),
             metadata=metadata,
         )
 
     def iter_movements(
         self,
-        language: str = "italiano",
         include_metadata: bool = True,
     ) -> Iterator[MovementRecord]:
-        """Iterate over movement records for the selected language."""
+        """Iterate over movement records."""
         metadata = self.load_metadata() if include_metadata else {}
-        for path in self.list_movements(language=language):
+        for path in self.list_movements():
             movement_id = path.stem
             yield MovementRecord(
                 movement_id=movement_id,
-                language=language,
                 text=path.read_text(encoding="utf-8", errors="ignore"),
                 metadata=metadata.get(movement_id) if include_metadata else None,
             )
@@ -114,17 +109,15 @@ class BaroqueMusicDataAPI:
 
     def iter_augmented_movements(
         self,
-        language: str = "italiano",
         augmentations: Optional[Iterable[Augmentation]] = None,
         include_metadata: bool = True,
     ) -> Iterator[MovementRecord]:
         """Iterate movement records after applying augmentations."""
         for record in self.iter_movements(
-            language=language, include_metadata=include_metadata
+            include_metadata=include_metadata
         ):
             yield MovementRecord(
                 movement_id=record.movement_id,
-                language=record.language,
                 text=self.apply_augmentations(record.text, augmentations),
                 metadata=record.metadata,
             )

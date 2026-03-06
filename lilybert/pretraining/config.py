@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from lilybert.config import (
     BaseModelConfig,
@@ -27,7 +27,6 @@ class PretrainingConfig:
     data_dir: str = PathConfig.data_dir
     tokenizer_path: str = PathConfig.tokenizer_path
     output_dir: str = "outputs/pretraining"
-    languages: List[str] = field(default_factory=lambda: ["italiano", "english"])
 
     # --- model architecture (from BaseModelConfig + pretraining-specific) ---
     model_architecture: str = BaseModelConfig.pretrained_model
@@ -62,9 +61,6 @@ class PretrainingConfig:
     tensorboard_log_dir: str = LoggingConfig.tensorboard_log_dir
 
     def __post_init__(self) -> None:
-        self.languages = [str(language).strip().lower() for language in self.languages]
-        if not self.languages:
-            raise ValueError("languages must contain at least one value")
         if self.max_length < 8:
             raise ValueError("max_length must be >= 8")
         if not (0.0 < self.mlm_probability < 1.0):

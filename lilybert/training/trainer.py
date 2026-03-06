@@ -165,15 +165,15 @@ class StratifiedKFoldTrainer:
         return json.loads(metadata_path.read_text(encoding="utf-8"))
 
     def _prepare_cv_samples(self, metadata: Dict[str, Dict[str, Any]]):
-        language_dir = Path(self.config.data_dir) / self.config.language
-        if not language_dir.exists():
-            raise FileNotFoundError(f"Language directory not found: {language_dir}")
+        data_dir = Path(self.config.data_dir)
+        if not data_dir.exists():
+            raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
         sample_ids: List[str] = []
         labels: List[str] = []
         groups: List[str] = []
 
-        for movement_file in sorted(language_dir.glob("*.ly")):
+        for movement_file in sorted(data_dir.glob("*.ly")):
             movement_id = movement_file.stem
             movement_meta = metadata.get(movement_id)
             if not movement_meta:
@@ -209,9 +209,9 @@ class StratifiedKFoldTrainer:
             )
 
         tokenizer = self._ensure_tokenizer()
-        language_dir = Path(self.config.data_dir) / self.config.language
+        data_dir = Path(self.config.data_dir)
         movement_files = [
-            str(language_dir / f"{movement_id}.ly") for movement_id in movement_ids
+            str(data_dir / f"{movement_id}.ly") for movement_id in movement_ids
         ]
 
         return BaroqueMusicClassificationDataset(
@@ -1009,7 +1009,6 @@ class StratifiedKFoldTrainer:
                 "stride": self.config.stride,
                 "num_classes": num_classes,
                 "pretrained_model": self.config.pretrained_model,
-                "language": self.config.language,
                 "early_stopping_patience": self.config.early_stopping_patience,
                 "seed": self.config.seed,
                 "device": str(self.device),

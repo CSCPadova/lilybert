@@ -57,8 +57,7 @@ class _TinyClassifier(nn.Module):
 
 def _build_processed_dataset(tmp_path: Path) -> Path:
     processed = tmp_path / "processed"
-    english = processed / "english"
-    english.mkdir(parents=True, exist_ok=True)
+    processed.mkdir(parents=True, exist_ok=True)
 
     metadata = {}
     rows = [
@@ -71,7 +70,7 @@ def _build_processed_dataset(tmp_path: Path) -> Path:
     ]
 
     for movement_id, base_work, composer in rows:
-        (english / f"{movement_id}.ly").write_text(
+        (processed / f"{movement_id}.ly").write_text(
             "a b c d e f g a b c", encoding="utf-8"
         )
         metadata[movement_id] = {

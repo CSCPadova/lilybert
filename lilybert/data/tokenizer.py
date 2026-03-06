@@ -1,4 +1,7 @@
-"""Parser-aware BPE tokenizer utilities for lilyBERT."""
+"""Parser-aware BPE tokenizer utilities for lilyBERT.
+
+Pipeline: LilyPond text -> python-ly lexer -> MusicalLexer -> BPE
+"""
 
 from __future__ import annotations
 
@@ -9,14 +12,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-import ly.document
-import ly.lex
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
 
+from .lexer import LexerConfig, MusicalLexer
 from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
@@ -51,9 +53,12 @@ def _tokenize_file_worker(path: str) -> dict:
 
 
 class LilyPondTokenizer:
-    """Parser-aware BPE tokenizer for movement-level LilyPond files."""
+    """Parser-aware BPE tokenizer for movement-level LilyPond files.
 
-    VALID_NOTATION_MODES = {"english", "italiano", "nederlands", "both"}
+    Always uses :class:`MusicalLexer` for tokenization.  The lexer emits
+    python-ly token strings directly, which become whitespace-delimited
+    words for BPE processing.
+    """
 
     SPECIAL_TOKENS = [
         "[CLS]",
@@ -64,33 +69,9 @@ class LilyPondTokenizer:
         "[PART_BEGIN]",
         "[PART_NAME]",
         "[PART_END]",
-        "[SIMUL_BEGIN]",
-        "[SIMUL_END]",
-        "[SEQ_BEGIN]",
-        "[SEQ_END]",
-        "[VOICE_SEP]",
-        "[SCORE]",
-        "[LANGUAGE]",
-        "[NEW_STAFF]",
-        "[NEW_VOICE]",
-        "[NEW_PIANOSTAFF]",
-        "[NEW_CHOIRSTAFF]",
     ]
 
     PLACEHOLDER_TOKENS = ["<INT>", "<DEC>"]
-
-    SPECIAL_TOKEN_TO_LILYPOND = {
-        "[SIMUL_BEGIN]": "<<",
-        "[SIMUL_END]": ">>",
-        "[SEQ_BEGIN]": "{",
-        "[SEQ_END]": "}",
-        "[VOICE_SEP]": "\\\\",
-        "[SCORE]": "\\score",
-        "[NEW_STAFF]": "\\new Staff",
-        "[NEW_VOICE]": "\\new Voice",
-        "[NEW_PIANOSTAFF]": "\\new PianoStaff",
-        "[NEW_CHOIRSTAFF]": "\\new ChoirStaff",
-    }
 
     _SKIP_ON_DECODE = {"[CLS]", "[SEP]", "[PAD]", "[MASK]", "[UNK]"}
 
@@ -100,23 +81,20 @@ class LilyPondTokenizer:
         self,
         parser: Optional[LilyPondParser] = None,
         fast_tokenizer: Optional[PreTrainedTokenizerFast] = None,
+        lexer_config: Optional[LexerConfig] = None,
     ):
         self.parser = parser or LilyPondParser()
         self.fast_tokenizer = fast_tokenizer
+        self.lexer = MusicalLexer(lexer_config or LexerConfig())
 
     def build_corpus(
         self,
         processed_dir: str | Path,
-        notation_mode: str = "both",
-        languages: Optional[List[str]] = None,
     ) -> List[str]:
         """Build parser-token corpus strings from cleaned movement files.
 
         Args:
             processed_dir: Root processed directory (typically `data/processed`).
-            notation_mode: Which notation folders to include: `english`,
-                `italiano`, or `both`.
-            languages: Optional explicit language folders to include.
 
         Returns:
             List of space-separated parser token strings (one per movement file).
@@ -124,13 +102,9 @@ class LilyPondTokenizer:
         root = Path(processed_dir)
         if not root.exists():
             raise FileNotFoundError(f"Processed directory not found: {root}")
-        if notation_mode not in self.VALID_NOTATION_MODES:
-            raise ValueError(
-                f"notation_mode must be one of {sorted(self.VALID_NOTATION_MODES)}, got: {notation_mode}"
-            )
 
         movement_files = sorted(
-            self._iter_movement_files(root, notation_mode, languages=languages)
+            self._iter_movement_files(root)
         )
 
         # parallelize token-line extraction using worker processes
@@ -235,7 +209,7 @@ class LilyPondTokenizer:
     def encode_lilypond(self, text: str, add_special_tokens: bool = False) -> List[int]:
         """Encode raw LilyPond text to BPE token IDs.
 
-        Converts text through the parser-token intermediate representation
+        Converts text through the lexer intermediate representation
         then BPE-encodes.
 
         Args:
@@ -252,25 +226,25 @@ class LilyPondTokenizer:
             parser_tokens, add_special_tokens=add_special_tokens
         )
 
-    # Patterns that BPE may split with spaces; collapse back to single tokens.
-    _VALUE_TOKEN_RE = re.compile(r"(lang|part)\s*:\s*(\S+)")
-    # BPE may split backslash commands: "\ key" → "\key"
+    # BPE may split value tokens: "part : violin" -> "part:violin"
+    _VALUE_TOKEN_RE = re.compile(r"(part)\s*:\s*(\S+)")
+    # BPE may split backslash commands: "\ key" -> "\key"
     _BACKSLASH_CMD_RE = re.compile(r"\\\s+([a-zA-Z])")
 
     def _ids_to_parser_tokens(self, token_ids: List[int]) -> List[str]:
         """Convert token IDs back to parser-level tokens.
 
         Special tokens are preserved.  BPE-split value tokens like
-        ``lang : english`` are collapsed back to ``lang:english``.
+        ``part : violin`` are collapsed back to ``part:violin``.
         Backslash commands split by BPE (``\\ key``) are rejoined.
         """
         if self.fast_tokenizer is None:
             raise ValueError("Tokenizer has not been trained/loaded yet")
 
         raw = self.fast_tokenizer.decode(token_ids, skip_special_tokens=False)
-        # Collapse BPE-split value tokens (e.g. "lang : english" → "lang:english")
+        # Collapse BPE-split value tokens (e.g. "part : violin" -> "part:violin")
         raw = self._VALUE_TOKEN_RE.sub(r"\1:\2", raw)
-        # Collapse BPE-split backslash commands (e.g. "\ key" → "\key")
+        # Collapse BPE-split backslash commands (e.g. "\ key" -> "\key")
         raw = self._BACKSLASH_CMD_RE.sub(r"\\\1", raw)
         return raw.split()
 
@@ -280,6 +254,10 @@ class LilyPondTokenizer:
         include_version: bool = True,
     ) -> str:
         """Decode BPE token IDs back to syntactically valid LilyPond text.
+
+        Since the lexer emits raw python-ly token strings, decoding
+        simply joins them with spaces (after handling structural markers
+        like ``[PART_BEGIN]``/``[PART_END]``).
 
         Args:
             token_ids: List of BPE token IDs.
@@ -295,7 +273,7 @@ class LilyPondTokenizer:
             parts.append(f'\\version "{self.DEFAULT_VERSION}"')
 
         i = 0
-        open_braces = 0  # track braces opened by [SCORE]
+        open_braces = 0
 
         while i < len(tokens):
             tok = tokens[i]
@@ -305,55 +283,28 @@ class LilyPondTokenizer:
                 i += 1
                 continue
 
-            # [LANGUAGE] lang:X  →  \language "X"
-            if tok == "[LANGUAGE]":
-                if i + 1 < len(tokens) and tokens[i + 1].startswith("lang:"):
-                    lang = tokens[i + 1][len("lang:") :]
-                    parts.append(f'\\language "{lang}"')
-                    i += 2
-                else:
-                    i += 1
-                continue
-
-            # [PART_BEGIN] [PART_NAME] part:X  →  X = {
+            # [PART_BEGIN] [PART_NAME] part:X  ->  X = {
             if tok == "[PART_BEGIN]":
                 name = "voice"
                 j = i + 1
                 if j < len(tokens) and tokens[j] == "[PART_NAME]":
                     j += 1
                 if j < len(tokens) and tokens[j].startswith("part:"):
-                    name = tokens[j][len("part:") :]
+                    name = tokens[j][len("part:"):]
                     j += 1
                 parts.append(f"{name} = {{")
                 open_braces += 1
                 i = j
                 continue
 
-            # [PART_END]  →  }
+            # [PART_END]  ->  }
             if tok == "[PART_END]":
                 parts.append("}")
                 open_braces = max(0, open_braces - 1)
                 i += 1
                 continue
 
-            # [SCORE]  →  \score  (the next [SEQ_BEGIN] supplies the {)
-            if tok == "[SCORE]":
-                parts.append("\\score")
-                i += 1
-                continue
-
-            # Simple structural mapping
-            if tok in self.SPECIAL_TOKEN_TO_LILYPOND:
-                ly_text = self.SPECIAL_TOKEN_TO_LILYPOND[tok]
-                parts.append(ly_text)
-                if tok == "[SEQ_BEGIN]":
-                    open_braces += 1
-                elif tok == "[SEQ_END]":
-                    open_braces = max(0, open_braces - 1)
-                i += 1
-                continue
-
-            # Music token — emit as-is
+            # Music token — emit as-is (already valid LilyPond)
             parts.append(tok)
             i += 1
 
@@ -390,16 +341,8 @@ class LilyPondTokenizer:
                 music_buf.clear()
 
         structural = {
-            "<<",
-            ">>",
-            "{",
-            "}",
-            "\\score",
-            "\\new Staff",
-            "\\new Voice",
-            "\\new PianoStaff",
-            "\\new ChoirStaff",
-            "\\\\",
+            "<<", ">>", "{", "}", "\\score",
+            "\\new", "\\\\",
         }
 
         for part in parts:
@@ -421,163 +364,89 @@ class LilyPondTokenizer:
     def _iter_movement_files(
         self,
         root: Path,
-        notation_mode: str,
-        languages: Optional[List[str]] = None,
     ) -> Iterable[Path]:
-        if languages:
-            normalized = [
-                language.strip().lower() for language in languages if language
-            ]
-            for language in normalized:
-                language_dir = root / language
-                if not language_dir.exists():
-                    raise FileNotFoundError(
-                        f"Requested language folder not found: {language_dir}"
-                    )
-                yield from language_dir.glob("*.ly")
-            return
-
-        if (root / "italiano").exists() or (root / "english").exists():
-            if notation_mode in {"italiano", "both"}:
-                italiano_dir = root / "italiano"
-                if notation_mode == "italiano" and not italiano_dir.exists():
-                    raise FileNotFoundError(
-                        f"Requested notation_mode=italiano but folder not found: {italiano_dir}"
-                    )
-                if italiano_dir.exists():
-                    yield from italiano_dir.glob("*.ly")
-
-            if notation_mode in {"english", "both"}:
-                english_dir = root / "english"
-                if notation_mode == "english" and not english_dir.exists():
-                    raise FileNotFoundError(
-                        f"Requested notation_mode=english but folder not found: {english_dir}"
-                    )
-                if english_dir.exists():
-                    yield from english_dir.glob("*.ly")
-            return
-
+        """Yield .ly files from the data directory."""
         yield from root.glob("*.ly")
 
-    def _detect_language_token(self, text: str) -> Optional[str]:
-        """Detect the pitch language and return a lang:X value token."""
-        lang_match = re.search(r'\\language\s+"([^"]+)"', text)
-        if lang_match:
-            return lang_match.group(1)
-        detected = self.parser.detect_pitch_language(text)
-        if detected and detected != "mixed":
-            return detected
-        return None
+    # Regex for \version "..." lines
+    _VERSION_RE = re.compile(r'\\version\s+"[^"]*"')
+    # \language "..." directives
+    _LANGUAGE_RE = re.compile(r'\\language\s+"[^"]*"')
+    # Named blocks to strip entirely: \header{}, \paper{}, \layout{}, \midi{}
+    _BLOCK_CMD_RE = re.compile(r"\\(header|paper|layout|midi)\s*\{")
+
+    def _strip_envelope(self, text: str) -> str:
+        """Remove envelope content from raw LilyPond text.
+
+        Strips: ``\\version``, ``\\language``, ``\\header{}``,
+        ``\\paper{}``, ``\\layout{}``, ``\\midi{}`` blocks.
+
+        The :class:`MusicalLexer` handles filtering of all other
+        non-musical content (overrides, tweaks, markup, scheme, comments,
+        etc.).
+        """
+        # 1. Comments (use the parser's method)
+        text = self.parser._remove_comments(text)
+
+        # 2. \version
+        text = self._VERSION_RE.sub("", text)
+
+        # 3. \language
+        text = self._LANGUAGE_RE.sub("", text)
+
+        # 4. Named blocks: \header{}, \paper{}, \layout{}, \midi{}
+        for m in reversed(list(self._BLOCK_CMD_RE.finditer(text))):
+            open_idx = m.end() - 1  # position of the opening {
+            close_idx = LilyPondParser.find_matching_brace(text, open_idx)
+            text = text[: m.start()] + text[close_idx:]
+
+        return text
 
     def _movement_to_parser_tokens(self, text: str) -> str:
-        prefix: List[str] = []
-        lang = self._detect_language_token(text)
-        if lang:
-            prefix.extend(["[LANGUAGE]", f"lang:{lang}"])
+        """Convert a movement's LilyPond text to a space-separated token string.
 
-        # Strip the \language directive so it doesn't appear in music tokens
-        text = re.sub(r'\\language\s+"[^"]*"', "", text)
+        Uses :class:`MusicalLexer` for all tokenization.  The lexer emits
+        python-ly token strings and handles structural elements
+        (voices, simultaneous music) internally.
+        """
+        # Strip envelope (version, language, header/paper/layout/midi)
+        text = self._strip_envelope(text)
+
+        # Learn user macros from the full text
+        macro_map = MusicalLexer.extract_macros(text)
 
         parts = self._extract_part_variables(text)
         if parts:
-            tokens: List[str] = [*prefix]
+            tokens: List[str] = []
             for name, content in parts:
-                structural_tokens = self._extract_structural_tokens(content)
-                music_tokens = self.parser._tokenize_music(content)
-                if not music_tokens:
-                    parsed = self.parser.parse_content(content)
-                    music_tokens = [element.content for element in parsed]
+                music_tokens = self.lexer.linearize(content, macro_map=macro_map)
                 if not music_tokens:
                     continue
-
                 tokens.extend(
                     [
                         "[PART_BEGIN]",
                         "[PART_NAME]",
                         f"part:{name.lower()}",
-                        *structural_tokens,
                         *music_tokens,
                         "[PART_END]",
                     ]
                 )
             return " ".join(tokens).strip()
 
-        structural_tokens = self._extract_structural_tokens(text)
-        tokens = self.parser._tokenize_music(text)
-        if not tokens:
-            parsed = self.parser.parse_content(text)
-            tokens = [element.content for element in parsed]
-        return " ".join([*prefix, *structural_tokens, *tokens]).strip()
-
-    _NEW_CONTEXT_MAP = {
-        "ChoirStaff": "[NEW_CHOIRSTAFF]",
-        "Staff": "[NEW_STAFF]",
-        "PianoStaff": "[NEW_PIANOSTAFF]",
-        "Voice": "[NEW_VOICE]",
-    }
-
-    def _extract_structural_tokens(self, text: str) -> List[str]:
-        """Extract score-structure markers using python-ly lexical tokens."""
-        document = ly.document.Document(text)
-        state = ly.lex.state("lilypond")
-
-        markers: List[str] = []
-        in_simultaneous_depth = 0
-        expect_context_name = False
-
-        for token in state.tokens(document.plaintext()):
-            token_type = type(token).__name__
-            token_text = str(token)
-
-            if token_type == "Score":
-                markers.append("[SCORE]")
-                continue
-
-            if token_type == "SimultaneousStart":
-                markers.append("[SIMUL_BEGIN]")
-                in_simultaneous_depth += 1
-                continue
-
-            if token_type == "SimultaneousEnd":
-                markers.append("[SIMUL_END]")
-                in_simultaneous_depth = max(0, in_simultaneous_depth - 1)
-                continue
-
-            if token_type == "SequentialStart":
-                markers.append("[SEQ_BEGIN]")
-                continue
-
-            if token_type == "SequentialEnd":
-                markers.append("[SEQ_END]")
-                continue
-
-            if (
-                token_type == "Unparsed"
-                and token_text == "\\"
-                and in_simultaneous_depth > 0
-            ):
-                markers.append("[VOICE_SEP]")
-                continue
-
-            # Detect \new Staff, \new Voice, etc.
-            if token_text == "\\new":
-                expect_context_name = True
-                continue
-
-            if expect_context_name:
-                expect_context_name = False
-                if isinstance(token, ly.lex.Space):
-                    expect_context_name = True
-                    continue
-                context_token = self._NEW_CONTEXT_MAP.get(token_text)
-                if context_token:
-                    markers.append(context_token)
-
-        return markers
+        # No part variables — tokenize the full text
+        music_tokens = self.lexer.linearize(text, macro_map=macro_map)
+        return " ".join(music_tokens).strip()
 
     def _extract_part_variables(self, text: str) -> List[tuple[str, str]]:
         parts: List[tuple[str, str]] = []
-        pattern = r"([A-Za-z][\w-]*)\s*=\s*\{"
+        # Match: Name = { ... } or Name = \relative pitch { ... }
+        # The optional LilyPond mode command is consumed but not included
+        # in the body — only the brace-enclosed content is extracted.
+        pattern = (
+            r"([A-Za-z][\w-]*)\s*=\s*"
+            r"(?:\\(?:relative|absolute|fixed|transpose)\b[^{]*)?"
+            r"\{"
+        )
         cursor = 0
 
         while True:
@@ -588,22 +457,10 @@ class LilyPondTokenizer:
             start = cursor + match.start()
             name = match.group(1)
             open_brace = text.find("{", start)
-            close_brace = self._find_matching_brace(text, open_brace)
+            close_brace = LilyPondParser.find_matching_brace(text, open_brace)
             body = text[open_brace + 1 : close_brace - 1].strip()
             if body:
                 parts.append((name, body))
             cursor = close_brace
 
         return parts
-
-    @staticmethod
-    def _find_matching_brace(text: str, open_idx: int) -> int:
-        depth = 1
-        for i in range(open_idx + 1, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    return i + 1
-        return len(text)

@@ -9,7 +9,6 @@ from .bert_classifier import (
     LilyBERTTaskClassifier,
     StyleClassifier,
 )
-from .config import LilyBERTConfig
 
 __all__ = [
     "LilyBERTEncoder",
@@ -19,5 +18,4 @@ __all__ = [
     "StyleClassifier",
     "InstrumentClassifier",
     "KeyRootClassifier",
-    "LilyBERTConfig",
 ]

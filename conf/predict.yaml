@@ -1,7 +1,6 @@
 checkpoint: ""
 input_dir: ""
 task: composer
-language: english
 batch_size: 16
 max_length: 512
 stride: 256

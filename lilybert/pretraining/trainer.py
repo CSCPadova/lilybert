@@ -107,7 +107,6 @@ class MLMPretrainer:
         else:
             all_files = self._collect_movement_files(
                 data_dir=self.config.data_dir,
-                languages=self.config.languages,
             )
             if not all_files:
                 raise ValueError("No LilyPond files found for Stage-1 pretraining")
@@ -195,7 +194,6 @@ class MLMPretrainer:
             "avg_tokens_per_file": token_stats["avg_tokens_per_file"],
             "eval_ratio": 0.01,
             "pretokenized_shards": self.config.pretokenized_shards_dir is not None,
-            "languages": self.config.languages,
             "max_length": self.config.max_length,
             "mlm_probability": self.config.mlm_probability,
             "architecture": self.config.model_architecture,
@@ -305,12 +303,9 @@ class MLMPretrainer:
         }
 
     @staticmethod
-    def _collect_movement_files(data_dir: str, languages: List[str]) -> List[Path]:
+    def _collect_movement_files(data_dir: str) -> List[Path]:
+        """Collect .ly files from the data directory."""
         root = Path(data_dir)
-        files: List[Path] = []
-        for language in languages:
-            language_dir = root / language
-            if not language_dir.exists():
-                continue
-            files.extend(sorted(language_dir.glob("*.ly")))
-        return files
+        if not root.exists():
+            return []
+        return sorted(root.glob("*.ly"))

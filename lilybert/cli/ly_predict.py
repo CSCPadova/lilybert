@@ -20,7 +20,6 @@ class PredictConfig:
     checkpoint: str = ""
     input_dir: str = ""
     task: str = "composer"
-    language: str = "english"
     batch_size: int = 16
     max_length: int = 512
     stride: int = 256
@@ -64,7 +63,6 @@ def _main(cfg: DictConfig) -> None:
 
     results = pipeline.predict_directory(
         input_dir=config.input_dir,
-        language=config.language,
         batch_size=config.batch_size,
     )
 

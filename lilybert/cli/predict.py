@@ -40,12 +40,9 @@ def main(
         str, typer.Option(help="Path to model checkpoint directory")
     ],
     input_dir: Annotated[
-        str, typer.Option(help="Root data directory with language subdirs")
+        str, typer.Option(help="Root data directory containing .ly files")
     ],
     task: Annotated[str, typer.Option(help="Classification task")] = "composer",
-    language: Annotated[
-        str, typer.Option(help="Language variant subdir")
-    ] = "english",
     batch_size: Annotated[int, typer.Option(help="Inference batch size")] = 16,
     max_length: Annotated[int, typer.Option(help="Max sequence length")] = 512,
     stride: Annotated[int, typer.Option(help="Window stride")] = 256,
@@ -69,7 +66,6 @@ def main(
 
     results = pipeline.predict_directory(
         input_dir=input_dir,
-        language=language,
         batch_size=batch_size,
     )
 

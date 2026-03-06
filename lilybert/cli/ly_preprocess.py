@@ -26,7 +26,6 @@ from lilybert.data.tokenizer import LilyPondTokenizer
 
 @dataclass
 class AugmentationSettings:
-    languages: List[str] = field(default_factory=lambda: ["italiano", "english"])
     enable_transposition: bool = False
     enable_absolute_relative: bool = False
     enable_articulation_variants: bool = False
@@ -45,8 +44,6 @@ class ShardingSettings:
     output_dir: str = "artifacts/pretokenized"
     max_length: int = 512
     stride: int = 256
-    language: str = "english"
-    languages: Optional[str] = None
     shard_size: int = 4096
     include_structure_markers: bool = False
     eval_ratio: float = 0.01
@@ -60,8 +57,6 @@ class BPESettings:
     vocab_size: int = 8000
     min_frequency: int = 0
     number_placeholders: bool = False
-    notation_mode: str = "both"
-    languages: Optional[List[str]] = None
 
 
 @dataclass
@@ -97,7 +92,6 @@ def _main(cfg: DictConfig) -> None:
         output_dir=config.output_dir,
         labels_path=config.labels_path,
         augmentation_config={
-            "languages": config.augmentation.languages,
             "enable_transposition": config.augmentation.enable_transposition,
             "enable_absolute_relative": config.augmentation.enable_absolute_relative,
             "enable_articulation_variants": config.augmentation.enable_articulation_variants,
@@ -116,8 +110,6 @@ def _main(cfg: DictConfig) -> None:
                 tokenizer_path=config.sharding.tokenizer_path,
                 output_dir=config.sharding.output_dir,
                 max_length=config.sharding.max_length,
-                language=config.sharding.language,
-                languages=config.sharding.languages,
                 shard_size=config.sharding.shard_size,
                 eval_ratio=config.sharding.eval_ratio,
                 seed=config.sharding.seed,
@@ -130,7 +122,6 @@ def _main(cfg: DictConfig) -> None:
                 output_dir=config.sharding.output_dir,
                 max_length=config.sharding.max_length,
                 stride=config.sharding.stride,
-                language=config.sharding.language,
                 shard_size=config.sharding.shard_size,
                 include_structure_markers=config.sharding.include_structure_markers,
             )
@@ -145,8 +136,6 @@ def _main(cfg: DictConfig) -> None:
         tokenizer = LilyPondTokenizer()
         corpus = tokenizer.build_corpus(
             config.output_dir,
-            notation_mode=config.bpe.notation_mode,
-            languages=config.bpe.languages,
         )
         fast_tokenizer = tokenizer.train(
             corpus=corpus,
