@@ -1,6 +1,0 @@
-# Multi-task benchmark preset used by `lilybert run-experiment tasks=baseline`.
-- composer
-- musical_form
-- instruments
-- section_nomenclature
-- key_scale

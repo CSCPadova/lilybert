@@ -13,17 +13,16 @@ from .music_theory import CANONICAL_KEY_ROOTS, canonicalize_key_root
 
 
 class LabelEncoder:
-    """Encode labels for the five supported tasks.
+    """Encode labels for the supported tasks.
 
     Tasks:
     - composer (single-label)
-    - musical_form (multi-label)
-    - instruments (multi-label)
-    - section_nomenclature (single-label)
-    - key_scale (single-label)
+    - style (single-label)
+    - instrument (multi-label)
+    - key_root (single-label)
     """
 
-    MULTI_LABEL_TASKS = {"musical_form", "instruments"}
+    MULTI_LABEL_TASKS = {"instrument"}
 
     def __init__(
         self,
@@ -39,10 +38,9 @@ class LabelEncoder:
 
         self.classes: Dict[str, List[str]] = {
             "composer": self._build_composer_classes(),
-            "musical_form": self._build_form_classes(),
-            "instruments": self._build_instrument_classes(),
-            "section_nomenclature": self._build_section_classes(),
-            "key_scale": self._build_key_scale_classes(),
+            "style": self._build_style_classes(),
+            "instrument": self._build_instrument_classes(),
+            "key_root": self._build_key_root_classes(),
         }
         self.class_to_index: Dict[str, Dict[str, int]] = {
             task: {label: idx for idx, label in enumerate(labels)}
@@ -50,11 +48,6 @@ class LabelEncoder:
         }
 
     def encode(self, task: str, value: Any) -> int | torch.Tensor:
-        """Encode a label value for a task.
-
-        Returns int for single-label tasks and multi-hot float tensor for
-        multi-label tasks.
-        """
         if task not in self.class_to_index:
             raise KeyError(f"Unknown task: {task}")
 
@@ -78,8 +71,7 @@ class LabelEncoder:
             raise KeyError(f"Unknown task: {task}")
         return len(self.classes[task])
 
-    def get_key_scale_label(self, movement_record: Mapping[str, Any]) -> str:
-        """Extract canonical key_scale label from a movement metadata record."""
+    def get_key_root_label(self, movement_record: Mapping[str, Any]) -> str:
         labels = (
             movement_record.get("labels", {})
             if isinstance(movement_record, Mapping)
@@ -87,8 +79,7 @@ class LabelEncoder:
         )
         meta = labels.get("meta", {}) if isinstance(labels, Mapping) else {}
         key = canonicalize_key_root(meta.get("key", "do"))
-        scale = self._normalize(meta.get("scale", "major"))
-        return f"{key}_{scale}"
+        return self._normalize(key)
 
     def _build_composer_classes(self) -> List[str]:
         base = [self._normalize(x) for x in self.hierarchy.get("composer", [])]
@@ -103,14 +94,17 @@ class LabelEncoder:
                 from_metadata.append(self._normalize(composer))
         return self._unique_sorted(base + from_metadata)
 
-    def _build_form_classes(self) -> List[str]:
-        base = [self._normalize(x) for x in self.hierarchy.get("type", [])]
+    def _build_style_classes(self) -> List[str]:
         from_metadata: List[str] = []
         for item in self.metadata.values():
-            forms = (item.get("labels") or {}).get("musical_form") or []
-            for form in forms:
-                from_metadata.append(self._normalize(form))
-        return self._unique_sorted(base + from_metadata)
+            style = (
+                ((item.get("labels") or {}).get("style"))
+                if isinstance(item, Mapping)
+                else None
+            )
+            if style:
+                from_metadata.append(self._normalize(style))
+        return self._unique_sorted(from_metadata)
 
     def _build_instrument_classes(self) -> List[str]:
         base = [self._normalize(x) for x in self.hierarchy.get("instruments", [])]
@@ -121,40 +115,8 @@ class LabelEncoder:
                 from_metadata.append(self._normalize(instrument))
         return self._unique_sorted(base + from_metadata)
 
-    def _build_section_classes(self) -> List[str]:
-        leaves: List[str] = []
-        for key in [
-            "slow",
-            "mid",
-            "fast",
-            "very fast",
-            "intention",
-            "no_tempo",
-            "non_descript",
-            "suite",
-        ]:
-            leaves.extend(self._normalize(x) for x in self.hierarchy.get(key, []))
-
-        from_metadata = []
-        for item in self.metadata.values():
-            section = (
-                item.get("section_nomenclature") if isinstance(item, Mapping) else None
-            )
-            if section:
-                from_metadata.append(self._normalize(section))
-            meta_key = item.get("meta_key") if isinstance(item, Mapping) else None
-            if meta_key and isinstance(meta_key, str) and ":" in meta_key:
-                from_metadata.append(self._normalize(meta_key.split(":", 1)[1]))
-
-        return self._unique_sorted(leaves + from_metadata)
-
-    def _build_key_scale_classes(self) -> List[str]:
-        classes = [
-            f"{key}_{scale}"
-            for key in CANONICAL_KEY_ROOTS
-            for scale in ["major", "minor"]
-        ]
-        return classes
+    def _build_key_root_classes(self) -> List[str]:
+        return list(CANONICAL_KEY_ROOTS)
 
     def _load_hierarchy(self) -> Dict[str, Any]:
         hierarchy = LABEL_HIERARCHY

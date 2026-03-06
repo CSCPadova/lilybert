@@ -7,7 +7,7 @@ from lilybert.data import (
 )
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 from lilybert.inference import InferencePipeline
-from lilybert.models import LilyBERTClassifier, LilyBERTEncoder, TrainingMode
+from lilybert.models import LilyBERTClassifier, LilyBERTEncoder
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 
 __all__ = [
@@ -15,7 +15,6 @@ __all__ = [
     "LilyPondPreprocessor",
     "BaroqueMusicClassificationDataset",
     "InferencePipeline",
-    "TrainingMode",
     "LilyBERTEncoder",
     "LilyBERTClassifier",
     "TrainingConfig",

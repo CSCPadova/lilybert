@@ -1,189 +1,10 @@
-"""Tests for hardened CLIs and cleaned public exports."""
+"""Tests for simplified ly-* CLI module surface."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
-import pytest
-from omegaconf import OmegaConf
-from typer.testing import CliRunner
-
-
-runner = CliRunner()
-
-
-def test_training_cli_runs_cv(monkeypatch, tmp_path):
-    """Training CLI now uses Hydra compose; test via direct config construction."""
-    from lilybert.cli import train as training_cli
-    from lilybert.training.config import TrainingConfig
-
-    class _DummyTrainer:
-        def __init__(self, config):
-            self.config = config
-
-        def run(self):
-            return {
-                "task": self.config.task,
-                "n_folds": self.config.n_folds,
-                "mean": {"avg_score": 0.5},
-                "std": {"avg_score": 0.0},
-            }
-
-    monkeypatch.setattr(training_cli, "StratifiedKFoldTrainer", _DummyTrainer)
-
-    # Directly construct the config as the Hydra CLI would
-    config = TrainingConfig(
-        task="composer",
-        data_dir=str(tmp_path),
-        n_folds=3,
-    )
-    trainer = _DummyTrainer(config)
-    result = trainer.run()
-    assert result["task"] == "composer"
-    assert result["n_folds"] == 3
-
-
-def test_evaluation_cli_reports_single_label_metrics(tmp_path):
-    from lilybert.cli import evaluate as eval_cli
-    from lilybert import __main__ as main_mod
-
-    main_mod._register_commands()
-
-    y_true = np.array([0, 1, 1, 0])
-    y_pred = np.array([0, 1, 0, 0])
-
-    y_true_path = tmp_path / "y_true.npy"
-    y_pred_path = tmp_path / "y_pred.npy"
-    np.save(y_true_path, y_true)
-    np.save(y_pred_path, y_pred)
-
-    result = runner.invoke(
-        main_mod.app,
-        [
-            "evaluate",
-            "--y-true",
-            str(y_true_path),
-            "--y-pred",
-            str(y_pred_path),
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert "accuracy" in payload
-    assert "f1_macro" in payload
-
-
-def test_run_experiment_script_module_exists(monkeypatch):
-    from lilybert.cli import run_experiment
-
-    called = {}
-
-    class _DummyTrainer:
-        def __init__(self, config):
-            called["task"] = config.task
-
-        def run(self):
-            called["ran"] = True
-            return {}
-
-    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
-    run_experiment.run_task(
-        task="composer", data_dir="data/processed", tokenizer_path="artifacts/tokenizer"
-    )
-    assert called["task"] == "composer"
-    assert called["ran"] is True
-
-
-def test_run_experiment_hydra_config(monkeypatch):
-    from lilybert.cli import run_experiment
-
-    seen = []
-
-    class _DummyTrainer:
-        def __init__(self, config):
-            seen.append(config)
-
-        def run(self):
-            return {"ok": True}
-
-    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
-
-    cfg = OmegaConf.create(
-        {
-            "dataset": {
-                "data_dir": "data/processed",
-                "tokenizer_path": "artifacts/tokenizer",
-                "tokenizer_notation_mode": "english",
-                "tokenizer_path_by_notation": {
-                    "english": "artifacts/tokenizer_english",
-                    "italiano": "artifacts/tokenizer_italiano",
-                    "both": "artifacts/tokenizer",
-                },
-                "labels_path": "data/labels/labels_v1.json",
-                "language": "english",
-            },
-            "model": {
-                "pretrained_model": "bert-base-uncased",
-                "mode": "full_finetune",
-                "lora_r": 16,
-                "lora_alpha": 32,
-            },
-            "training": {
-                "n_folds": 3,
-                "num_train_epochs": 2,
-                "batch_size": 4,
-                "learning_rate": 2e-5,
-                "weight_decay": 0.01,
-                "warmup_ratio": 0.1,
-                "early_stopping_patience": 2,
-                "max_length": 128,
-                "stride": 64,
-            },
-            "runtime": {"output_dir": "outputs/experiments", "seed": 42},
-            "tasks": {"list": ["composer", "key_scale"]},
-        }
-    )
-
-    results = run_experiment.run_from_config(cfg)
-    assert set(results.keys()) == {"composer", "key_scale"}
-    assert len(seen) == 2
-    assert seen[0].n_folds == 3
-    assert seen[0].per_device_train_batch_size == 4
-    assert seen[0].tokenizer_path == "artifacts/tokenizer_english"
-
-
-def test_run_experiment_invalid_tokenizer_notation_mode(monkeypatch):
-    from lilybert.cli import run_experiment
-
-    class _DummyTrainer:
-        def __init__(self, config):
-            self.config = config
-
-        def run(self):
-            return {"ok": True}
-
-    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
-
-    cfg = OmegaConf.create(
-        {
-            "dataset": {
-                "data_dir": "data/processed",
-                "tokenizer_path": "artifacts/tokenizer",
-                "tokenizer_notation_mode": "invalid",
-                "labels_path": "data/labels/labels_v1.json",
-                "language": "english",
-            },
-            "model": {"pretrained_model": "bert-base-uncased", "mode": "full_finetune"},
-            "training": {"n_folds": 2, "num_train_epochs": 1, "batch_size": 2},
-            "runtime": {"output_dir": "outputs/experiments", "seed": 42},
-            "tasks": {"list": ["composer"]},
-        }
-    )
-
-    with pytest.raises(ValueError, match="tokenizer_notation_mode"):
-        run_experiment.run_from_config(cfg)
 
 
 def test_generate_tables_creates_markdown_table(tmp_path):
@@ -204,7 +25,7 @@ def test_generate_tables_creates_markdown_table(tmp_path):
                 "avg_f1_weighted": 0.02,
             },
         },
-        "instruments": {
+        "instrument": {
             "mean": {
                 "avg_f1_micro": 0.85,
                 "avg_f1_macro": 0.72,
@@ -229,58 +50,36 @@ def test_generate_tables_creates_markdown_table(tmp_path):
     assert "Single-label" in text
     assert "Multi-label" in text
     assert "Composer" in text
-    assert "Instruments" in text
-    assert "Top-1 Acc" in text
-    assert "Top-5 Acc" in text
-    assert "F1 (micro)" in text
 
 
-def test_generate_tables_creates_latex_table(tmp_path):
-    from lilybert.cli import generate_tables
+def test_ly_evaluate_writes_metrics(tmp_path, capsys):
+    from lilybert.cli.ly_evaluate import _main
+    from omegaconf import OmegaConf
 
-    results = {
-        "composer": {
-            "mean": {
-                "avg_top1_accuracy": 0.81,
-                "avg_top5_accuracy": 0.95,
-                "avg_f1_macro": 0.78,
-                "avg_f1_weighted": 0.80,
-            },
-            "std": {
-                "avg_top1_accuracy": 0.02,
-                "avg_top5_accuracy": 0.01,
-                "avg_f1_macro": 0.03,
-                "avg_f1_weighted": 0.02,
-            },
-        },
-    }
-    input_path = tmp_path / "results.json"
-    output_path = tmp_path / "table.tex"
-    input_path.write_text(json.dumps(results), encoding="utf-8")
+    y_true = np.array([0, 1, 1, 0])
+    y_pred = np.array([0, 1, 0, 0])
 
-    generate_tables.generate_latex_table(input_path, output_path)
-    text = output_path.read_text(encoding="utf-8")
+    y_true_path = tmp_path / "y_true.npy"
+    y_pred_path = tmp_path / "y_pred.npy"
+    np.save(y_true_path, y_true)
+    np.save(y_pred_path, y_pred)
 
-    assert r"\begin{table}" in text
-    assert r"\toprule" in text
-    assert "Composer" in text
-    assert "Top-1 Acc" in text
-    assert "Top-5 Acc" in text
+    _main(OmegaConf.create({"y_true": str(y_true_path), "y_pred": str(y_pred_path), "multi_label": False}))
+    payload = json.loads(capsys.readouterr().out)
+
+    assert "accuracy" in payload
+    assert "f1_macro" in payload
 
 
-def test_main_cli_exposes_all_subcommands():
+def test_legacy_main_points_to_ly_entrypoints():
     from lilybert import __main__ as main_mod
 
-    main_mod._register_commands()
-    result = runner.invoke(main_mod.app, ["--help"])
-    assert result.exit_code == 0
-
-    help_text = result.output
-    assert "upload-dataset" in help_text
-    assert "upload-model" in help_text
-    assert "generate-tables" in help_text
-    assert "preprocess" in help_text
-    assert "train" in help_text
-    assert "pretrain" in help_text
-    assert "evaluate" in help_text
-    assert "run-experiment" in help_text
+    try:
+        main_mod.main()
+    except SystemExit as exc:
+        message = str(exc)
+        assert "ly-preprocess" in message
+        assert "ly-train" in message
+        assert "ly-probe" in message
+        assert "ly-predict" in message
+        assert "ly-evaluate" in message

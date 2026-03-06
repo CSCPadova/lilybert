@@ -102,7 +102,7 @@ def test_windowed_dataset_builds_overlapping_windows(tmp_path: Path):
     assert last["attention_mask"].tolist() == [1, 1, 1, 1, 1, 1]
 
 
-def test_dataset_multi_label_encoding_for_instruments(tmp_path: Path):
+def test_dataset_multi_label_encoding_for_instrument(tmp_path: Path):
     movement_files, metadata = _write_movements(tmp_path)
     tokenizer = _FakeTokenizer()
 
@@ -112,7 +112,7 @@ def test_dataset_multi_label_encoding_for_instruments(tmp_path: Path):
         tokenizer=tokenizer,
         max_length=8,
         stride=4,
-        task="instruments",
+        task="instrument",
     )
 
     first = dataset[0]

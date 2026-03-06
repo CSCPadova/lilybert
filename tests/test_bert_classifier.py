@@ -1,4 +1,4 @@
-"""Tests for BERT classifier modes."""
+"""Tests for simplified BERT classifiers."""
 
 from __future__ import annotations
 
@@ -7,13 +7,12 @@ from transformers import BertConfig, BertModel
 
 from lilybert.models.bert_classifier import (
     ComposerClassifier,
-    InstrumentsClassifier,
+    InstrumentClassifier,
+    KeyRootClassifier,
     LilyBERTClassifier,
     LilyBERTEncoder,
-    MusicalFormClassifier,
-    TrainingMode,
+    StyleClassifier,
 )
-from lilybert.models.config import LilyBERTConfig
 
 
 def _tiny_bert(vocab_size: int = 32) -> BertModel:
@@ -28,11 +27,15 @@ def _tiny_bert(vocab_size: int = 32) -> BertModel:
     return BertModel(config)
 
 
-def test_random_init_mode_forward_single_label():
+def test_classifier_forward_single_label(monkeypatch):
+    monkeypatch.setattr(
+        "lilybert.models.bert_classifier.BertModel.from_pretrained",
+        lambda *args, **kwargs: _tiny_bert(vocab_size=64),
+    )
     model = LilyBERTClassifier(
         num_classes=3,
         vocab_size=64,
-        mode=TrainingMode.RANDOM_INIT,
+        pretrained="bert-base",
         multi_label=False,
     )
     input_ids = torch.randint(0, 64, (2, 10))
@@ -44,11 +47,15 @@ def test_random_init_mode_forward_single_label():
     assert outputs["loss"] is not None
 
 
-def test_random_init_mode_forward_multi_label():
+def test_classifier_forward_multi_label(monkeypatch):
+    monkeypatch.setattr(
+        "lilybert.models.bert_classifier.BertModel.from_pretrained",
+        lambda *args, **kwargs: _tiny_bert(vocab_size=64),
+    )
     model = LilyBERTClassifier(
         num_classes=4,
         vocab_size=64,
-        mode=TrainingMode.RANDOM_INIT,
+        pretrained="bert-base",
         multi_label=True,
     )
     input_ids = torch.randint(0, 64, (2, 10))
@@ -60,95 +67,8 @@ def test_random_init_mode_forward_multi_label():
     assert outputs["loss"] is not None
 
 
-def test_frozen_mode_freezes_backbone_and_keeps_head_trainable(monkeypatch):
-    def fake_from_pretrained(*args, **kwargs):
-        del args, kwargs
-        return _tiny_bert(vocab_size=32)
-
-    monkeypatch.setattr(
-        "lilybert.models.bert_classifier.BertModel.from_pretrained",
-        fake_from_pretrained,
-    )
-
-    model = LilyBERTClassifier(
-        num_classes=5,
-        vocab_size=80,
-        mode=TrainingMode.FROZEN,
-    )
-
-    assert model.bert.embeddings.word_embeddings.num_embeddings == 80
-    assert all(not parameter.requires_grad for parameter in model.bert.parameters())
-    assert all(parameter.requires_grad for parameter in model.classifier.parameters())
-
-
-def test_full_finetune_mode_keeps_backbone_trainable(monkeypatch):
-    def fake_from_pretrained(*args, **kwargs):
-        del args, kwargs
-        return _tiny_bert(vocab_size=32)
-
-    monkeypatch.setattr(
-        "lilybert.models.bert_classifier.BertModel.from_pretrained",
-        fake_from_pretrained,
-    )
-
-    model = LilyBERTClassifier(
-        num_classes=2,
-        vocab_size=48,
-        mode=TrainingMode.FULL_FINETUNE,
-    )
-
-    assert model.bert.embeddings.word_embeddings.num_embeddings == 48
-    assert all(parameter.requires_grad for parameter in model.bert.parameters())
-    assert all(parameter.requires_grad for parameter in model.classifier.parameters())
-
-
-def test_lora_mode_uses_query_value_target_modules(monkeypatch):
-    captured = {}
-
-    def fake_from_pretrained(*args, **kwargs):
-        del args, kwargs
-        return _tiny_bert(vocab_size=32)
-
-    def fake_get_peft_model(model, peft_config):
-        captured["config"] = peft_config
-        return model
-
-    monkeypatch.setattr(
-        "lilybert.models.bert_classifier.BertModel.from_pretrained",
-        fake_from_pretrained,
-    )
-    monkeypatch.setattr(
-        "lilybert.models.bert_classifier.get_peft_model",
-        fake_get_peft_model,
-    )
-
-    model = LilyBERTClassifier(
-        num_classes=3,
-        vocab_size=40,
-        mode=TrainingMode.LORA,
-        lora_r=4,
-        lora_alpha=8,
-    )
-
-    target_modules = list(captured["config"].target_modules)
-    assert "query" in target_modules
-    assert "value" in target_modules
-    assert model.classifier.out_features == 3
-
-
-def test_lilybert_config_defaults():
-    config = LilyBERTConfig()
-    assert config.pretrained_model == "bert-base"
-    assert config.mode == TrainingMode.FULL_FINETUNE
-    assert config.max_length == 512
-    assert config.lora_r == 16
-
-
 def test_encoder_can_run_standalone_forward():
-    encoder = LilyBERTEncoder(
-        vocab_size=64,
-        mode=TrainingMode.RANDOM_INIT,
-    )
+    encoder = LilyBERTEncoder(vocab_size=64, random_init=True)
     input_ids = torch.randint(0, 64, (2, 10))
     attention_mask = torch.ones_like(input_ids)
 
@@ -160,20 +80,27 @@ def test_encoder_can_run_standalone_forward():
     assert pooled.shape[1] == encoder.bert.config.hidden_size
 
 
-def test_specialized_classifiers_have_expected_shapes():
-    composer = ComposerClassifier(vocab_size=64, mode=TrainingMode.RANDOM_INIT)
-    forms = MusicalFormClassifier(vocab_size=64, mode=TrainingMode.RANDOM_INIT)
-    instruments = InstrumentsClassifier(vocab_size=64, mode=TrainingMode.RANDOM_INIT)
+def test_specialized_classifiers_have_expected_shapes(monkeypatch):
+    monkeypatch.setattr(
+        "lilybert.models.bert_classifier.BertModel.from_pretrained",
+        lambda *args, **kwargs: _tiny_bert(vocab_size=64),
+    )
+    composer = ComposerClassifier(vocab_size=64, num_classes=7)
+    style = StyleClassifier(vocab_size=64, num_classes=3)
+    instrument = InstrumentClassifier(vocab_size=64, num_classes=12)
+    key_root = KeyRootClassifier(vocab_size=64, num_classes=12)
 
     input_ids = torch.randint(0, 64, (2, 10))
     attention_mask = torch.ones_like(input_ids)
 
     composer_out = composer(input_ids=input_ids, attention_mask=attention_mask)
-    forms_out = forms(input_ids=input_ids, attention_mask=attention_mask)
-    instruments_out = instruments(input_ids=input_ids, attention_mask=attention_mask)
+    style_out = style(input_ids=input_ids, attention_mask=attention_mask)
+    instrument_out = instrument(input_ids=input_ids, attention_mask=attention_mask)
+    key_root_out = key_root(input_ids=input_ids, attention_mask=attention_mask)
 
-    assert composer_out["logits"].shape == (2, 70)
-    assert forms_out["logits"].shape == (2, 17)
-    assert instruments_out["logits"].shape == (2, 25)
-    assert forms.multi_label is True
-    assert instruments.multi_label is True
+    assert composer_out["logits"].shape == (2, 7)
+    assert style_out["logits"].shape == (2, 3)
+    assert instrument_out["logits"].shape == (2, 12)
+    assert key_root_out["logits"].shape == (2, 12)
+    assert instrument.multi_label is True
+    assert style.multi_label is False

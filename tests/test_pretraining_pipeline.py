@@ -1,10 +1,8 @@
-"""Tests for Stage-1 pretraining and two-stage orchestration wiring."""
+"""Tests for pretraining utilities and unified train-task normalization."""
 
 from __future__ import annotations
 
 from pathlib import Path
-
-from omegaconf import OmegaConf
 
 from lilybert.data.preprocessor import AugmentationConfig
 from lilybert.pretraining.trainer import MLMPretrainer
@@ -28,85 +26,18 @@ def test_augmentation_config_parses_flags_and_languages():
     assert config.enable_barline_variants is False
 
 
-def test_run_experiment_supports_two_stage_pipeline(monkeypatch):
-    from lilybert.cli import run_experiment
+def test_ly_train_task_aliases():
+    from lilybert.cli.ly_train import _normalize_task
 
-    class _DummyPretrainer:
-        def __init__(self, config):
-            self.config = config
-
-        def run(self):
-            return {"model_dir": "outputs/pretraining/mlm_model", "num_files": 10}
-
-    class _DummyTrainer:
-        def __init__(self, config):
-            self.config = config
-
-        def run(self):
-            return {"task": self.config.task, "mean": {"avg_accuracy": 0.5}}
-
-    monkeypatch.setattr(run_experiment, "MLMPretrainer", _DummyPretrainer)
-    monkeypatch.setattr(run_experiment, "StratifiedKFoldTrainer", _DummyTrainer)
-
-    cfg = OmegaConf.create(
-        {
-            "pipeline": {"stage": "both"},
-            "dataset": {
-                "data_dir": "data/processed",
-                "tokenizer_path": "artifacts/tokenizer",
-                "tokenizer_notation_mode": "both",
-                "labels_path": "data/labels/labels_v1.json",
-                "language": "english",
-            },
-            "augmentation": {
-                "languages": ["italiano", "english"],
-                "enable_transposition": False,
-                "enable_absolute_relative": False,
-                "enable_articulation_variants": False,
-                "enable_barline_variants": False,
-            },
-            "pretraining": {
-                "prepare_data": False,
-                "data_dir": "data/processed",
-                "tokenizer_path": "artifacts/tokenizer",
-                "output_dir": "outputs/pretraining",
-                "languages": ["italiano", "english"],
-                "model_architecture": "bert-base",
-                "max_length": 64,
-                "num_train_epochs": 1,
-                "per_device_train_batch_size": 2,
-            },
-            "model": {
-                "pretrained_model": "bert-base",
-                "mode": "full_finetune",
-                "lora_r": 16,
-                "lora_alpha": 32,
-            },
-            "training": {
-                "n_folds": 2,
-                "num_train_epochs": 1,
-                "batch_size": 2,
-                "learning_rate": 2e-5,
-                "weight_decay": 0.01,
-                "warmup_ratio": 0.1,
-                "early_stopping_patience": 2,
-                "max_length": 128,
-                "stride": 64,
-                "eval_steps": 10,
-                "log_steps": 10,
-            },
-            "runtime": {"output_dir": "outputs/experiments", "seed": 42},
-            "tasks": {"list": ["composer"]},
-        }
-    )
-
-    results = run_experiment.run_from_config(cfg)
-    assert "stage1" in results
-    assert "stage2" in results
-    assert "composer" in results["stage2"]
+    assert _normalize_task("composer") == "composer"
+    assert _normalize_task("style") == "style"
+    assert _normalize_task("instruments") == "instrument"
+    assert _normalize_task("instrument") == "instrument"
+    assert _normalize_task("musical_key") == "key_root"
+    assert _normalize_task("key") == "key_root"
 
 
-def test_count_corpus_tokens_includes_augmented_mutopia_files(tmp_path: Path):
+def test_count_corpus_tokens_includes_augmented_files(tmp_path: Path):
     italiano_dir = tmp_path / "italiano"
     english_dir = tmp_path / "english"
     italiano_dir.mkdir(parents=True)

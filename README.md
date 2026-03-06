@@ -2,7 +2,11 @@
 
 MIR classification on LilyPond music notation.
 
-lilyBERT provides an end-to-end classification pipeline for symbolic scores, from LilyPond preprocessing to model training, evaluation, and Hub upload utilities.
+lilyBERT provides a unified Hydra-based workflow for:
+- preprocessing any LilyPond dataset,
+- optional augmentation/sharding/BPE at preprocess time,
+- unified model training (pretraining or classification),
+- evaluation, prediction, and linear probing.
 
 ## Installation
 
@@ -20,163 +24,121 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
-## Core Commands
+## Command surface
 
-### Data preparation
+The CLI is intentionally small:
+- `ly-preprocess`
+- `ly-train`
+- `ly-evaluate`
+- `ly-predict`
+- `ly-probe`
 
-```bash
-lilybert preprocess \
-  --input-dir data/raw \
-  --output-dir data/processed \
-  --labels-path data/labels/labels_v1.json
+## Core workflows
 
-# Enable configurable data augmentation for Stage-1 corpus creation
-lilybert preprocess \
-  --languages italiano,english,nederlands \
-  --enable-transposition \
-  --enable-absolute-relative \
-  --enable-articulation-variants \
-  --enable-barline-variants
-```
+### 1) Unified preprocessing
 
-### Tokenizer training
+`ly-preprocess` is the single preprocessing entrypoint for any LilyPond dataset.
 
 ```bash
-lilybert train-tokenizer \
-  --processed-dir data/processed \
-  --output-dir artifacts/tokenizer \
-  --vocab-size 8000 \
-  --notation-mode both
+# Minimal preprocessing
+ly-preprocess input_dir=data/raw output_dir=data/processed labels_path=data/labels/labels_v1.json
 
-# English-only tokenizer corpus
-lilybert train-tokenizer --processed-dir data/processed --notation-mode english
+# Enable augmentation
+ly-preprocess \
+  input_dir=data/raw \
+  output_dir=data/processed \
+  augmentation.enable_transposition=true \
+  augmentation.enable_absolute_relative=true \
+  augmentation.enable_articulation_variants=true \
+  augmentation.enable_barline_variants=true \
+  augmentation.enable_retrograde=true \
+  augmentation.enable_inversion=true
 
-# Explicit language folders (beyond english/italiano presets)
-lilybert train-tokenizer --processed-dir data/processed --languages italiano,english,nederlands
+# Add optional sharding and optional BPE training
+ly-preprocess \
+  input_dir=data/raw \
+  output_dir=data/processed \
+  sharding.enabled=true \
+  sharding.stage=mlm \
+  sharding.tokenizer_path=artifacts/tokenizer \
+  sharding.output_dir=artifacts/pretokenized \
+  bpe.enabled=true \
+  bpe.output_dir=artifacts/tokenizer \
+  bpe.vocab_size=8000
 ```
 
-### Stage-1 MLM pretraining (BERT-base from scratch)
+### 2) Unified training
+
+`ly-train` is the single model training command.
 
 ```bash
-lilybert pretrain \
-  --data-dir data/processed \
-  --tokenizer-path artifacts/tokenizer \
-  --output-dir outputs/pretraining \
-  --languages italiano,english \
-  --epochs 3
+# Stage-1 MLM pretraining
+ly-train \
+  stage=pretrain \
+  data_dir=data/processed \
+  tokenizer_path=artifacts/tokenizer \
+  output_dir=outputs/pretraining
+
+# Classification training / fine-tuning
+# If pretrained_model points to a checkpoint, this is treated as fine-tuning.
+ly-train \
+  stage=classify \
+  task=composer \
+  data_dir=data/processed \
+  tokenizer_path=artifacts/tokenizer \
+  pretrained_model=bert-base \
+  output_dir=outputs/cv
 ```
 
-### Cross-validated training
+Supported classification tasks in this refactor:
+- `composer`
+- `style`
+- `instrument`
+- `key_root`
+
+### 3) Evaluation
 
 ```bash
-lilybert train \
-  --task composer \
-  --data-dir data/processed \
-  --tokenizer-path artifacts/tokenizer \
-  --n-folds 5
+ly-evaluate y_true=y_true.npy y_pred=y_pred.npy multi_label=false
 ```
 
-### Classification evaluation
+### 4) Prediction
 
 ```bash
-lilybert evaluate --y-true y_true.npy --y-pred y_pred.npy
-lilybert evaluate --y-true y_true.npy --y-pred y_pred.npy --multi-label
+ly-predict \
+  checkpoint=outputs/cv/fold_1/best_checkpoint \
+  input_dir=data/processed \
+  task=composer \
+  language=english \
+  format=json
 ```
 
-### Multi-task experiment runner (Hydra)
+### 5) Linear probing
+
+`ly-probe` runs a separate linear-probe workflow on frozen encoder embeddings.
 
 ```bash
-lilybert run-experiment
-
-# Use a predefined task set
-lilybert run-experiment tasks=baseline
-
-# Select tokenizer artifact automatically by notation mode
-lilybert run-experiment dataset.tokenizer_notation_mode=english
-
-# Preset: English-only tokenizer experiment
-lilybert run-experiment dataset=english_only
-
-# Preset: English+Italian tokenizer experiment
-lilybert run-experiment dataset=english_italiano
-
-# Override modular config values from CLI
-lilybert run-experiment training.n_folds=3 training.batch_size=8 runtime.output_dir=outputs/exp_debug
-
-# Step-oriented training with periodic eval/logging
-lilybert run-experiment training.max_steps=2000 training.eval_steps=200 training.log_steps=20
-
-# Enable W&B logging (one run per fold)
-lilybert run-experiment runtime.wandb.enabled=true runtime.wandb.project=lilybert
-
-# Run both stages with one entrypoint
-lilybert run-experiment pipeline.stage=both
-
-# Switch config file
-lilybert run-experiment --config-name experiment
+ly-probe \
+  checkpoint_dir=outputs/cv/fold_1/best_checkpoint \
+  tokenizer_path=artifacts/tokenizer \
+  data_dir=data/processed \
+  task=style
 ```
 
-### Result table generation (meta tooling)
+## Notes
 
-```bash
-python scripts/generate_tables.py \
-  --results outputs/experiments/results.json \
-  --output outputs/tables/results.md
-```
-
-### HuggingFace Hub upload utilities (meta tooling)
-
-```bash
-python scripts/upload_dataset.py --help
-python scripts/upload_model.py --help
-```
-
-## Mutopia Dataset Pretraining
-
-To preprocess a large-scale symbolic dataset (MutopiaProject) for pretraining:
-
-```bash
-# Combine split Mutopia files (resolves \include directives)
-# Validates with parser, updates notation with convert-ly
-uv run python scripts/combine_mutopia_files.py
-
-# Preprocess and train BPE tokenizer
-# Skips invalid files, keeps files intact (no movement splitting)
-uv run python scripts/preprocess_mutopia.py --train-tokenizer --vocab-size 8000
-```
-
-**See [MUTOPIA_PIPELINE.md](MUTOPIA_PIPELINE.md)** for comprehensive guide on:
-- Data ingestion and file aggregation
-- Preprocessing stages and file validation
-- Tokenizer training
-- Output formats and troubleshooting
-
-**See [MUTOPIA_ENHANCEMENTS.md](MUTOPIA_ENHANCEMENTS.md)** for details on:
-- Parser-based file validation
-- Notation updates with convert-ly
-- Robust error handling and skipping invalid files
-- Design choices (e.g., why files aren't split by movement)
+- Dataset-specific pipelines (Mutopia/Baroque-only CLIs) were removed.
+- `run-experiment` orchestration was removed.
+- Hugging Face upload CLIs were removed.
+- File combination/compilation/LilyPond version updates are expected in separate scripts.
 
 ## Python API
 
 ```python
 from lilybert.data import LilyPondPreprocessor, LilyPondTokenizer, LabelEncoder
-from lilybert.models import LilyBERTClassifier, TrainingMode
+from lilybert.models import LilyBERTClassifier, LilyBERTEncoder
 from lilybert.training import TrainingConfig, StratifiedKFoldTrainer
 from lilybert.evaluation import ClassificationMetrics, WindowAggregator
-```
-
-## Project Structure
-
-```text
-conf/           # hydra config tree (dataset/model/training/runtime/tasks)
-
-lilybert/
-  data/         # parser, preprocessing, tokenizer, label hierarchy, dataset, repository API
-  models/       # BERT classifier and model config
-  training/     # grouped stratified CV trainer and config
-  evaluation/   # aggregation and classification metrics
-  scripts/      # packaged script entrypoints
 ```
 
 ## Testing
@@ -188,8 +150,6 @@ pytest tests/ --cov=lilybert
 pytest -m "not slow"
 pytest -m "not model"
 ```
-
-Markers: `slow`, `integration`, `model`.
 
 ## License
 

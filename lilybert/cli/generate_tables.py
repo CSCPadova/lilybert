@@ -14,14 +14,17 @@ from typing import Any, Dict, Mapping, Optional
 import typer
 from typing_extensions import Annotated
 
-SINGLE_LABEL_TASKS = {"composer", "section_nomenclature", "key_scale"}
-MULTI_LABEL_TASKS = {"musical_form", "instruments"}
+SINGLE_LABEL_TASKS = {"composer", "style", "key_root", "section_nomenclature", "key_scale"}
+MULTI_LABEL_TASKS = {"instrument", "instruments", "musical_form"}
 
 TASK_DISPLAY_NAMES: Dict[str, str] = {
     "composer": "Composer",
+    "style": "Style",
+    "key_root": "Key Root",
     "section_nomenclature": "Section",
     "key_scale": "Key / Scale",
     "musical_form": "Musical Form",
+    "instrument": "Instruments",
     "instruments": "Instruments",
 }
 

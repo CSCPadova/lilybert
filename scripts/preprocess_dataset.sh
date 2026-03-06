@@ -11,24 +11,13 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Preprocess a custom folder of .ly files, train a tokenizer on the
-# preprocessed corpus, then pretokenize and shard for MLM pretraining.
+# Unified preprocessing pipeline using `ly-preprocess`.
 #
 # Usage:
 #   sbatch scripts/preprocess_dataset.sh
 #
-#   # Override defaults via --export:
-#   sbatch --export=ALL,INPUT_DIR=data/my_corpus,SHARD_SIZE=4096 \
-#       scripts/preprocess_dataset.sh
-#
-#   # Skip preprocessing (already done), only train tokenizer + pretokenize:
-#   sbatch --export=ALL,SKIP_PREPROCESS=1 scripts/preprocess_dataset.sh
-#
-#   # Skip tokenizer training (already trained):
-#   sbatch --export=ALL,SKIP_TOKENIZER=1 scripts/preprocess_dataset.sh
-#
-#   # Skip pretokenization (only preprocess + train tokenizer):
-#   sbatch --export=ALL,SKIP_PRETOKENIZE=1 scripts/preprocess_dataset.sh
+# Optional overrides via --export:
+#   sbatch --export=ALL,INPUT_DIR=data/my_corpus,SHARD_SIZE=4096 scripts/preprocess_dataset.sh
 # ---------------------------------------------------------------------------
 
 # ── Configuration (override via environment variables) ─────────────────────
@@ -36,14 +25,14 @@ set -euo pipefail
 # Input directory containing raw .ly files
 INPUT_DIR="data/ly"
 
-# Preprocessing output (language-separated variants)
+# Preprocessing output (language-separated variants + metadata.json)
 PREPROCESSED_DIR="data/custom_preprocessed"
 
-# Tokenizer to use for pretokenization
+# Tokenizer output path (for optional BPE training)
 TOKENIZER_PATH="artifacts/tokenizer"
 
 # Pretokenized shards output
-SHARDS_DIR="artifacts/pretokenized/mlm"
+SHARDS_DIR="artifacts/pretokenized"
 
 # Pretokenization settings
 SHARD_SIZE="8192"
@@ -57,10 +46,10 @@ VOCAB_SIZE="${VOCAB_SIZE:-8000}"
 # Worker count: SLURM cpus > nproc fallback
 NUM_WORKERS="${NUM_WORKERS:-${SLURM_CPUS_PER_TASK:-$(nproc)}}"
 
-# Stage toggles
-SKIP_PREPROCESS="${SKIP_PREPROCESS:-0}"
-SKIP_TOKENIZER="${SKIP_TOKENIZER:-0}"
-SKIP_PRETOKENIZE="${SKIP_PRETOKENIZE:-0}"
+# Optional pipeline stages
+ENABLE_SHARDING="${ENABLE_SHARDING:-1}"
+SHARD_STAGE="${SHARD_STAGE:-mlm}"
+ENABLE_BPE="${ENABLE_BPE:-1}"
 
 # Augmentation settings
 LANGUAGES="english,italiano,nederlands"
@@ -76,7 +65,7 @@ ENABLE_INVERSION="${ENABLE_INVERSION:-0}"
 mkdir -p logs
 
 echo "============================================"
-echo " lilybert preprocess + pretokenize pipeline"
+echo " ly-preprocess unified pipeline"
 echo "============================================"
 echo "Job ID:           ${SLURM_JOB_ID:-local}"
 echo "Date:             $(date)"
@@ -89,90 +78,50 @@ echo "SHARDS_DIR:       ${SHARDS_DIR}"
 echo "SHARD_SIZE:       ${SHARD_SIZE}"
 echo "MAX_LENGTH:       ${MAX_LENGTH}"
 echo "VOCAB_SIZE:       ${VOCAB_SIZE}"
-echo "SKIP_PREPROCESS:  ${SKIP_PREPROCESS}"
-echo "SKIP_TOKENIZER:   ${SKIP_TOKENIZER}"
-echo "SKIP_PRETOKENIZE: ${SKIP_PRETOKENIZE}"
+echo "ENABLE_SHARDING:  ${ENABLE_SHARDING}"
+echo "SHARD_STAGE:      ${SHARD_STAGE}"
+echo "ENABLE_BPE:       ${ENABLE_BPE}"
 echo "============================================"
 
-# ── Stage 1: Preprocess ───────────────────────────────────────────────────
+echo ""
+echo "Running unified preprocessing ..."
+echo ""
 
-if [[ "${SKIP_PREPROCESS}" == "0" ]]; then
-    echo ""
-    echo "[Stage 1/3] Preprocessing .ly files from ${INPUT_DIR} ..."
-    echo ""
-
-    PREPROCESS_ARGS=(
-        --input-dir "${INPUT_DIR}"
-        --output-dir "${PREPROCESSED_DIR}"
-        --num-workers "${NUM_WORKERS}"
-        --skip-on-error
-        --languages "${LANGUAGES}"
-    )
-
-    [[ "${ENABLE_TRANSPOSITION}" == "1" ]]          && PREPROCESS_ARGS+=(--enable-transposition)
-    [[ "${ENABLE_ABSOLUTE_RELATIVE}" == "1" ]]      && PREPROCESS_ARGS+=(--enable-absolute-relative)
-    [[ "${ENABLE_ARTICULATION_VARIANTS}" == "1" ]]   && PREPROCESS_ARGS+=(--enable-articulation-variants)
-    [[ "${ENABLE_BARLINE_VARIANTS}" == "1" ]]        && PREPROCESS_ARGS+=(--enable-barline-variants)
-    [[ "${ENABLE_RETROGRADE}" == "1" ]]              && PREPROCESS_ARGS+=(--enable-retrograde)
-    [[ "${ENABLE_INVERSION}" == "1" ]]               && PREPROCESS_ARGS+=(--enable-inversion)
-
-    uv run lilybert mutopia-preprocess "${PREPROCESS_ARGS[@]}"
-
-    echo ""
-    echo "[Stage 1/3] Preprocessing complete."
-else
-    echo ""
-    echo "[Stage 1/3] Skipped (SKIP_PREPROCESS=1)."
+SHARDING_ENABLED=false
+if [[ "${ENABLE_SHARDING}" == "1" ]]; then
+    SHARDING_ENABLED=true
 fi
 
-# ── Stage 2: Train tokenizer ─────────────────────────────────────────────
-
-if [[ "${SKIP_TOKENIZER}" == "0" ]]; then
-    echo ""
-    echo "[Stage 2/3] Training tokenizer on preprocessed corpus ..."
-    echo ""
-
-    uv run lilybert train-tokenizer \
-        --processed-dir "${PREPROCESSED_DIR}" \
-        --output-dir "${TOKENIZER_PATH}" \
-        --vocab-size "${VOCAB_SIZE}" \
-        --languages "${LANGUAGES}"
-
-    echo ""
-    echo "[Stage 2/3] Tokenizer training complete."
-else
-    echo ""
-    echo "[Stage 2/3] Skipped (SKIP_TOKENIZER=1)."
+BPE_ENABLED=false
+if [[ "${ENABLE_BPE}" == "1" ]]; then
+    BPE_ENABLED=true
 fi
 
-# ── Stage 3: Pretokenize & shard ──────────────────────────────────────────
-
-if [[ "${SKIP_PRETOKENIZE}" == "0" ]]; then
-    echo ""
-    echo "[Stage 3/3] Pretokenizing and sharding ..."
-    echo ""
-
-    uv run lilybert pretokenize \
-        --stage mlm \
-        --data-dir "${PREPROCESSED_DIR}" \
-        --tokenizer-path "${TOKENIZER_PATH}" \
-        --output-dir "${SHARDS_DIR}" \
-        --max-length "${MAX_LENGTH}" \
-        --shard-size "${SHARD_SIZE}" \
-        --eval-ratio "${EVAL_RATIO}" \
-        --languages "${LANGUAGES}" \
-        --seed "${SEED}"
-
-    echo ""
-    echo "[Stage 3/3] Pretokenization complete."
-else
-    echo ""
-    echo "[Stage 3/3] Skipped (SKIP_PRETOKENIZE=1)."
-fi
+uv run ly-preprocess \
+    input_dir="${INPUT_DIR}" \
+    output_dir="${PREPROCESSED_DIR}" \
+    augmentation.languages="[${LANGUAGES}]" \
+    augmentation.enable_transposition=$([[ "${ENABLE_TRANSPOSITION}" == "1" ]] && echo true || echo false) \
+    augmentation.enable_absolute_relative=$([[ "${ENABLE_ABSOLUTE_RELATIVE}" == "1" ]] && echo true || echo false) \
+    augmentation.enable_articulation_variants=$([[ "${ENABLE_ARTICULATION_VARIANTS}" == "1" ]] && echo true || echo false) \
+    augmentation.enable_barline_variants=$([[ "${ENABLE_BARLINE_VARIANTS}" == "1" ]] && echo true || echo false) \
+    augmentation.enable_retrograde=$([[ "${ENABLE_RETROGRADE}" == "1" ]] && echo true || echo false) \
+    augmentation.enable_inversion=$([[ "${ENABLE_INVERSION}" == "1" ]] && echo true || echo false) \
+    sharding.enabled=${SHARDING_ENABLED} \
+    sharding.stage="${SHARD_STAGE}" \
+    sharding.tokenizer_path="${TOKENIZER_PATH}" \
+    sharding.output_dir="${SHARDS_DIR}" \
+    sharding.max_length="${MAX_LENGTH}" \
+    sharding.shard_size="${SHARD_SIZE}" \
+    sharding.eval_ratio="${EVAL_RATIO}" \
+    sharding.seed="${SEED}" \
+    bpe.enabled=${BPE_ENABLED} \
+    bpe.output_dir="${TOKENIZER_PATH}" \
+    bpe.vocab_size="${VOCAB_SIZE}"
 
 # ── Done ──────────────────────────────────────────────────────────────────
 
 echo ""
 echo "============================================"
-echo " Pipeline finished at $(date)"
+echo " Unified pipeline finished at $(date)"
 echo "============================================"

@@ -13,7 +13,6 @@ from lilybert.config import (
     LoggingConfig,
     PathConfig,
 )
-from lilybert.models import TrainingMode
 
 
 @dataclass
@@ -33,7 +32,6 @@ class TrainingConfig:
 
     # --- model (from BaseModelConfig) ---
     pretrained_model: str = BaseModelConfig.pretrained_model
-    mode: TrainingMode = TrainingMode.FULL_FINETUNE
     task: str = "composer"
     max_length: int = BaseModelConfig.max_length
     stride: int = 256
@@ -46,8 +44,6 @@ class TrainingConfig:
     per_device_eval_batch_size: int = BaseTrainingConfig.per_device_eval_batch_size
     weight_decay: float = BaseTrainingConfig.weight_decay
     warmup_ratio: float = BaseTrainingConfig.warmup_ratio
-    lora_r: int = BaseTrainingConfig.lora_r
-    lora_alpha: int = BaseTrainingConfig.lora_alpha
 
     lr_scheduler_type: str = "linear"
     grad_clip_norm: Optional[float] = 1.0
@@ -80,9 +76,6 @@ class TrainingConfig:
 
     log_per_class_metrics: bool = True
     top_k: List[int] = field(default_factory=lambda: [1, 5])
-
-    # Legacy compatibility knobs retained for existing tests/transition
-    use_lora: bool = True
 
     def __post_init__(self) -> None:
         self.num_train_epochs = int(self.num_train_epochs)
@@ -122,22 +115,14 @@ class TrainingConfig:
         config_path = save_path / "training_config.json"
 
         data = asdict(self)
-        data["mode"] = (
-            self.mode.value if isinstance(self.mode, TrainingMode) else str(self.mode)
-        )
         config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     @classmethod
     def from_pretrained(cls, config_path: str) -> "TrainingConfig":
         path = Path(config_path)
         data: Dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-        if "mode" in data:
-            mode_value = str(data["mode"])
-            if mode_value.startswith("TrainingMode."):
-                mode_value = mode_value.split(".", 1)[1].lower()
-            data["mode"] = TrainingMode(mode_value)
         # Drop legacy alias keys that no longer exist as fields
-        for legacy_key in ("lr", "epochs", "batch_size"):
+        for legacy_key in ("lr", "epochs", "batch_size", "mode", "lora_r", "lora_alpha", "use_lora"):
             data.pop(legacy_key, None)
         return cls(**data)
 

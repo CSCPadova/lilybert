@@ -12,7 +12,7 @@ Focus on classification workflows:
 - label encoding for supported tasks,
 - grouped stratified cross-validation training,
 - movement-level aggregation and metrics,
-- dataset/model upload helpers.
+- separate linear probing on trained encoders.
 
 ## Environment
 
@@ -47,17 +47,14 @@ flake8 lilybert/ tests/
 
 ### Entry points
 ```bash
-lilybert preprocess
-lilybert train-tokenizer
-lilybert train
-lilybert evaluate
-lilybert predict
-lilybert run-experiment
+ly-preprocess
+ly-train
+ly-evaluate
+ly-predict
+ly-probe
 
 # Meta tooling kept outside package command
 python scripts/generate_tables.py
-python scripts/upload_dataset.py
-python scripts/upload_model.py
 ```
 
 ## Architecture
@@ -94,7 +91,7 @@ python scripts/upload_model.py
 - `cli.py`
 
 ### Scripts (`lilybert/scripts/`)
-- preprocess, tokenizer training, experiment orchestration, table generation, hub upload wrappers
+- table generation and auxiliary project scripts
 
 ## Development Guidelines
 

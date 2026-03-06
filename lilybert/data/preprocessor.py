@@ -906,8 +906,8 @@ class LilyPondPreprocessor:
                         "composer": (
                             labels_entry.get("composer") if labels_entry else None
                         ),
-                        "musical_form": (
-                            labels_entry.get("musical_form") if labels_entry else []
+                        "style": (
+                            labels_entry.get("style") if labels_entry else None
                         ),
                         "midi_instruments": (
                             labels_entry.get("midi_instruments") if labels_entry else []

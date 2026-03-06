@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class BaroqueMusicClassificationDataset(Dataset):
     """Windowed dataset for movement-level classification tasks."""
 
-    MULTI_LABEL_TASKS = {"musical_form", "instruments"}
+    MULTI_LABEL_TASKS = {"instrument"}
 
     def __init__(
         self,
@@ -42,10 +42,9 @@ class BaroqueMusicClassificationDataset(Dataset):
             raise ValueError("max_length must be >= 3 to include [CLS] and [SEP]")
         if self.task not in {
             "composer",
-            "musical_form",
-            "instruments",
-            "section_nomenclature",
-            "key_scale",
+            "style",
+            "instrument",
+            "key_root",
         }:
             raise ValueError(f"Unsupported task: {self.task}")
 
@@ -169,12 +168,8 @@ class BaroqueMusicClassificationDataset(Dataset):
         return int(value)
 
     def _build_label_mapping(self) -> Dict[str, int]:
-        if self.task == "key_scale":
-            labels = [
-                f"{key}_{scale}"
-                for key in CANONICAL_KEY_ROOTS
-                for scale in ["major", "minor"]
-            ]
+        if self.task == "key_root":
+            labels = list(CANONICAL_KEY_ROOTS)
             return {label: idx for idx, label in enumerate(labels)}
 
         values = set()
@@ -214,17 +209,13 @@ class BaroqueMusicClassificationDataset(Dataset):
 
         if self.task == "composer":
             return labels.get("composer")
-        if self.task == "musical_form":
-            return labels.get("musical_form", [])
-        if self.task == "instruments":
+        if self.task == "style":
+            return labels.get("style")
+        if self.task == "instrument":
             return labels.get("midi_instruments", [])
-        if self.task == "section_nomenclature":
-            return movement_meta.get("section_nomenclature")
-        if self.task == "key_scale":
+        if self.task == "key_root":
             meta = labels.get("meta", {}) if isinstance(labels, dict) else {}
-            key = canonicalize_key_root(meta.get("key", "do"))
-            scale = self._normalize(meta.get("scale", "major"))
-            return f"{key}_{scale}"
+            return canonicalize_key_root(meta.get("key", "do"))
 
         raise ValueError(f"Unsupported task: {self.task}")
 

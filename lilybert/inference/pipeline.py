@@ -136,7 +136,7 @@ class InferenceDataset(Dataset):
 class InferencePipeline:
     """End-to-end inference pipeline: files -> predictions."""
 
-    MULTI_LABEL_TASKS = {"musical_form", "instruments"}
+    MULTI_LABEL_TASKS = {"instrument"}
 
     def __init__(
         self,

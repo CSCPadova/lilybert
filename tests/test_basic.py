@@ -335,7 +335,7 @@ class TestTrainingConfig:
         config = TrainingConfig()
         assert config.learning_rate > 0
         assert config.num_train_epochs > 0
-        assert config.use_lora is True
+        assert config.pretrained_model == "bert-base"
 
     def test_quick_test_config(self):
         """Test quick test configuration."""
@@ -463,7 +463,7 @@ class TestIntegration:
             # Verify key properties are preserved
             assert loaded_config.learning_rate == original_config.learning_rate
             assert loaded_config.num_train_epochs == original_config.num_train_epochs
-            assert loaded_config.use_lora == original_config.use_lora
+            assert loaded_config.pretrained_model == original_config.pretrained_model
 
     def test_tokenizer_notation_mode_filters_corpus(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -592,13 +592,10 @@ class TestDefaultAugmentationLanguages:
         assert "nederlands" in variant_languages
 
     def test_preprocess_cli_default_languages(self):
-        """CLI default --languages flag includes all three languages."""
-        import inspect
-        from lilybert.cli.preprocess import main as preprocess_main
+        """Default augmentation languages include the three supported variants."""
+        from lilybert.data.preprocessor import DEFAULT_AUGMENTATION_LANGUAGES
 
-        sig = inspect.signature(preprocess_main)
-        default = sig.parameters["languages"].default
-        languages = [lang.strip() for lang in default.split(",")]
+        languages = list(DEFAULT_AUGMENTATION_LANGUAGES)
         assert languages == ["italiano", "english", "nederlands"]
 
 

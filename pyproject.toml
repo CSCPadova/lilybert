@@ -29,7 +29,6 @@ requires-python = ">=3.11"
 dependencies = [
     "torch>=2.0.0",
     "transformers>=4.30.0",
-    "peft>=0.5.0",
     "accelerate>=0.20.0",
     "datasets>=2.12.0",
     "numpy>=1.24.0",
@@ -42,7 +41,6 @@ dependencies = [
     "hydra-core>=1.3.2",
     "scikit-learn>=1.2.0",
     "tokenizers>=0.13.0",
-    "huggingface-hub>=0.16.0",
     "python-ly>=0.9.9",
     "typer>=0.24.0",
 ]
@@ -62,7 +60,11 @@ dev = [
 "Repository" = "https://github.com/CSCPadova/lilybert"
 
 [project.scripts]
-lilybert = "lilybert.__main__:main"
+ly-preprocess = "lilybert.cli.ly_preprocess:main"
+ly-train = "lilybert.cli.ly_train:main"
+ly-predict = "lilybert.cli.ly_predict:main"
+ly-evaluate = "lilybert.cli.ly_evaluate:main"
+ly-probe = "lilybert.cli.ly_probe:main"
 
 [tool.hatchling.build.targets.wheel]
 packages = ["lilybert"]

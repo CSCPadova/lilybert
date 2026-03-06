@@ -41,8 +41,6 @@ class BaseTrainingConfig:
     weight_decay: float = 0.01
     warmup_ratio: float = 0.1
     num_train_epochs: int = 20
-    lora_r: int = 16
-    lora_alpha: int = 32
 
 
 @dataclass

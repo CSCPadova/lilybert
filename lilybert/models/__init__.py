@@ -2,26 +2,22 @@
 
 from .bert_classifier import (
     ComposerClassifier,
-    InstrumentsClassifier,
-    KeyScaleClassifier,
+    InstrumentClassifier,
+    KeyRootClassifier,
     LilyBERTClassifier,
     LilyBERTEncoder,
     LilyBERTTaskClassifier,
-    MusicalFormClassifier,
-    SectionNomenclatureClassifier,
-    TrainingMode,
+    StyleClassifier,
 )
 from .config import LilyBERTConfig
 
 __all__ = [
-    "TrainingMode",
     "LilyBERTEncoder",
     "LilyBERTTaskClassifier",
     "LilyBERTClassifier",
     "ComposerClassifier",
-    "MusicalFormClassifier",
-    "InstrumentsClassifier",
-    "SectionNomenclatureClassifier",
-    "KeyScaleClassifier",
+    "StyleClassifier",
+    "InstrumentClassifier",
+    "KeyRootClassifier",
     "LilyBERTConfig",
 ]
