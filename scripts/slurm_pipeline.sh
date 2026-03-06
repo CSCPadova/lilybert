@@ -1,109 +1,76 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# Unified preprocessing pipeline for lilyBERT.
+# lilyBERT preprocessing pipeline — SLURM batch script.
 #
-# Runs four stages as a SLURM job array (--array=1-4), where each array task
-# picks up exactly one stage.  Stages depend on each other sequentially so
-# they are submitted with --dependency=afterok chaining (see submit helper
-# at the bottom).
+# Submit with sbatch.  Override defaults via environment variables:
 #
-# Stages:
+#   sbatch scripts/slurm_pipeline.sh
+#   sbatch --export=ALL,INPUT_DIR=/data/corpus,OUTPUT_DIR=/scratch/out scripts/slurm_pipeline.sh
+#
+# Or edit the "Defaults" section below before submission.
+#
+# Stages (all run sequentially in a single job):
 #   1  Preprocess   – clean/augment raw .ly files into movement-level artefacts
 #   2  BPE          – train a BPE tokenizer on the preprocessed corpus
 #   3  Shard        – pretokenize movements into .npz shards for training
 #   4  Verify       – quick sanity-check (counts, encode/decode roundtrip)
 #
-# Usage (local, all stages):
-#   bash scripts/slurm_pipeline.sh --input data/pdmx --output outputs
-#
-# Usage (SLURM, submit chained jobs):
-#   bash scripts/slurm_pipeline.sh --input data/pdmx --output outputs --submit
-#
-# Usage (single stage locally):
-#   STAGE=2 bash scripts/slurm_pipeline.sh --input data/pdmx --output outputs
-#
-# All flags (defaults in parentheses):
-#   --input       DIR   raw .ly files                        (data/raw)
-#   --output      DIR   root output directory                (artifacts)
-#   --labels      PATH  labels JSON                          (data/labels/labels_v1.json)
-#   --vocab-size  N     BPE vocabulary size                  (8000)
-#   --min-freq    N     BPE minimum token frequency          (0)
-#   --shard-size  N     samples per .npz shard               (8192)
-#   --max-length  N     max tokens per sample                (2048)
-#   --stride      N     sliding-window stride                (256)
-#   --shard-stage STR   sharding stage: mlm|classification   (mlm)
-#   --task        STR   classification task (if shard-stage=classification) (composer)
-#   --eval-ratio  F     fraction held-out for eval (MLM)     (0.01)
-#   --seed        N     random seed                          (42)
-#   --num-placeholders  enable number placeholders in BPE    (off)
-#   --transposition     enable transposition augmentation    (off)
-#   --abs-rel           enable absolute/relative augment.    (off)
-#   --artic-var         enable articulation variants         (off)
-#   --barline-var       enable barline variants              (off)
-#   --retrograde        enable retrograde augmentation       (off)
-#   --inversion         enable inversion augmentation        (off)
-#   --submit            submit to SLURM instead of local run
+# To run only specific stages, set STAGE=2 (or STAGE=1, STAGE=3, etc.)
+# in the environment.  Default is STAGE=all.
 # ---------------------------------------------------------------------------
+
+#SBATCH --job-name=ly-pipeline
+#SBATCH --partition=allgroups
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=64G
+#SBATCH --time=48:00:00
 
 set -euo pipefail
 
-# ── Defaults ──────────────────────────────────────────────────────────────
+# ── Project layout ────────────────────────────────────────────────────────
 
-INPUT_DIR="data/raw"
-OUTPUT_DIR="artifacts"
-LABELS_PATH="data/labels/labels_v1.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-VOCAB_SIZE=10000
-MIN_FREQUENCY=40
-NUMBER_PLACEHOLDERS=false
+# Logs go under project root so they are always writable.
+LOG_DIR="${PROJECT_ROOT}/logs"
+mkdir -p "${LOG_DIR}"
 
-SHARD_SIZE=8192
-MAX_LENGTH=2048
-STRIDE=256
+# Under SLURM, tee stdout/stderr to log files (sbatch --output/--error
+# default to the submitter's cwd which may be unwritable on compute nodes).
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    exec > >(tee "${LOG_DIR}/pipeline_${SLURM_JOB_ID}.out") \
+         2> >(tee "${LOG_DIR}/pipeline_${SLURM_JOB_ID}.err" >&2)
+fi
+
+# ── Defaults (override via env before sbatch) ─────────────────────────────
+
+INPUT_DIR="/nfsd/voce/machine_learning/datasets/pdmx/PDMX/ly"
+OUTPUT_DIR="/nfsd/voce/machine_learning/experiments/artifacts"
+LABELS_PATH="${LABELS_PATH:-data/labels/labels_v1.json}"
+
+VOCAB_SIZE="10000"
+MIN_FREQUENCY="40"
+NUMBER_PLACEHOLDERS="false"
+
+SHARD_SIZE="8192"
+MAX_LENGTH="2048"
+STRIDE="256"
 SHARD_STAGE="mlm"
-TASK="composer"
-EVAL_RATIO=0.01
-SEED=42
+TASK="${TASK:-composer}"
+EVAL_RATIO="0.01"
+SEED="42"
 
-AUG_TRANSPOSITION=false
-AUG_ABS_REL=true
-AUG_ARTIC=false
-AUG_BARLINE=false
-AUG_RETROGRADE=false
-AUG_INVERSION=false
+AUG_TRANSPOSITION="${AUG_TRANSPOSITION:-false}"
+AUG_ABS_REL="${AUG_ABS_REL:-true}"
+AUG_ARTIC="${AUG_ARTIC:-false}"
+AUG_BARLINE="${AUG_BARLINE:-false}"
+AUG_RETROGRADE="${AUG_RETROGRADE:-false}"
+AUG_INVERSION="${AUG_INVERSION:-false}"
 
-SUBMIT=true
-
-# ── Parse CLI arguments ──────────────────────────────────────────────────
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --input)        INPUT_DIR="$2";        shift 2 ;;
-        --output)       OUTPUT_DIR="$2";       shift 2 ;;
-        --labels)       LABELS_PATH="$2";      shift 2 ;;
-        --vocab-size)   VOCAB_SIZE="$2";       shift 2 ;;
-        --min-freq)     MIN_FREQUENCY="$2";    shift 2 ;;
-        --shard-size)   SHARD_SIZE="$2";       shift 2 ;;
-        --max-length)   MAX_LENGTH="$2";       shift 2 ;;
-        --stride)       STRIDE="$2";           shift 2 ;;
-        --shard-stage)  SHARD_STAGE="$2";      shift 2 ;;
-        --task)         TASK="$2";             shift 2 ;;
-        --eval-ratio)   EVAL_RATIO="$2";       shift 2 ;;
-        --seed)         SEED="$2";             shift 2 ;;
-        --num-placeholders) NUMBER_PLACEHOLDERS=true; shift ;;
-        --transposition)    AUG_TRANSPOSITION=true;   shift ;;
-        --abs-rel)          AUG_ABS_REL=true;         shift ;;
-        --artic-var)        AUG_ARTIC=true;           shift ;;
-        --barline-var)      AUG_BARLINE=true;         shift ;;
-        --retrograde)       AUG_RETROGRADE=true;      shift ;;
-        --inversion)        AUG_INVERSION=true;       shift ;;
-        --submit)           SUBMIT=true;              shift ;;
-        *)
-            echo "Unknown option: $1" >&2
-            exit 1
-            ;;
-    esac
-done
+STAGE="${STAGE:-all}"
 
 # ── Derived paths ────────────────────────────────────────────────────────
 
@@ -111,128 +78,42 @@ PROCESSED_DIR="${OUTPUT_DIR}/processed"
 TOKENIZER_DIR="${OUTPUT_DIR}/tokenizer"
 SHARDS_DIR="${OUTPUT_DIR}/pretokenized"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# ── Activate environment ─────────────────────────────────────────────────
+
+cd "${PROJECT_ROOT}"
+
 VENV_ACTIVATE="${PROJECT_ROOT}/.venv/bin/activate"
 PYTHON="${PROJECT_ROOT}/.venv/bin/python"
 
-# ── SLURM submission mode ────────────────────────────────────────────────
-
-if [[ "$SUBMIT" == "true" ]]; then
-    mkdir -p "${PROJECT_ROOT}/logs"
-
-    # Export all config as environment variables for the array jobs
-    EXPORT_VARS="ALL"
-    EXPORT_VARS+=",PIPELINE_INPUT_DIR=${INPUT_DIR}"
-    EXPORT_VARS+=",PIPELINE_OUTPUT_DIR=${OUTPUT_DIR}"
-    EXPORT_VARS+=",PIPELINE_LABELS_PATH=${LABELS_PATH}"
-    EXPORT_VARS+=",PIPELINE_VOCAB_SIZE=${VOCAB_SIZE}"
-    EXPORT_VARS+=",PIPELINE_MIN_FREQUENCY=${MIN_FREQUENCY}"
-    EXPORT_VARS+=",PIPELINE_NUMBER_PLACEHOLDERS=${NUMBER_PLACEHOLDERS}"
-    EXPORT_VARS+=",PIPELINE_SHARD_SIZE=${SHARD_SIZE}"
-    EXPORT_VARS+=",PIPELINE_MAX_LENGTH=${MAX_LENGTH}"
-    EXPORT_VARS+=",PIPELINE_STRIDE=${STRIDE}"
-    EXPORT_VARS+=",PIPELINE_SHARD_STAGE=${SHARD_STAGE}"
-    EXPORT_VARS+=",PIPELINE_TASK=${TASK}"
-    EXPORT_VARS+=",PIPELINE_EVAL_RATIO=${EVAL_RATIO}"
-    EXPORT_VARS+=",PIPELINE_SEED=${SEED}"
-    EXPORT_VARS+=",PIPELINE_AUG_TRANSPOSITION=${AUG_TRANSPOSITION}"
-    EXPORT_VARS+=",PIPELINE_AUG_ABS_REL=${AUG_ABS_REL}"
-    EXPORT_VARS+=",PIPELINE_AUG_ARTIC=${AUG_ARTIC}"
-    EXPORT_VARS+=",PIPELINE_AUG_BARLINE=${AUG_BARLINE}"
-    EXPORT_VARS+=",PIPELINE_AUG_RETROGRADE=${AUG_RETROGRADE}"
-    EXPORT_VARS+=",PIPELINE_AUG_INVERSION=${AUG_INVERSION}"
-
-    # Stage 1: Preprocess
-    JOB1=$(sbatch --parsable \
-        --partition=allgroups \
-        --job-name=ly-preprocess \
-        --output=${PROJECT_ROOT}/logs/preprocess_%j.out \
-        --error=${PROJECT_ROOT}/logs/preprocess_%j.err \
-        --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=24:00:00 \
-        --export="${EXPORT_VARS},STAGE=1" \
-        "${BASH_SOURCE[0]}")
-    echo "Submitted stage 1 (preprocess): job ${JOB1}"
-
-    # Stage 2: BPE (depends on stage 1)
-    JOB2=$(sbatch --parsable \
-        --partition=allgroups \
-        --dependency=afterok:${JOB1} \
-        --job-name=ly-bpe \
-        --output=${PROJECT_ROOT}/logs/bpe_%j.out \
-        --error=${PROJECT_ROOT}/logs/bpe_%j.err \
-        --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=12:00:00 \
-        --export="${EXPORT_VARS},STAGE=2" \
-        "${BASH_SOURCE[0]}")
-    echo "Submitted stage 2 (BPE):        job ${JOB2} (after ${JOB1})"
-
-    # Stage 3: Shard (depends on stage 2)
-    JOB3=$(sbatch --parsable \
-        --partition=allgroups \
-        --dependency=afterok:${JOB2} \
-        --job-name=ly-shard \
-        --output=${PROJECT_ROOT}/logs/shard_%j.out \
-        --error=${PROJECT_ROOT}/logs/shard_%j.err \
-        --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=24:00:00 \
-        --export="${EXPORT_VARS},STAGE=3" \
-        "${BASH_SOURCE[0]}")
-    echo "Submitted stage 3 (shard):      job ${JOB3} (after ${JOB2})"
-
-    # Stage 4: Verify (depends on stage 3)
-    JOB4=$(sbatch --parsable \
-        --partition=allgroups \
-        --dependency=afterok:${JOB3} \
-        --job-name=ly-verify \
-        --output=${PROJECT_ROOT}/logs/verify_%j.out \
-        --error=${PROJECT_ROOT}/logs/verify_%j.err \
-        --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=12:00:00 \
-        --export="${EXPORT_VARS},STAGE=4" \
-        "${BASH_SOURCE[0]}")
-    echo "Submitted stage 4 (verify):     job ${JOB4} (after ${JOB3})"
-
-    echo ""
-    echo "Pipeline submitted: ${JOB1} → ${JOB2} → ${JOB3} → ${JOB4}"
-    exit 0
-fi
-
-# ── Pick up SLURM-exported config (if running as array task) ─────────────
-
-INPUT_DIR="${PIPELINE_INPUT_DIR:-$INPUT_DIR}"
-OUTPUT_DIR="${PIPELINE_OUTPUT_DIR:-$OUTPUT_DIR}"
-LABELS_PATH="${PIPELINE_LABELS_PATH:-$LABELS_PATH}"
-VOCAB_SIZE="${PIPELINE_VOCAB_SIZE:-$VOCAB_SIZE}"
-MIN_FREQUENCY="${PIPELINE_MIN_FREQUENCY:-$MIN_FREQUENCY}"
-NUMBER_PLACEHOLDERS="${PIPELINE_NUMBER_PLACEHOLDERS:-$NUMBER_PLACEHOLDERS}"
-SHARD_SIZE="${PIPELINE_SHARD_SIZE:-$SHARD_SIZE}"
-MAX_LENGTH="${PIPELINE_MAX_LENGTH:-$MAX_LENGTH}"
-STRIDE="${PIPELINE_STRIDE:-$STRIDE}"
-SHARD_STAGE="${PIPELINE_SHARD_STAGE:-$SHARD_STAGE}"
-TASK="${PIPELINE_TASK:-$TASK}"
-EVAL_RATIO="${PIPELINE_EVAL_RATIO:-$EVAL_RATIO}"
-SEED="${PIPELINE_SEED:-$SEED}"
-AUG_TRANSPOSITION="${PIPELINE_AUG_TRANSPOSITION:-$AUG_TRANSPOSITION}"
-AUG_ABS_REL="${PIPELINE_AUG_ABS_REL:-$AUG_ABS_REL}"
-AUG_ARTIC="${PIPELINE_AUG_ARTIC:-$AUG_ARTIC}"
-AUG_BARLINE="${PIPELINE_AUG_BARLINE:-$AUG_BARLINE}"
-AUG_RETROGRADE="${PIPELINE_AUG_RETROGRADE:-$AUG_RETROGRADE}"
-AUG_INVERSION="${PIPELINE_AUG_INVERSION:-$AUG_INVERSION}"
-
-# Re-derive paths after potential overrides
-PROCESSED_DIR="${OUTPUT_DIR}/processed"
-TOKENIZER_DIR="${OUTPUT_DIR}/tokenizer"
-SHARDS_DIR="${OUTPUT_DIR}/pretokenized"
-
-# ── Activate environment ─────────────────────────────────────────────────
-
-cd "$PROJECT_ROOT"
 if [[ -f "$VENV_ACTIVATE" ]]; then
+    # shellcheck disable=SC1090
     source "$VENV_ACTIVATE"
 fi
 
-# ── Stage dispatcher ─────────────────────────────────────────────────────
+# ── Print config ─────────────────────────────────────────────────────────
 
-# STAGE can be set via env (SLURM export) or defaults to "all"
-STAGE="${STAGE:-all}"
+echo ""
+echo "============================================"
+echo " lilyBERT preprocessing pipeline"
+echo "============================================"
+echo "  SLURM_JOB_ID:  ${SLURM_JOB_ID:-local}"
+echo "  INPUT_DIR:     ${INPUT_DIR}"
+echo "  OUTPUT_DIR:    ${OUTPUT_DIR}"
+echo "  PROCESSED_DIR: ${PROCESSED_DIR}"
+echo "  TOKENIZER_DIR: ${TOKENIZER_DIR}"
+echo "  SHARDS_DIR:    ${SHARDS_DIR}"
+echo "  STAGE:         ${STAGE}"
+echo "  VOCAB_SIZE:    ${VOCAB_SIZE}"
+echo "  MIN_FREQUENCY: ${MIN_FREQUENCY}"
+echo "  SHARD_STAGE:   ${SHARD_STAGE}"
+echo "  MAX_LENGTH:    ${MAX_LENGTH}"
+echo "  STRIDE:        ${STRIDE}"
+echo "============================================"
+echo ""
+
+mkdir -p "${PROCESSED_DIR}" "${TOKENIZER_DIR}" "${SHARDS_DIR}"
+
+# ── Stage functions ──────────────────────────────────────────────────────
 
 run_stage_1() {
     echo "============================================"
@@ -279,6 +160,7 @@ print(json.dumps(summary, indent=2, default=str))
     "${AUG_BARLINE}" \
     "${AUG_RETROGRADE}" \
     "${AUG_INVERSION}"
+
     echo ""
     echo "Stage 1 finished at $(date)"
 }
@@ -324,6 +206,7 @@ print(json.dumps({
     "${MIN_FREQUENCY}" \
     "${NUMBER_PLACEHOLDERS}" \
     "${TOKENIZER_DIR}"
+
     echo ""
     echo "Stage 2 finished at $(date)"
 }
@@ -429,7 +312,7 @@ if (tok_dir / 'tokenizer.json').exists():
         sample = ly_files[0].read_text(encoding='utf-8')
         ids = tok.encode_lilypond(sample)
         decoded = tok.decode_to_lilypond(ids)
-        print(f'Roundtrip test:      {len(ids)} IDs → {len(decoded)} chars')
+        print(f'Roundtrip test:      {len(ids)} IDs -> {len(decoded)} chars')
 else:
     print('Tokenizer not found (skipped)')
 
@@ -446,23 +329,12 @@ print('Verification complete.')
     "${PROCESSED_DIR}" \
     "${TOKENIZER_DIR}" \
     "${SHARDS_DIR}"
+
     echo ""
     echo "Stage 4 finished at $(date)"
 }
 
 # ── Execute ──────────────────────────────────────────────────────────────
-
-echo ""
-echo "Pipeline config:"
-echo "  INPUT_DIR:     ${INPUT_DIR}"
-echo "  OUTPUT_DIR:    ${OUTPUT_DIR}"
-echo "  PROCESSED_DIR: ${PROCESSED_DIR}"
-echo "  TOKENIZER_DIR: ${TOKENIZER_DIR}"
-echo "  SHARDS_DIR:    ${SHARDS_DIR}"
-echo "  STAGE:         ${STAGE}"
-echo ""
-
-mkdir -p "${PROCESSED_DIR}" "${TOKENIZER_DIR}" "${SHARDS_DIR}"
 
 case "$STAGE" in
     1)    run_stage_1 ;;
