@@ -54,7 +54,7 @@ OUTPUT_DIR="artifacts"
 LABELS_PATH="data/labels/labels_v1.json"
 
 VOCAB_SIZE=10000
-MIN_FREQUENCY=50
+MIN_FREQUENCY=40
 NUMBER_PLACEHOLDERS=false
 
 SHARD_SIZE=8192
@@ -72,7 +72,7 @@ AUG_BARLINE=false
 AUG_RETROGRADE=false
 AUG_INVERSION=false
 
-SUBMIT=false
+SUBMIT=true
 
 # ── Parse CLI arguments ──────────────────────────────────────────────────
 
@@ -145,10 +145,10 @@ if [[ "$SUBMIT" == "true" ]]; then
 
     # Stage 1: Preprocess
     JOB1=$(sbatch --parsable \
-        --partition=allpartitions \
+        --partition=allgroups \
         --job-name=ly-preprocess \
-        --output=logs/preprocess_%j.out \
-        --error=logs/preprocess_%j.err \
+        --output=${PROJECT_ROOT}/logs/preprocess_%j.out \
+        --error=${PROJECT_ROOT}/logs/preprocess_%j.err \
         --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=24:00:00 \
         --export="${EXPORT_VARS},STAGE=1" \
         "${BASH_SOURCE[0]}")
@@ -156,11 +156,11 @@ if [[ "$SUBMIT" == "true" ]]; then
 
     # Stage 2: BPE (depends on stage 1)
     JOB2=$(sbatch --parsable \
-        --partition=allpartitions \
+        --partition=allgroups \
         --dependency=afterok:${JOB1} \
         --job-name=ly-bpe \
-        --output=logs/bpe_%j.out \
-        --error=logs/bpe_%j.err \
+        --output=${PROJECT_ROOT}/logs/bpe_%j.out \
+        --error=${PROJECT_ROOT}/logs/bpe_%j.err \
         --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=12:00:00 \
         --export="${EXPORT_VARS},STAGE=2" \
         "${BASH_SOURCE[0]}")
@@ -168,11 +168,11 @@ if [[ "$SUBMIT" == "true" ]]; then
 
     # Stage 3: Shard (depends on stage 2)
     JOB3=$(sbatch --parsable \
-        --partition=allpartitions \
+        --partition=allgroups \
         --dependency=afterok:${JOB2} \
         --job-name=ly-shard \
-        --output=logs/shard_%j.out \
-        --error=logs/shard_%j.err \
+        --output=${PROJECT_ROOT}/logs/shard_%j.out \
+        --error=${PROJECT_ROOT}/logs/shard_%j.err \
         --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=24:00:00 \
         --export="${EXPORT_VARS},STAGE=3" \
         "${BASH_SOURCE[0]}")
@@ -180,11 +180,11 @@ if [[ "$SUBMIT" == "true" ]]; then
 
     # Stage 4: Verify (depends on stage 3)
     JOB4=$(sbatch --parsable \
-        --partition=allpartitions \
+        --partition=allgroups \
         --dependency=afterok:${JOB3} \
         --job-name=ly-verify \
-        --output=logs/verify_%j.out \
-        --error=logs/verify_%j.err \
+        --output=${PROJECT_ROOT}/logs/verify_%j.out \
+        --error=${PROJECT_ROOT}/logs/verify_%j.err \
         --nodes=1 --ntasks=1 --cpus-per-task=32 --mem=64G --time=12:00:00 \
         --export="${EXPORT_VARS},STAGE=4" \
         "${BASH_SOURCE[0]}")
