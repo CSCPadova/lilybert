@@ -58,6 +58,8 @@ class BPESettings:
     enabled: bool = False
     output_dir: str = "artifacts/tokenizer"
     vocab_size: int = 8000
+    min_frequency: int = 0
+    number_placeholders: bool = False
     notation_mode: str = "both"
     languages: Optional[List[str]] = None
 
@@ -149,6 +151,8 @@ def _main(cfg: DictConfig) -> None:
         fast_tokenizer = tokenizer.train(
             corpus=corpus,
             vocab_size=config.bpe.vocab_size,
+            min_frequency=config.bpe.min_frequency,
+            number_placeholders=config.bpe.number_placeholders,
         )
         saved_dir = tokenizer.save(config.bpe.output_dir)
         bpe_summary = {

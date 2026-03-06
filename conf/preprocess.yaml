@@ -34,5 +34,7 @@ bpe:
   enabled: false
   output_dir: artifacts/tokenizer
   vocab_size: 8000
+  min_frequency: 0
+  number_placeholders: false
   notation_mode: both
   languages: null

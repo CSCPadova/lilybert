@@ -21,6 +21,23 @@ from .parser import LilyPondParser
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Number normalisation helpers
+# ---------------------------------------------------------------------------
+_DECIMAL_RE = re.compile(r"\b\d+\.\d+\b")
+_INTEGER_RE = re.compile(r"\b\d+\b")
+
+
+def normalize_numbers(text: str) -> str:
+    """Replace bare numeric literals with ``<INT>`` / ``<DEC>`` placeholders.
+
+    Decimals are replaced first so that the integer pattern does not
+    partially match the integer part of a decimal.
+    """
+    text = _DECIMAL_RE.sub("<DEC>", text)
+    text = _INTEGER_RE.sub("<INT>", text)
+    return text
+
 
 def _tokenize_file_worker(path: str) -> dict:
     """Process-safe worker for corpus token extraction."""
@@ -59,6 +76,8 @@ class LilyPondTokenizer:
         "[NEW_PIANOSTAFF]",
         "[NEW_CHOIRSTAFF]",
     ]
+
+    PLACEHOLDER_TOKENS = ["<INT>", "<DEC>"]
 
     SPECIAL_TOKEN_TO_LILYPOND = {
         "[SIMUL_BEGIN]": "<<",
@@ -139,22 +158,45 @@ class LilyPondTokenizer:
         return corpus
 
     def train(
-        self, corpus: List[str], vocab_size: int = 8000
+        self,
+        corpus: List[str],
+        vocab_size: int = 8000,
+        min_frequency: int = 0,
+        number_placeholders: bool = False,
     ) -> PreTrainedTokenizerFast:
         """Train a parser-aware BPE tokenizer.
 
         Uses Whitespace pre-tokenization so BPE never merges across parser-token
         boundaries.
+
+        Args:
+            corpus: List of space-separated parser token strings.
+            vocab_size: Target BPE vocabulary size.
+            min_frequency: Minimum number of occurrences required for a
+                merge to be kept (passed to ``BpeTrainer``).
+            number_placeholders: When *True*, replace bare integer and
+                decimal literals in the corpus with ``<INT>`` / ``<DEC>``
+                placeholder tokens before training.
         """
         if not corpus:
             raise ValueError("Cannot train tokenizer with an empty corpus")
 
+        if number_placeholders:
+            corpus = [normalize_numbers(line) for line in corpus]
+
         backend = Tokenizer(BPE(unk_token="[UNK]"))
         backend.pre_tokenizer = Whitespace()
 
+        special_tokens = list(self.SPECIAL_TOKENS)
+        if number_placeholders:
+            special_tokens.extend(
+                t for t in self.PLACEHOLDER_TOKENS if t not in special_tokens
+            )
+
         trainer = BpeTrainer(
             vocab_size=vocab_size,
-            special_tokens=self.SPECIAL_TOKENS,
+            min_frequency=min_frequency,
+            special_tokens=special_tokens,
             show_progress=True,
         )
         backend.train_from_iterator(corpus, trainer=trainer)

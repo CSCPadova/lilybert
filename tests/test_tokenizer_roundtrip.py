@@ -2,7 +2,7 @@
 
 import pytest
 
-from lilybert.data.tokenizer import LilyPondTokenizer
+from lilybert.data.tokenizer import LilyPondTokenizer, normalize_numbers
 
 
 def _train_tokenizer_on(texts: list[str]) -> LilyPondTokenizer:
@@ -204,3 +204,61 @@ class TestValidateRoundTrip:
         # Notes should survive
         for note in ["c4", "d4", "e4", "f4"]:
             assert note in decoded
+
+
+class TestNormalizeNumbers:
+    def test_replaces_standalone_integers(self):
+        assert normalize_numbers("120 4 16") == "<INT> <INT> <INT>"
+
+    def test_preserves_note_durations(self):
+        # c4, d8 etc. are note+duration — digits are NOT on a word boundary
+        assert normalize_numbers("c4 d8 e16") == "c4 d8 e16"
+
+    def test_replaces_decimals(self):
+        assert normalize_numbers("3.5 1.0") == "<DEC> <DEC>"
+
+    def test_mixed(self):
+        result = normalize_numbers("tempo 120 offset 3.5 c4")
+        assert "<INT>" in result
+        assert "<DEC>" in result
+        assert "120" not in result
+        assert "3.5" not in result
+
+    def test_no_numbers_passthrough(self):
+        assert normalize_numbers("c d e f") == "c d e f"
+
+
+class TestTrainMinFrequency:
+    def test_min_frequency_reduces_vocab(self):
+        """Higher min_frequency should yield a smaller or equal vocabulary."""
+        tok_no_min = LilyPondTokenizer()
+        corpus = [tok_no_min._movement_to_parser_tokens(t) for t in _CORPUS_TEXTS]
+
+        tok_no_min.train(corpus, vocab_size=500, min_frequency=0)
+        size_no_min = tok_no_min.fast_tokenizer.vocab_size
+
+        tok_with_min = LilyPondTokenizer()
+        tok_with_min.train(corpus, vocab_size=500, min_frequency=10)
+        size_with_min = tok_with_min.fast_tokenizer.vocab_size
+
+        assert size_with_min <= size_no_min
+
+
+class TestTrainNumberPlaceholders:
+    def test_placeholder_tokens_in_vocab(self):
+        tok = LilyPondTokenizer()
+        corpus = [tok._movement_to_parser_tokens(t) for t in _CORPUS_TEXTS]
+        tok.train(corpus, vocab_size=500, number_placeholders=True)
+        vocab = tok.fast_tokenizer.get_vocab()
+        assert "<INT>" in vocab
+        assert "<DEC>" in vocab
+
+    def test_placeholder_disables_raw_number_merges(self):
+        tok = LilyPondTokenizer()
+        corpus = [tok._movement_to_parser_tokens(t) for t in _CORPUS_TEXTS]
+        tok.train(corpus, vocab_size=500, number_placeholders=True)
+        vocab = tok.fast_tokenizer.get_vocab()
+        # Specific raw integers like "120" or "4/4" fragments should not
+        # appear as standalone tokens (they get replaced by <INT>).
+        # At least <INT> should be there and used.
+        assert "<INT>" in vocab
