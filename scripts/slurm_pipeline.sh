@@ -31,11 +31,6 @@
 
 set -euo pipefail
 
-# ── Project layout ────────────────────────────────────────────────────────
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
 # ── Defaults (override via env before sbatch) ─────────────────────────────
 
 INPUT_DIR="/nfsd/voce/machine_learning/datasets/pdmx/PDMX/ly"
@@ -71,10 +66,8 @@ SHARDS_DIR="${OUTPUT_DIR}/pretokenized"
 
 # ── Activate environment ─────────────────────────────────────────────────
 
-cd "${PROJECT_ROOT}"
-
-VENV_ACTIVATE="${PROJECT_ROOT}/.venv/bin/activate"
-PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+VENV_ACTIVATE="./.venv/bin/activate"
+PYTHON="./.venv/bin/python"
 
 if [[ -f "$VENV_ACTIVATE" ]]; then
     # shellcheck disable=SC1090
