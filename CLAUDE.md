@@ -10,9 +10,7 @@ Focus on classification workflows:
 - preprocessing LilyPond scores into movement-level artifacts,
 - parser-aware tokenizer training,
 - label encoding for supported tasks,
-- grouped stratified cross-validation training,
-- movement-level aggregation and metrics,
-- separate linear probing on trained encoders.
+- grouped stratified cross-validation linear probing on frozen encoder embeddings.
 
 ## Environment
 
@@ -20,6 +18,21 @@ Focus on classification workflows:
 - Dependency manager: `uv`
 - Build backend: `hatchling`
 - Package root: `lilybert/__init__.py`
+
+## Configuration
+
+- Hydra config root: `conf/`
+- Base shared config: `conf/config.yaml`
+- CLI wrappers (`train.yaml`, `preprocess.yaml`) are thin and import `config`.
+- Shared groups: `dataset/default.yaml`, `model/default.yaml`, `runtime/default.yaml`, `environment/{local,slurm}.yaml`.
+- Training modes are nested under `train`:
+  - `train.mode=classify` with `train.classify.*` (frozen embeddings + sklearn linear probe)
+  - `train.mode=pretrain` with `train.pretrain.*`
+
+Common override examples:
+- `ly-train train.mode=classify train.task=composer runtime.output_dir=outputs/cv`
+- `ly-train train.mode=pretrain train.pretrain.max_steps=10`
+- `ly-preprocess preprocess.input_dir=data/raw preprocess.output_dir=data/processed`
 
 ## Common Commands
 
@@ -49,12 +62,6 @@ flake8 lilybert/ tests/
 ```bash
 ly-preprocess
 ly-train
-ly-evaluate
-ly-predict
-ly-probe
-
-# Meta tooling kept outside package command
-python scripts/generate_tables.py
 ```
 
 ## Architecture
@@ -81,17 +88,8 @@ python scripts/generate_tables.py
 - `trainer.py`
 - `cli.py`
 
-### Evaluation (`lilybert/evaluation/`)
-- `aggregation.py`
-- `metrics.py`
-- `cli.py`
-
-### Inference (`lilybert/inference/`)
-- `pipeline.py`
-- `cli.py`
-
 ### Scripts (`lilybert/scripts/`)
-- table generation and auxiliary project scripts
+- auxiliary project scripts
 
 ## Development Guidelines
 

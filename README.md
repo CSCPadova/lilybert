@@ -5,8 +5,18 @@ MIR classification on LilyPond music notation.
 lilyBERT provides a unified Hydra-based workflow for:
 - preprocessing any LilyPond dataset,
 - optional augmentation/sharding/BPE at preprocess time,
-- unified model training (pretraining or classification),
-- evaluation, prediction, and linear probing.
+- unified model training (pretraining or linear-probe classification).
+
+## Current Status (March 2026)
+
+- Tokenization stack has been unified and de-duplicated:
+  - `lilybert.data.lexer.MusicalLexer` is the single source of truth for LilyPond → linear token conversion.
+  - `lilybert.data.parser.LilyPondParser` is now a slim utility module (validation, comment removal, brace matching, pitch helpers).
+  - `lilybert.data.tokenizer.LilyPondTokenizer` delegates musical tokenization to `MusicalLexer`.
+- Preprocessing and tokenization pipelines are aligned end-to-end (preprocess → BPE → shard → verify).
+- Unified SLURM pipeline is available in `scripts/slurm_pipeline.sh` and is now meant to be submitted directly with `sbatch`.
+- Legacy split SLURM scripts have been removed in favor of a single pipeline script.
+- Repository history was cleaned to remove `data/raw/` LilyPond files from Git history.
 
 ## Installation
 
@@ -29,11 +39,47 @@ pip install -e ".[dev]"
 The CLI is intentionally small:
 - `ly-preprocess`
 - `ly-train`
-- `ly-evaluate`
-- `ly-predict`
-- `ly-probe`
+
+## Documentation
+
+- `docs/tokenization-bpe-design.md`
+- `docs/training-parameter-choices.md`
+- `docs/linear-probing-protocol.md`
+
+## Configuration layout
+
+Hydra configuration follows a single-base pattern:
+
+- base config: `conf/config.yaml`
+- shared groups: `conf/dataset/default.yaml`, `conf/model/default.yaml`, `conf/runtime/default.yaml`, `conf/environment/{local,slurm}.yaml`
+- thin CLI wrappers: `conf/train.yaml`, `conf/preprocess.yaml`
+
+Training uses one nested tree with mode switch:
+
+- `train.mode=classify` with `train.classify.*`
+- `train.mode=pretrain` with `train.pretrain.*`
 
 ## Core workflows
+
+### 0) Unified SLURM pipeline (recommended on cluster)
+
+Use the single pipeline script for preprocessing + tokenizer training + sharding + verification.
+
+```bash
+# Run all stages with defaults defined in the script
+sbatch scripts/slurm_pipeline.sh
+
+# Override key paths/params via environment export at submission time
+sbatch --export=ALL,INPUT_DIR=/data/ly,OUTPUT_DIR=/scratch/lilybert_artifacts,VOCAB_SIZE=12000 scripts/slurm_pipeline.sh
+
+# Run only one stage (1=preprocess, 2=bpe, 3=shard, 4=verify)
+sbatch --export=ALL,STAGE=2 scripts/slurm_pipeline.sh
+```
+
+Artifacts produced by the pipeline:
+- `${OUTPUT_DIR}/processed`
+- `${OUTPUT_DIR}/tokenizer`
+- `${OUTPUT_DIR}/pretokenized`
 
 ### 1) Unified preprocessing
 
@@ -41,30 +87,33 @@ The CLI is intentionally small:
 
 ```bash
 # Minimal preprocessing
-ly-preprocess input_dir=data/raw output_dir=data/processed labels_path=data/labels/labels_v1.json
+ly-preprocess \
+  preprocess.input_dir=data/raw \
+  preprocess.output_dir=data/processed \
+  preprocess.labels_path=data/labels/labels_v1.json
 
 # Enable augmentation
 ly-preprocess \
-  input_dir=data/raw \
-  output_dir=data/processed \
-  augmentation.enable_transposition=true \
-  augmentation.enable_absolute_relative=true \
-  augmentation.enable_articulation_variants=true \
-  augmentation.enable_barline_variants=true \
-  augmentation.enable_retrograde=true \
-  augmentation.enable_inversion=true
+  preprocess.input_dir=data/raw \
+  preprocess.output_dir=data/processed \
+  preprocess.augmentation.enable_transposition=true \
+  preprocess.augmentation.enable_absolute_relative=true \
+  preprocess.augmentation.enable_articulation_variants=true \
+  preprocess.augmentation.enable_barline_variants=true \
+  preprocess.augmentation.enable_retrograde=true \
+  preprocess.augmentation.enable_inversion=true
 
 # Add optional sharding and optional BPE training
 ly-preprocess \
-  input_dir=data/raw \
-  output_dir=data/processed \
-  sharding.enabled=true \
-  sharding.stage=mlm \
-  sharding.tokenizer_path=artifacts/tokenizer \
-  sharding.output_dir=artifacts/pretokenized \
-  bpe.enabled=true \
-  bpe.output_dir=artifacts/tokenizer \
-  bpe.vocab_size=8000
+  preprocess.input_dir=data/raw \
+  preprocess.output_dir=data/processed \
+  preprocess.sharding.enabled=true \
+  preprocess.sharding.stage=mlm \
+  preprocess.sharding.tokenizer_path=artifacts/tokenizer \
+  preprocess.sharding.output_dir=artifacts/pretokenized \
+  preprocess.bpe.enabled=true \
+  preprocess.bpe.output_dir=artifacts/tokenizer \
+  preprocess.bpe.vocab_size=8000
 ```
 
 ### 2) Unified training
@@ -74,20 +123,19 @@ ly-preprocess \
 ```bash
 # Stage-1 MLM pretraining
 ly-train \
-  stage=pretrain \
-  data_dir=data/processed \
-  tokenizer_path=artifacts/tokenizer \
-  output_dir=outputs/pretraining
+  train.mode=pretrain \
+  dataset.processed_dir=data/processed \
+  dataset.tokenizer_path=artifacts/tokenizer \
+  runtime.output_dir=outputs/pretraining
 
-# Classification training / fine-tuning
-# If pretrained_model points to a checkpoint, this is treated as fine-tuning.
+# Classification via frozen embeddings + sklearn linear probing
 ly-train \
-  stage=classify \
-  task=composer \
-  data_dir=data/processed \
-  tokenizer_path=artifacts/tokenizer \
-  pretrained_model=bert-base \
-  output_dir=outputs/cv
+  train.mode=classify \
+  train.task=composer \
+  dataset.processed_dir=data/processed \
+  dataset.tokenizer_path=artifacts/tokenizer \
+  model.pretrained_model=bert-base \
+  runtime.output_dir=outputs/cv
 ```
 
 Supported classification tasks in this refactor:
@@ -96,33 +144,9 @@ Supported classification tasks in this refactor:
 - `instrument`
 - `key_root`
 
-### 3) Evaluation
-
-```bash
-ly-evaluate y_true=y_true.npy y_pred=y_pred.npy multi_label=false
-```
-
-### 4) Prediction
-
-```bash
-ly-predict \
-  checkpoint=outputs/cv/fold_1/best_checkpoint \
-  input_dir=data/processed \
-  task=composer \
-  format=json
-```
-
-### 5) Linear probing
-
-`ly-probe` runs a separate linear-probe workflow on frozen encoder embeddings.
-
-```bash
-ly-probe \
-  checkpoint_dir=outputs/cv/fold_1/best_checkpoint \
-  tokenizer_path=artifacts/tokenizer \
-  data_dir=data/processed \
-  task=style
-```
+Classification mode uses grouped stratified 5-fold CV and trains a linear probe
+(`sklearn` LogisticRegression, OvR for multi-label) on movement-level embeddings
+extracted from a frozen pretrained encoder.
 
 ## Notes
 
@@ -135,7 +159,6 @@ ly-probe \
 from lilybert.data import LilyPondPreprocessor, LilyPondTokenizer, LabelEncoder
 from lilybert.models import LilyBERTClassifier, LilyBERTEncoder
 from lilybert.training import TrainingConfig, StratifiedKFoldTrainer
-from lilybert.evaluation import ClassificationMetrics, WindowAggregator
 ```
 
 ## Testing
