@@ -62,9 +62,7 @@ dev = [
 [project.scripts]
 ly-preprocess = "lilybert.cli.ly_preprocess:main"
 ly-train = "lilybert.cli.ly_train:main"
-ly-predict = "lilybert.cli.ly_predict:main"
-ly-evaluate = "lilybert.cli.ly_evaluate:main"
-ly-probe = "lilybert.cli.ly_probe:main"
+ly-embed = "lilybert.cli.embed:run"
 
 [tool.hatchling.build.targets.wheel]
 packages = ["lilybert"]

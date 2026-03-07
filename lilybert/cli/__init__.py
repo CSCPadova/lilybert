@@ -3,7 +3,4 @@
 __all__ = [
     "ly_preprocess",
     "ly_train",
-    "ly_predict",
-    "ly_evaluate",
-    "ly_probe",
 ]

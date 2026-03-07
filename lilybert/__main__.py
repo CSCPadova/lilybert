@@ -6,10 +6,7 @@ def main() -> None:
         "The monolithic `lilybert` CLI has been removed.\n"
         "Use dedicated entrypoints instead:\n"
         "  - ly-preprocess\n"
-        "  - ly-train\n"
-        "  - ly-probe\n"
-        "  - ly-predict\n"
-        "  - ly-evaluate"
+        "  - ly-train"
     )
     raise SystemExit(message)
 
