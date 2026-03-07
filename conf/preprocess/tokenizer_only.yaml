@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+preprocess:
+  enabled: false
+  bpe:
+    enabled: true
+  tokenize:
+    enabled: false
+  sharding:
+    enabled: false
