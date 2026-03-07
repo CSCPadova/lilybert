@@ -1,0 +1,15 @@
+dataset:
+  processed_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
+  tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
+  pretokenized_shards_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized
+
+runtime:
+  output_dir: /nfsd/voce/machine_learning/experiments/pdmx
+  system:
+    dataloader_num_workers: 8
+    use_fsdp: true
+  wandb:
+    enabled: true
+  tensorboard:
+    enabled: true
+    log_dir: /nfsd/voce/machine_learning/experiments/pdmx/tensorboard

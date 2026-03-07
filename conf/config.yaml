@@ -1,0 +1,38 @@
+defaults:
+  - _self_
+  - dataset: default
+  - model: default
+  - runtime: default
+  - environment: local
+  - preprocess: default
+
+train:
+  mode: classify
+  task: composer
+
+  classify:
+    n_folds: 5
+    max_length: 2048
+    stride: 256
+    probe_max_iter: 2000
+    probe_c: 1.0
+    probe_class_weight: null
+    top_k: [1, 5]
+
+  pretrain:
+    max_length: 2048
+    mlm_probability: 0.15
+    per_device_train_batch_size: 16
+    per_device_eval_batch_size: 16
+    num_train_epochs: 3
+    learning_rate: 2e-5
+    lr_scheduler_type: linear
+    grad_clip_norm: 1.0
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    max_steps: 0
+    eval_steps: 200
+    log_steps: 20
+    logging_steps: 50
+    save_steps: 500
+    model_architecture: bert-base

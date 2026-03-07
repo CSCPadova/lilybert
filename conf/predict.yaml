@@ -1,9 +1,0 @@
-checkpoint: ""
-input_dir: ""
-task: composer
-batch_size: 16
-max_length: 512
-stride: 256
-aggregation: average
-output: null
-format: json

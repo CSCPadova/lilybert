@@ -1,8 +1,18 @@
 output_dir: outputs/experiments
 seed: 42
+
+system:
+  dataloader_num_workers: 0
+  use_fsdp: false
+  fsdp_sharding_strategy: FULL_SHARD
+
 wandb:
-  enabled: true
+  enabled: false
   project: lilybert
   entity: null
   mode: online
   run_name: null
+
+tensorboard:
+  enabled: false
+  log_dir: outputs/tensorboard

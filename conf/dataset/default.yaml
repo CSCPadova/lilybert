@@ -1,0 +1,7 @@
+raw_dir: data/raw
+processed_dir: data/processed
+labels_path: data/labels/labels_v1.json
+tokenizer_path: artifacts/tokenizer
+pretokenized_path: null
+sharded_data_dir: null
+pretokenized_shards_dir: null

@@ -1,8 +1,0 @@
-checkpoint_dir: ""
-tokenizer_path: artifacts/tokenizer
-data_dir: data/processed
-task: composer
-max_length: 512
-stride: 256
-test_size: 0.2
-random_state: 42

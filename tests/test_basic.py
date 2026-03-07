@@ -275,31 +275,31 @@ class TestTrainingConfig:
     def test_default_config(self):
         """Test default training configuration."""
         config = TrainingConfig()
-        assert config.learning_rate > 0
-        assert config.num_train_epochs > 0
+        assert config.probe_c > 0
+        assert config.probe_max_iter > 0
         assert config.pretrained_model == "bert-base"
 
     def test_quick_test_config(self):
         """Test quick test configuration."""
         config = TrainingConfig.for_quick_test()
-        assert config.num_train_epochs == 1
-        assert config.per_device_train_batch_size == 2
+        assert config.n_folds == 2
+        assert config.probe_max_iter == 200
 
     def test_production_config(self):
         """Test production configuration."""
         config = TrainingConfig.for_production()
-        assert config.num_train_epochs == 5
-        assert config.per_device_train_batch_size == 8
+        assert config.n_folds == 5
+        assert config.probe_max_iter == 2000
 
     def test_config_validation(self):
         """Test configuration validation."""
         # Valid config should not raise
-        config = TrainingConfig(learning_rate=1e-4)
+        config = TrainingConfig(probe_c=1.0)
         config._validate_config()
 
         # Invalid config should raise
         with pytest.raises(ValueError):
-            invalid_config = TrainingConfig(learning_rate=-1)
+            invalid_config = TrainingConfig(probe_c=-1)
             invalid_config._validate_config()
 
     def test_save_load_config(self):
@@ -315,7 +315,7 @@ class TestTrainingConfig:
 
             # Load and verify
             loaded_config = TrainingConfig.from_pretrained(str(config_file))
-            assert loaded_config.num_train_epochs == config.num_train_epochs
+            assert loaded_config.probe_max_iter == config.probe_max_iter
 
 
 class TestClassificationMetrics:
@@ -402,8 +402,8 @@ class TestIntegration:
             loaded_config = TrainingConfig.from_pretrained(str(config_file))
 
             # Verify key properties are preserved
-            assert loaded_config.learning_rate == original_config.learning_rate
-            assert loaded_config.num_train_epochs == original_config.num_train_epochs
+            assert loaded_config.probe_c == original_config.probe_c
+            assert loaded_config.probe_max_iter == original_config.probe_max_iter
             assert loaded_config.pretrained_model == original_config.pretrained_model
 
     def test_tokenizer_builds_corpus_from_data_dir(self):

@@ -1,36 +1,3 @@
-input_dir: data/raw
-output_dir: data/processed
-labels_path: data/labels/labels_v1.json
-strip: null
-
-augmentation:
-  enable_transposition: false
-  enable_absolute_relative: false
-  enable_articulation_variants: false
-  enable_barline_variants: false
-  enable_retrograde: false
-  enable_inversion: false
-  include_original: true
-
-sharding:
-  enabled: false
-  stage: classification
-  task: composer
-  tokenizer_path: artifacts/tokenizer
-  output_dir: artifacts/pretokenized
-  max_length: 512
-  stride: 256
-  shard_size: 4096
-  include_structure_markers: false
-  eval_ratio: 0.01
-  seed: 42
-
-bpe:
-  enabled: false
-  output_dir: artifacts/tokenizer
-  vocab_size: 8000
-  min_frequency: 0
-  number_placeholders: false
-  lexer:
-    include_articulations: true
-    include_slurs: true
+defaults:
+  - config
+  - _self_

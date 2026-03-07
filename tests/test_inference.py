@@ -181,16 +181,3 @@ def test_pipeline_majority_aggregation(tmp_path: Path):
     assert len(results) == 2
     for r in results:
         assert r["prediction"] == 0
-
-
-# --- CLI tests ---
-
-
-def test_cli_default_options():
-    import inspect
-    from lilybert.cli.predict import main as predict_main
-
-    sig = inspect.signature(predict_main)
-    assert sig.parameters["task"].default == "composer"
-    assert sig.parameters["format"].default == "json"
-    assert sig.parameters["aggregation"].default == "average"

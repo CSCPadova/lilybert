@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 
 from lilybert.config import (
     BaseModelConfig,
-    BaseTrainingConfig,
     LoggingConfig,
     PathConfig,
 )
@@ -37,31 +36,13 @@ class TrainingConfig:
     stride: int = 256
     seed: int = BaseModelConfig.seed
 
-    # --- training (from BaseTrainingConfig) ---
-    learning_rate: float = BaseTrainingConfig.learning_rate
-    num_train_epochs: int = BaseTrainingConfig.num_train_epochs
-    per_device_train_batch_size: int = BaseTrainingConfig.per_device_train_batch_size
-    per_device_eval_batch_size: int = BaseTrainingConfig.per_device_eval_batch_size
-    weight_decay: float = BaseTrainingConfig.weight_decay
-    warmup_ratio: float = BaseTrainingConfig.warmup_ratio
-
-    lr_scheduler_type: str = "linear"
-    grad_clip_norm: Optional[float] = 1.0
-    early_stopping_patience: int = 5
-    model_selection_metric: str = "auto"
-    model_selection_mode: str = "auto"
-    max_steps: int = 0
-    eval_steps: int = 200
-    log_steps: int = 20
+    # --- probing model (sklearn linear probe) ---
+    probe_max_iter: int = 2000
+    probe_c: float = 1.0
+    probe_class_weight: Optional[str] = None
 
     n_folds: int = 5
 
-    pretokenized_path: Optional[str] = None
-    sharded_data_dir: Optional[str] = None
-
-    # --- distributed ---
-    use_fsdp: bool = False
-    fsdp_sharding_strategy: str = "FULL_SHARD"
     dataloader_num_workers: int = 0
 
     # --- logging (from LoggingConfig) ---
@@ -77,34 +58,18 @@ class TrainingConfig:
     top_k: List[int] = field(default_factory=lambda: [1, 5])
 
     def __post_init__(self) -> None:
-        self.num_train_epochs = int(self.num_train_epochs)
-        self.per_device_train_batch_size = int(self.per_device_train_batch_size)
-        self.per_device_eval_batch_size = int(self.per_device_eval_batch_size)
+        self.probe_max_iter = int(self.probe_max_iter)
         self._validate_config()
 
     def _validate_config(self) -> None:
-        if self.learning_rate <= 0:
-            raise ValueError("learning_rate must be > 0")
-        if self.num_train_epochs < 1:
-            raise ValueError("num_train_epochs must be >= 1")
-        if self.per_device_train_batch_size < 1:
-            raise ValueError("per_device_train_batch_size must be >= 1")
         if self.n_folds < 2:
             raise ValueError("n_folds must be >= 2")
-        if self.early_stopping_patience < 1:
-            raise ValueError("early_stopping_patience must be >= 1")
-        if self.warmup_ratio < 0 or self.warmup_ratio > 1:
-            raise ValueError("warmup_ratio must be in [0, 1]")
-        if self.grad_clip_norm is not None and self.grad_clip_norm <= 0:
-            raise ValueError("grad_clip_norm must be > 0 when set")
-        if self.model_selection_mode not in {"auto", "min", "max"}:
-            raise ValueError("model_selection_mode must be one of: auto, min, max")
-        if self.max_steps < 0:
-            raise ValueError("max_steps must be >= 0")
-        if self.eval_steps < 1:
-            raise ValueError("eval_steps must be >= 1")
-        if self.log_steps < 1:
-            raise ValueError("log_steps must be >= 1")
+        if self.probe_max_iter < 1:
+            raise ValueError("probe_max_iter must be >= 1")
+        if self.probe_c <= 0:
+            raise ValueError("probe_c must be > 0")
+        if self.probe_class_weight not in {None, "balanced"}:
+            raise ValueError("probe_class_weight must be null or 'balanced'")
         if not self.top_k or any(k < 1 for k in self.top_k):
             raise ValueError("top_k must be a non-empty list of positive integers")
 
@@ -128,19 +93,17 @@ class TrainingConfig:
     @classmethod
     def for_quick_test(cls) -> "TrainingConfig":
         return cls(
-            num_train_epochs=1,
-            per_device_train_batch_size=2,
-            per_device_eval_batch_size=2,
             n_folds=2,
-            early_stopping_patience=2,
+            max_length=256,
+            stride=64,
+            probe_max_iter=200,
         )
 
     @classmethod
     def for_production(cls) -> "TrainingConfig":
         return cls(
-            num_train_epochs=5,
-            per_device_train_batch_size=8,
-            per_device_eval_batch_size=8,
             n_folds=5,
-            early_stopping_patience=5,
+            max_length=2048,
+            stride=256,
+            probe_max_iter=2000,
         )
