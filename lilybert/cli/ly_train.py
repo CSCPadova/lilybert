@@ -37,6 +37,8 @@ class TrainConfig:
     max_steps: int = 0
     eval_steps: int = 200
     log_steps: int = 20
+    lr_scheduler_type: str = "linear"
+    grad_clip_norm: float = 1.0
     early_stopping_patience: int = 5
     model_selection_metric: str = "auto"
     model_selection_mode: str = "auto"
@@ -150,8 +152,8 @@ def _main(cfg: DictConfig) -> None:
         per_device_eval_batch_size=config.per_device_eval_batch_size,
         weight_decay=config.weight_decay,
         warmup_ratio=config.warmup_ratio,
-        lr_scheduler_type="linear",
-        grad_clip_norm=1.0,
+        lr_scheduler_type=config.lr_scheduler_type,
+        grad_clip_norm=config.grad_clip_norm,
         early_stopping_patience=config.early_stopping_patience,
         model_selection_metric=config.model_selection_metric,
         model_selection_mode=config.model_selection_mode,

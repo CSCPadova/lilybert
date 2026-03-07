@@ -1,4 +1,9 @@
-"""Tests for reversible LilyPond tokenizer (encode / decode)."""
+"""Tests for reversible LilyPond tokenizer (encode / decode).
+
+The tokenizer now uses musically-informed pre-tokenization (NOTE_C, DUR_4,
+etc.) before BPE.  These tests verify that the round-trip through musical
+tokens and BPE preserves musical content.
+"""
 
 import pytest
 

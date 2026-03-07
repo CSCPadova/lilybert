@@ -12,14 +12,15 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.pre_tokenizers import Whitespace
-from tokenizers.trainers import BpeTrainer
+from tokenizers import AddedToken, Tokenizer
+from tokenizers.models import WordLevel
+from tokenizers.pre_tokenizers import WhitespaceSplit
 from transformers import PreTrainedTokenizerFast
 
 from .lexer import LexerConfig, MusicalLexer
+from .musical_tokens import base_vocabulary, ly_tokens_to_musical, musical_to_ly_tokens
 from .parser import LilyPondParser
+from .token_bpe import BPE_SEPARATOR, TokenBPE
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +83,12 @@ class LilyPondTokenizer:
         parser: Optional[LilyPondParser] = None,
         fast_tokenizer: Optional[PreTrainedTokenizerFast] = None,
         lexer_config: Optional[LexerConfig] = None,
+        token_bpe: Optional[TokenBPE] = None,
     ):
         self.parser = parser or LilyPondParser()
         self.fast_tokenizer = fast_tokenizer
         self.lexer = MusicalLexer(lexer_config or LexerConfig())
+        self._token_bpe: Optional[TokenBPE] = token_bpe
 
     def build_corpus(
         self,
@@ -138,16 +141,17 @@ class LilyPondTokenizer:
         min_frequency: int = 0,
         number_placeholders: bool = False,
     ) -> PreTrainedTokenizerFast:
-        """Train a parser-aware BPE tokenizer.
+        """Train a token-level BPE tokenizer.
 
-        Uses Whitespace pre-tokenization so BPE never merges across parser-token
-        boundaries.
+        Uses :class:`TokenBPE` to learn merges on whole musical tokens,
+        then wraps the resulting vocabulary in a HuggingFace
+        ``PreTrainedTokenizerFast`` (WordLevel model) for pipeline
+        compatibility.
 
         Args:
             corpus: List of space-separated parser token strings.
-            vocab_size: Target BPE vocabulary size.
-            min_frequency: Minimum number of occurrences required for a
-                merge to be kept (passed to ``BpeTrainer``).
+            vocab_size: Target vocabulary size (base + merges).
+            min_frequency: Minimum pair frequency for a merge.
             number_placeholders: When *True*, replace bare integer and
                 decimal literals in the corpus with ``<INT>`` / ``<DEC>``
                 placeholder tokens before training.
@@ -158,22 +162,63 @@ class LilyPondTokenizer:
         if number_placeholders:
             corpus = [normalize_numbers(line) for line in corpus]
 
-        backend = Tokenizer(BPE(unk_token="[UNK]"))
-        backend.pre_tokenizer = Whitespace()
+        # 1. Parse corpus into token sequences
+        sequences = [line.split() for line in corpus]
 
-        special_tokens = list(self.SPECIAL_TOKENS)
+        # 2. Build base vocab: special + musical base + corpus tokens
+        base_tokens: List[str] = list(self.SPECIAL_TOKENS)
+        musical_vocab = base_vocabulary()
+        seen = set(base_tokens)
+        for t in musical_vocab:
+            if t not in seen:
+                base_tokens.append(t)
+                seen.add(t)
         if number_placeholders:
-            special_tokens.extend(
-                t for t in self.PLACEHOLDER_TOKENS if t not in special_tokens
-            )
+            for t in self.PLACEHOLDER_TOKENS:
+                if t not in seen:
+                    base_tokens.append(t)
+                    seen.add(t)
+        # Add any corpus tokens not already in base (fractions, part:names, etc.)
+        all_corpus_tokens: set[str] = set()
+        for seq in sequences:
+            all_corpus_tokens.update(seq)
+        for t in sorted(all_corpus_tokens):
+            if t not in seen:
+                base_tokens.append(t)
+                seen.add(t)
 
-        trainer = BpeTrainer(
-            vocab_size=vocab_size,
+        base_vocab_size = len(base_tokens)
+
+        # 3. Train token-level BPE
+        # Freeze structural tokens so they never participate in merges
+        frozen = set(self.SPECIAL_TOKENS) | {
+            t for t in all_corpus_tokens if t.startswith("part:")
+        }
+        num_merges = max(0, vocab_size - base_vocab_size)
+        bpe = TokenBPE()
+        bpe.learn(
+            sequences,
+            num_merges=num_merges,
             min_frequency=min_frequency,
-            special_tokens=special_tokens,
-            show_progress=True,
+            max_vocab=vocab_size,
+            base_vocab_size=base_vocab_size,
+            frozen_tokens=frozen,
         )
-        backend.train_from_iterator(corpus, trainer=trainer)
+        self._token_bpe = bpe
+
+        # 4. Build final vocab: base + merged tokens
+        vocab = {t: i for i, t in enumerate(base_tokens)}
+        for pair in bpe.merges:
+            merged = pair[0] + BPE_SEPARATOR + pair[1]
+            if merged not in vocab:
+                vocab[merged] = len(vocab)
+
+        # 5. Build HF Tokenizer (WordLevel — no subword splitting)
+        backend = Tokenizer(WordLevel(vocab=vocab, unk_token="[UNK]"))
+        backend.pre_tokenizer = WhitespaceSplit()
+
+        for t in self.SPECIAL_TOKENS:
+            backend.add_special_tokens([AddedToken(t, special=True)])
 
         self.fast_tokenizer = PreTrainedTokenizerFast(
             tokenizer_object=backend,
@@ -186,21 +231,28 @@ class LilyPondTokenizer:
 
         return self.fast_tokenizer
 
+    _TOKEN_BPE_FILENAME = "token_bpe.json"
+
     def save(self, path: str | Path) -> Path:
-        """Save tokenizer in HuggingFace `PreTrainedTokenizerFast` format."""
+        """Save tokenizer (HF files + token BPE merges)."""
         if self.fast_tokenizer is None:
             raise ValueError("Tokenizer has not been trained/loaded yet")
 
         output_dir = Path(path)
         output_dir.mkdir(parents=True, exist_ok=True)
         self.fast_tokenizer.save_pretrained(str(output_dir))
+        if self._token_bpe is not None:
+            self._token_bpe.save(output_dir / self._TOKEN_BPE_FILENAME)
         return output_dir
 
     @classmethod
     def load(cls, path: str | Path) -> "LilyPondTokenizer":
-        """Load tokenizer from a HuggingFace tokenizer directory."""
-        fast_tokenizer = PreTrainedTokenizerFast.from_pretrained(str(path))
-        return cls(fast_tokenizer=fast_tokenizer)
+        """Load tokenizer from a directory."""
+        p = Path(path)
+        fast_tokenizer = PreTrainedTokenizerFast.from_pretrained(str(p))
+        bpe_path = p / cls._TOKEN_BPE_FILENAME
+        token_bpe = TokenBPE.load(bpe_path) if bpe_path.exists() else None
+        return cls(fast_tokenizer=fast_tokenizer, token_bpe=token_bpe)
 
     # ------------------------------------------------------------------
     # Encode / Decode for generative (infilling) use
@@ -209,8 +261,8 @@ class LilyPondTokenizer:
     def encode_lilypond(self, text: str, add_special_tokens: bool = False) -> List[int]:
         """Encode raw LilyPond text to BPE token IDs.
 
-        Converts text through the lexer intermediate representation
-        then BPE-encodes.
+        Converts text through the lexer intermediate representation,
+        applies token-level BPE merges, then encodes via HF tokenizer.
 
         Args:
             text: Raw LilyPond text.
@@ -222,31 +274,33 @@ class LilyPondTokenizer:
         if self.fast_tokenizer is None:
             raise ValueError("Tokenizer has not been trained/loaded yet")
         parser_tokens = self._movement_to_parser_tokens(text)
+        token_list = parser_tokens.split()
+        if self._token_bpe is not None:
+            token_list = self._token_bpe.apply(token_list)
+        merged_text = " ".join(token_list)
         return self.fast_tokenizer.encode(
-            parser_tokens, add_special_tokens=add_special_tokens
+            merged_text, add_special_tokens=add_special_tokens
         )
-
-    # BPE may split value tokens: "part : violin" -> "part:violin"
-    _VALUE_TOKEN_RE = re.compile(r"(part)\s*:\s*(\S+)")
-    # BPE may split backslash commands: "\ key" -> "\key"
-    _BACKSLASH_CMD_RE = re.compile(r"\\\s+([a-zA-Z])")
 
     def _ids_to_parser_tokens(self, token_ids: List[int]) -> List[str]:
         """Convert token IDs back to parser-level tokens.
 
-        Special tokens are preserved.  BPE-split value tokens like
-        ``part : violin`` are collapsed back to ``part:violin``.
-        Backslash commands split by BPE (``\\ key``) are rejoined.
+        Decodes IDs to musical token strings, expands any ``+``-merged
+        tokens, then reverse-maps to LilyPond syntax.
         """
         if self.fast_tokenizer is None:
             raise ValueError("Tokenizer has not been trained/loaded yet")
 
         raw = self.fast_tokenizer.decode(token_ids, skip_special_tokens=False)
-        # Collapse BPE-split value tokens (e.g. "part : violin" -> "part:violin")
-        raw = self._VALUE_TOKEN_RE.sub(r"\1:\2", raw)
-        # Collapse BPE-split backslash commands (e.g. "\ key" -> "\key")
-        raw = self._BACKSLASH_CMD_RE.sub(r"\\\1", raw)
-        return raw.split()
+        tokens = raw.split()
+        # Expand merged tokens: "NOTE_C+DUR_4" -> ["NOTE_C", "DUR_4"]
+        expanded: List[str] = []
+        for t in tokens:
+            if BPE_SEPARATOR in t and t not in self._SKIP_ON_DECODE:
+                expanded.extend(t.split(BPE_SEPARATOR))
+            else:
+                expanded.append(t)
+        return musical_to_ly_tokens(expanded)
 
     def decode_to_lilypond(
         self,
@@ -419,23 +473,25 @@ class LilyPondTokenizer:
         if parts:
             tokens: List[str] = []
             for name, content in parts:
-                music_tokens = self.lexer.linearize(content, macro_map=macro_map)
-                if not music_tokens:
+                raw_tokens = self.lexer.linearize(content, macro_map=macro_map)
+                if not raw_tokens:
                     continue
+                musical = ly_tokens_to_musical(raw_tokens)
                 tokens.extend(
                     [
                         "[PART_BEGIN]",
                         "[PART_NAME]",
                         f"part:{name.lower()}",
-                        *music_tokens,
+                        *musical,
                         "[PART_END]",
                     ]
                 )
             return " ".join(tokens).strip()
 
         # No part variables — tokenize the full text
-        music_tokens = self.lexer.linearize(text, macro_map=macro_map)
-        return " ".join(music_tokens).strip()
+        raw_tokens = self.lexer.linearize(text, macro_map=macro_map)
+        musical = ly_tokens_to_musical(raw_tokens)
+        return " ".join(musical).strip()
 
     def _extract_part_variables(self, text: str) -> List[tuple[str, str]]:
         parts: List[tuple[str, str]] = []
