@@ -26,7 +26,7 @@ train:
     per_device_eval_batch_size: 16
     num_train_epochs: 3
     learning_rate: 2e-5
-    lr_scheduler_type: linear
+    lr_scheduler_type: cosine
     grad_clip_norm: 1.0
     weight_decay: 0.01
     warmup_ratio: 0.1
