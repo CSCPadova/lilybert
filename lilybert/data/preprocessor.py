@@ -390,6 +390,7 @@ class LilyPondPreprocessor:
         output_dir: str = "data/processed",
         labels_path: Optional[str] = None,
         augmentation_config: Optional[Dict[str, Any] | AugmentationConfig] = None,
+        num_workers: int = 0,
     ) -> Dict[str, Any]:
         """Run full preprocessing pipeline and write movement-level outputs."""
         raw_dir = Path(input_dir)
@@ -408,12 +409,13 @@ class LilyPondPreprocessor:
         failures: Dict[str, str] = {}
         total_movements = 0
 
-        # Parallel worker submits per raw file to avoid holding heavy parser state
         import os
         from concurrent.futures import ProcessPoolExecutor, as_completed
 
+        from tqdm import tqdm
+
         raw_files = sorted([str(p) for p in raw_dir.glob("*.ly")])
-        max_workers = min(8, (os.cpu_count() or 2))
+        max_workers = num_workers if num_workers > 0 else (os.cpu_count() or 2)
 
         aug_cfg = {
             "enable_transposition": config.enable_transposition,
@@ -439,7 +441,11 @@ class LilyPondPreprocessor:
                 ): path
                 for path in raw_files
             }
-            for fut in as_completed(futures):
+            for fut in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="preprocess",
+            ):
                 path = futures[fut]
                 res = fut.result()
                 if not res.get("ok"):

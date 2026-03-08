@@ -11,14 +11,17 @@ Supports two modes:
 from __future__ import annotations
 
 import json
+import os
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import typer
 from typing_extensions import Annotated
 
 import numpy as np
+from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
 
 from lilybert.data import BaroqueMusicClassificationDataset
@@ -314,6 +317,57 @@ def _collect_ly_files(data_dir: Path) -> List[Path]:
     return sorted(data_dir.glob("*.ly"))
 
 
+def _shard_file_worker(
+    file_path: str,
+    tokenizer_path: str,
+    max_length: int,
+    stride: int,
+) -> Tuple[str, List[List[int]], List[List[int]]]:
+    """Tokenize a single .ly file for MLM sharding (runs in subprocess)."""
+    fp = Path(file_path)
+    text = fp.read_text(encoding="utf-8", errors="ignore")
+
+    lily_tokenizer = LilyPondTokenizer()
+    parser_tokens = lily_tokenizer._movement_to_parser_tokens(text)
+    if not parser_tokens.strip():
+        return (fp.stem, [], [])
+
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    token_ids = tokenizer.encode(parser_tokens, add_special_tokens=False)
+    if not token_ids:
+        return (fp.stem, [], [])
+
+    pad_id = tokenizer.pad_token_id or 0
+    cls_id = tokenizer.cls_token_id
+    sep_id = tokenizer.sep_token_id
+
+    body_size = max_length - 2
+    step = max(1, body_size - stride)
+
+    if len(token_ids) <= body_size:
+        windows = [token_ids]
+    else:
+        windows = []
+        for start in range(0, len(token_ids) - body_size + 1, step):
+            windows.append(token_ids[start : start + body_size])
+        if windows and windows[-1] != token_ids[-body_size:]:
+            windows.append(token_ids[-body_size:])
+
+    id_rows: list[list[int]] = []
+    mask_rows: list[list[int]] = []
+    for window in windows:
+        ids = [cls_id] + window + [sep_id]
+        attn = [1] * len(ids)
+        pad_len = max_length - len(ids)
+        if pad_len > 0:
+            ids = ids + [pad_id] * pad_len
+            attn = attn + [0] * pad_len
+        id_rows.append(ids)
+        mask_rows.append(attn)
+
+    return (fp.stem, id_rows, mask_rows)
+
+
 def _pretokenize_mlm(
     *,
     data_dir: str,
@@ -324,6 +378,7 @@ def _pretokenize_mlm(
     shard_size: int,
     eval_ratio: float,
     seed: int,
+    num_workers: int = 0,
 ) -> None:
     data_path = Path(data_dir)
     all_files = _collect_ly_files(data_path)
@@ -333,15 +388,7 @@ def _pretokenize_mlm(
         )
 
     print(f"Loading tokenizer from {tokenizer_path}")
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
 
-    # Parser-aware tokenizer for stripping headers/comments/scheme
-    # and producing musically-informed token sequences.
-    lily_tokenizer = LilyPondTokenizer()
-
-    pad_id = tokenizer.pad_token_id or 0
-
-    # Shuffle and split into train / eval
     rng = random.Random(seed)
     shuffled = list(all_files)
     rng.shuffle(shuffled)
@@ -350,18 +397,13 @@ def _pretokenize_mlm(
     eval_files = shuffled[split_idx:]
 
     effective_shard_size = shard_size if shard_size > 0 else 8192
-
-    body_size = max_length - 2  # room for [CLS] + [SEP]
-    step = max(1, body_size - stride)
-
-    cls_id = tokenizer.cls_token_id
-    sep_id = tokenizer.sep_token_id
+    workers = num_workers if num_workers > 0 else (os.cpu_count() or 2)
 
     skipped = 0
     for split_name, files in [("train", train_files), ("eval", eval_files)]:
         print(
             f"Pretokenizing {split_name} split: {len(files)} files, "
-            f"shard_size={effective_shard_size}"
+            f"shard_size={effective_shard_size}, workers={workers}"
         )
         split_dir = Path(output_dir) / "mlm" / split_name
         writer = ShardWriter(
@@ -371,50 +413,33 @@ def _pretokenize_mlm(
             has_labels=False,
         )
 
-        for file_path in files:
-            text = file_path.read_text(encoding="utf-8", errors="ignore")
-
-            # Convert raw LilyPond → parser/lexer tokens (strips
-            # headers, scheme, comments, overrides, pagebreaks)
-            parser_tokens = lily_tokenizer._movement_to_parser_tokens(text)
-            if not parser_tokens.strip():
-                skipped += 1
-                continue
-
-            # BPE-encode the parser token string (no special tokens)
-            token_ids = tokenizer.encode(
-                parser_tokens, add_special_tokens=False
-            )
-            if not token_ids:
-                skipped += 1
-                continue
-
-            # Produce sliding windows
-            if len(token_ids) <= body_size:
-                windows = [token_ids]
-            else:
-                windows = []
-                for start in range(0, len(token_ids) - body_size + 1, step):
-                    windows.append(token_ids[start : start + body_size])
-                # Ensure last tokens are covered
-                if windows and windows[-1] != token_ids[-body_size:]:
-                    windows.append(token_ids[-body_size:])
-
-            for window in windows:
-                # Wrap with [CLS] ... [SEP] and pad
-                ids = [cls_id] + window + [sep_id]
-                attn = [1] * len(ids)
-                pad_len = max_length - len(ids)
-                if pad_len > 0:
-                    ids = ids + [pad_id] * pad_len
-                    attn = attn + [0] * pad_len
-
-                writer.add_sample(
-                    input_ids=np.array(ids, dtype=np.int64),
-                    attention_mask=np.array(attn, dtype=np.int64),
-                    movement_id=file_path.stem,
-                    base_work="",
-                )
+        with ProcessPoolExecutor(max_workers=workers) as exe:
+            futures = {
+                exe.submit(
+                    _shard_file_worker,
+                    str(fp),
+                    tokenizer_path,
+                    max_length,
+                    stride,
+                ): fp
+                for fp in files
+            }
+            for fut in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc=f"shard/{split_name}",
+            ):
+                mid, ids_list, masks_list = fut.result()
+                if not ids_list:
+                    skipped += 1
+                    continue
+                for ids, mask in zip(ids_list, masks_list):
+                    writer.add_sample(
+                        input_ids=np.array(ids, dtype=np.int64),
+                        attention_mask=np.array(mask, dtype=np.int64),
+                        movement_id=mid,
+                        base_work="",
+                    )
 
         manifest = writer.finalize(
             config={

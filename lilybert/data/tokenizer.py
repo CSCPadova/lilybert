@@ -93,15 +93,19 @@ class LilyPondTokenizer:
     def build_corpus(
         self,
         processed_dir: str | Path,
+        num_workers: int = 0,
     ) -> List[str]:
         """Build parser-token corpus strings from cleaned movement files.
 
         Args:
             processed_dir: Root processed directory (typically `data/processed`).
+            num_workers: Number of parallel workers (0 = auto).
 
         Returns:
             List of space-separated parser token strings (one per movement file).
         """
+        from tqdm import tqdm
+
         root = Path(processed_dir)
         if not root.exists():
             raise FileNotFoundError(f"Processed directory not found: {root}")
@@ -110,15 +114,18 @@ class LilyPondTokenizer:
             self._iter_movement_files(root)
         )
 
-        # parallelize token-line extraction using worker processes
-        max_workers = min(8, (os.cpu_count() or 2))
+        max_workers = num_workers if num_workers > 0 else (os.cpu_count() or 2)
         corpus: List[str] = []
 
         with ProcessPoolExecutor(max_workers=max_workers) as exe:
             futures = {
                 exe.submit(_tokenize_file_worker, str(p)): p for p in movement_files
             }
-            for fut in as_completed(futures):
+            for fut in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="build_corpus",
+            ):
                 res = fut.result()
                 if not res.get("ok"):
                     logger.warning(

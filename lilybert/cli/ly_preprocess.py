@@ -10,14 +10,17 @@ Supports:
 from __future__ import annotations
 
 import json
+import os
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import hydra
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
+from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
 
 from lilybert.cli.pretokenize import (
@@ -77,6 +80,7 @@ class BPESettings:
 @dataclass
 class PreprocessConfig:
     enabled: bool = True
+    num_workers: int = 0
     input_dir: str = "data/raw"
     output_dir: str = "data/processed"
     labels_path: str = "data/labels/labels_v1.json"
@@ -87,10 +91,72 @@ class PreprocessConfig:
     bpe: BPESettings = field(default_factory=BPESettings)
 
 
+def _resolve_num_workers(num_workers: int) -> int:
+    """Return effective worker count: 0 means use all available CPUs."""
+    if num_workers > 0:
+        return num_workers
+    return os.cpu_count() or 2
+
+
 def _collect_ly_files(data_dir: Path) -> List[Path]:
     if not data_dir.exists():
         return []
     return sorted(data_dir.glob("*.ly"))
+
+
+def _tokenize_file_worker(
+    file_path: str,
+    tokenizer_path: str,
+    max_length: int,
+    stride: int,
+) -> Tuple[str, List[List[int]], List[List[int]]]:
+    """Tokenize a single .ly file into windowed (input_ids, attention_mask) rows.
+
+    Runs in a subprocess — loads its own tokenizer and parser instances.
+    Returns (movement_id, list_of_id_rows, list_of_mask_rows).
+    """
+    fp = Path(file_path)
+    text = fp.read_text(encoding="utf-8", errors="ignore")
+
+    lily_tokenizer = LilyPondTokenizer()
+    parser_tokens = lily_tokenizer._movement_to_parser_tokens(text)
+    if not parser_tokens.strip():
+        return (fp.stem, [], [])
+
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    token_ids = tokenizer.encode(parser_tokens, add_special_tokens=False)
+    if not token_ids:
+        return (fp.stem, [], [])
+
+    pad_id = tokenizer.pad_token_id or 0
+    cls_id = tokenizer.cls_token_id
+    sep_id = tokenizer.sep_token_id
+
+    body_size = max_length - 2
+    step = max(1, body_size - stride)
+
+    if len(token_ids) <= body_size:
+        windows = [token_ids]
+    else:
+        windows = []
+        for start in range(0, len(token_ids) - body_size + 1, step):
+            windows.append(token_ids[start : start + body_size])
+        if windows and windows[-1] != token_ids[-body_size:]:
+            windows.append(token_ids[-body_size:])
+
+    id_rows: list[list[int]] = []
+    mask_rows: list[list[int]] = []
+    for window in windows:
+        ids = [cls_id] + window + [sep_id]
+        attn = [1] * len(ids)
+        pad_len = max_length - len(ids)
+        if pad_len > 0:
+            ids = ids + [pad_id] * pad_len
+            attn = attn + [0] * pad_len
+        id_rows.append(ids)
+        mask_rows.append(attn)
+
+    return (fp.stem, id_rows, mask_rows)
 
 
 def _tokenize_mlm_unsharded(
@@ -102,18 +168,12 @@ def _tokenize_mlm_unsharded(
     stride: int,
     eval_ratio: float,
     seed: int,
+    num_workers: int = 0,
 ) -> dict:
     data_path = Path(data_dir)
     all_files = _collect_ly_files(data_path)
     if not all_files:
         raise FileNotFoundError(f"No .ly files found in {data_path}")
-
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
-    lily_tokenizer = LilyPondTokenizer()
-
-    pad_id = tokenizer.pad_token_id or 0
-    cls_id = tokenizer.cls_token_id
-    sep_id = tokenizer.sep_token_id
 
     rng = random.Random(seed)
     shuffled = list(all_files)
@@ -122,49 +182,38 @@ def _tokenize_mlm_unsharded(
     train_files = shuffled[:split_idx]
     eval_files = shuffled[split_idx:]
 
-    body_size = max_length - 2
-    step = max(1, body_size - stride)
-
     out_root = Path(output_dir)
     out_root.mkdir(parents=True, exist_ok=True)
 
     summary = {"output_dir": str(out_root), "splits": {}}
+    workers = _resolve_num_workers(num_workers)
 
     for split_name, files in (("train", train_files), ("eval", eval_files)):
         input_rows: list[np.ndarray] = []
         mask_rows: list[np.ndarray] = []
         movement_ids: list[str] = []
 
-        for file_path in files:
-            text = file_path.read_text(encoding="utf-8", errors="ignore")
-            parser_tokens = lily_tokenizer._movement_to_parser_tokens(text)
-            if not parser_tokens.strip():
-                continue
-
-            token_ids = tokenizer.encode(parser_tokens, add_special_tokens=False)
-            if not token_ids:
-                continue
-
-            if len(token_ids) <= body_size:
-                windows = [token_ids]
-            else:
-                windows = []
-                for start in range(0, len(token_ids) - body_size + 1, step):
-                    windows.append(token_ids[start : start + body_size])
-                if windows and windows[-1] != token_ids[-body_size:]:
-                    windows.append(token_ids[-body_size:])
-
-            for window in windows:
-                ids = [cls_id] + window + [sep_id]
-                attn = [1] * len(ids)
-                pad_len = max_length - len(ids)
-                if pad_len > 0:
-                    ids = ids + [pad_id] * pad_len
-                    attn = attn + [0] * pad_len
-
-                input_rows.append(np.asarray(ids, dtype=np.int64))
-                mask_rows.append(np.asarray(attn, dtype=np.int64))
-                movement_ids.append(file_path.stem)
+        with ProcessPoolExecutor(max_workers=workers) as exe:
+            futures = {
+                exe.submit(
+                    _tokenize_file_worker,
+                    str(fp),
+                    tokenizer_path,
+                    max_length,
+                    stride,
+                ): fp
+                for fp in files
+            }
+            for fut in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc=f"tokenize/{split_name}",
+            ):
+                mid, ids_list, masks_list = fut.result()
+                for ids, mask in zip(ids_list, masks_list):
+                    input_rows.append(np.asarray(ids, dtype=np.int64))
+                    mask_rows.append(np.asarray(mask, dtype=np.int64))
+                    movement_ids.append(mid)
 
         input_ids = (
             np.stack(input_rows, axis=0)
@@ -206,6 +255,7 @@ def _main(cfg: DictConfig) -> None:
 
     config = PreprocessConfig(
         enabled=bool(preprocess_payload.get("enabled", True)),
+        num_workers=int(preprocess_payload.get("num_workers", 0)),
         input_dir=str(preprocess_payload.get("input_dir", "data/raw")),
         output_dir=str(preprocess_payload.get("output_dir", "data/processed")),
         labels_path=str(preprocess_payload.get("labels_path", "data/labels/labels_v1.json")),
@@ -215,6 +265,8 @@ def _main(cfg: DictConfig) -> None:
         sharding=ShardingSettings(**sharding_payload),
         bpe=BPESettings(**dict(preprocess_payload.get("bpe", {}))),
     )
+
+    workers = _resolve_num_workers(config.num_workers)
 
     preprocess_summary = None
     if config.enabled:
@@ -232,6 +284,7 @@ def _main(cfg: DictConfig) -> None:
                 "enable_inversion": config.augmentation.enable_inversion,
                 "include_original": config.augmentation.include_original,
             },
+            num_workers=workers,
         )
 
     bpe_summary = None
@@ -239,6 +292,7 @@ def _main(cfg: DictConfig) -> None:
         tokenizer = LilyPondTokenizer()
         corpus = tokenizer.build_corpus(
             config.output_dir,
+            num_workers=workers,
         )
         fast_tokenizer = tokenizer.train(
             corpus=corpus,
@@ -264,6 +318,7 @@ def _main(cfg: DictConfig) -> None:
             stride=config.tokenize.stride,
             eval_ratio=config.tokenize.eval_ratio,
             seed=config.tokenize.seed,
+            num_workers=workers,
         )
 
     sharding_summary = None
@@ -277,6 +332,7 @@ def _main(cfg: DictConfig) -> None:
             shard_size=config.sharding.shard_size,
             eval_ratio=config.sharding.eval_ratio,
             seed=config.sharding.seed,
+            num_workers=workers,
         )
         sharding_summary = {
             "enabled": True,
