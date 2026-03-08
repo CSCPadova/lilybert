@@ -7,10 +7,16 @@ using ``+`` as a separator (e.g., ``NOTE_C+DUR_4``).
 
 from __future__ import annotations
 
+import heapq
 import json
-from collections import Counter
+import logging
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import AbstractSet, List, Optional, Sequence
+
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 BPE_SEPARATOR = "+"
 
@@ -52,6 +58,12 @@ class TokenBPE:
     ) -> None:
         """Learn BPE merges from *sequences*.
 
+        Uses a word-frequency representation: identical sequences are
+        collapsed into a single entry with a count, so pair counting
+        and merge application scale with unique word types rather than
+        total corpus size.  A max-heap accelerates best-pair lookup to
+        amortised O(log n) per iteration.
+
         Args:
             sequences: Token sequences to learn from.
             num_merges: Maximum number of merges to learn.
@@ -61,38 +73,163 @@ class TokenBPE:
             frozen_tokens: Tokens that must never participate in a merge.
         """
         frozen = frozen_tokens or set()
-        # Work on mutable copies
-        seqs = [list(s) for s in sequences]
         self.merges = []
 
-        def _contains_frozen(tok: str) -> bool:
-            """Check if *tok* (possibly merged) contains a frozen token."""
-            for part in tok.split(BPE_SEPARATOR):
-                if part in frozen:
-                    return True
-            return False
+        frozen_cache: dict[str, bool] = {}
 
-        for _ in range(num_merges):
-            # Count adjacent pairs, skipping frozen tokens
-            pair_counts: Counter[tuple[str, str]] = Counter()
-            for seq in seqs:
-                for i in range(len(seq) - 1):
-                    if _contains_frozen(seq[i]) or _contains_frozen(seq[i + 1]):
+        def _is_frozen(tok: str) -> bool:
+            cached = frozen_cache.get(tok)
+            if cached is not None:
+                return cached
+            result = any(part in frozen for part in tok.split(BPE_SEPARATOR))
+            frozen_cache[tok] = result
+            return result
+
+        # Collapse identical sequences into (tuple, count) pairs.
+        word_freq: Counter[tuple[str, ...]] = Counter()
+        for seq in sequences:
+            word_freq[tuple(seq)] += 1
+
+        # Build initial pair counts from word frequencies.
+        pair_counts: dict[tuple[str, str], int] = defaultdict(int)
+        # Index: pair -> set of words containing that pair
+        pair_to_words: dict[tuple[str, str], set[tuple[str, ...]]] = defaultdict(set)
+
+        for word, freq in word_freq.items():
+            for i in range(len(word) - 1):
+                if _is_frozen(word[i]) or _is_frozen(word[i + 1]):
+                    continue
+                pair = (word[i], word[i + 1])
+                pair_counts[pair] += freq
+                pair_to_words[pair].add(word)
+
+        total_tokens = sum(len(w) * c for w, c in word_freq.items())
+        unique_words = len(word_freq)
+        logger.info(
+            "BPE training: %d total tokens, %d unique word types, up to %d merges",
+            total_tokens,
+            unique_words,
+            num_merges,
+        )
+
+        # Max-heap of (-count, pair).  Stale entries are detected by
+        # comparing the heap count against the live pair_counts dict.
+        heap: list[tuple[int, tuple[str, str]]] = [
+            (-count, pair) for pair, count in pair_counts.items()
+        ]
+        heapq.heapify(heap)
+
+        def _heap_push(pair: tuple[str, str]) -> None:
+            count = pair_counts.get(pair, 0)
+            if count > 0:
+                heapq.heappush(heap, (-count, pair))
+
+        min_freq = max(min_frequency, 1)
+
+        for step in tqdm(range(num_merges), desc="BPE merges"):
+            # Pop stale entries until we find one whose count matches.
+            bp: tuple[str, str] | None = None
+            best_count = 0
+            while heap:
+                neg_count, candidate = heap[0]
+                live = pair_counts.get(candidate, 0)
+                if live <= 0:
+                    heapq.heappop(heap)
+                    continue
+                if live != -neg_count:
+                    # Stale: re-push with correct count, pop this entry.
+                    heapq.heappop(heap)
+                    heapq.heappush(heap, (-live, candidate))
+                    continue
+                # Valid top entry.
+                bp = candidate
+                best_count = live
+                heapq.heappop(heap)
+                break
+
+            if bp is None or best_count < min_freq:
+                break
+
+            merged = bp[0] + BPE_SEPARATOR + bp[1]
+            self.merges.append(bp)
+
+            # Only process words that actually contain this pair.
+            affected_words = pair_to_words.pop(bp, set())
+            pair_counts.pop(bp, None)
+
+            # Track which pairs had their counts changed so we can
+            # re-push them into the heap in bulk afterwards.
+            dirty_pairs: set[tuple[str, str]] = set()
+
+            for word in affected_words:
+                freq = word_freq.get(word, 0)
+                if freq == 0:
+                    continue
+
+                new_word = tuple(_apply_single_merge(list(word), bp, merged))
+                if new_word == word:
+                    continue
+
+                # Subtract old pair counts — only pairs that touch a
+                # merge site change.  Find merge positions in old word.
+                wlen = len(word)
+                i = 0
+                while i < wlen - 1:
+                    if word[i] == bp[0] and word[i + 1] == bp[1]:
+                        # Pair at (i-1, i) if it exists and isn't frozen
+                        if i > 0 and not _is_frozen(word[i - 1]):
+                            left_pair = (word[i - 1], word[i])
+                            pair_counts[left_pair] -= freq
+                            if pair_counts[left_pair] <= 0:
+                                pair_counts.pop(left_pair, None)
+                            s = pair_to_words.get(left_pair)
+                            if s:
+                                s.discard(word)
+                                if not s:
+                                    del pair_to_words[left_pair]
+                            dirty_pairs.add(left_pair)
+                        # Pair at (i+1, i+2) if it exists and isn't frozen
+                        if i + 2 < wlen and not _is_frozen(word[i + 2]):
+                            right_pair = (word[i + 1], word[i + 2])
+                            pair_counts[right_pair] -= freq
+                            if pair_counts[right_pair] <= 0:
+                                pair_counts.pop(right_pair, None)
+                            s = pair_to_words.get(right_pair)
+                            if s:
+                                s.discard(word)
+                                if not s:
+                                    del pair_to_words[right_pair]
+                            dirty_pairs.add(right_pair)
+                        i += 2  # skip past the merged pair
+                    else:
+                        i += 1
+
+                # Update word_freq.
+                del word_freq[word]
+                word_freq[new_word] += freq
+
+                # Add new pair counts — only pairs adjacent to merged
+                # tokens in new_word.
+                nlen = len(new_word)
+                for j in range(nlen):
+                    if new_word[j] != merged:
                         continue
-                    pair_counts[(seq[i], seq[i + 1])] += 1
+                    # Left neighbour
+                    if j > 0 and not _is_frozen(new_word[j - 1]):
+                        lp = (new_word[j - 1], new_word[j])
+                        pair_counts[lp] += freq
+                        pair_to_words[lp].add(new_word)
+                        dirty_pairs.add(lp)
+                    # Right neighbour
+                    if j + 1 < nlen and not _is_frozen(new_word[j + 1]):
+                        rp = (new_word[j], new_word[j + 1])
+                        pair_counts[rp] += freq
+                        pair_to_words[rp].add(new_word)
+                        dirty_pairs.add(rp)
 
-            if not pair_counts:
-                break
-
-            best_pair, best_count = pair_counts.most_common(1)[0]
-            if best_count < max(min_frequency, 1):
-                break
-
-            merged = best_pair[0] + BPE_SEPARATOR + best_pair[1]
-            self.merges.append(best_pair)
-
-            # Apply merge to all sequences
-            seqs = [_apply_single_merge(s, best_pair, merged) for s in seqs]
+            # Batch re-push dirty pairs into the heap.
+            for dp in dirty_pairs:
+                _heap_push(dp)
 
             if max_vocab > 0 and (base_vocab_size + len(self.merges)) >= max_vocab:
                 break
