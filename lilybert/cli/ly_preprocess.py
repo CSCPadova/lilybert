@@ -234,6 +234,26 @@ def _main(cfg: DictConfig) -> None:
             },
         )
 
+    bpe_summary = None
+    if config.bpe.enabled:
+        tokenizer = LilyPondTokenizer()
+        corpus = tokenizer.build_corpus(
+            config.output_dir,
+        )
+        fast_tokenizer = tokenizer.train(
+            corpus=corpus,
+            vocab_size=config.bpe.vocab_size,
+            min_frequency=config.bpe.min_frequency,
+            number_placeholders=config.bpe.number_placeholders,
+        )
+        saved_dir = tokenizer.save(config.bpe.output_dir)
+        bpe_summary = {
+            "enabled": True,
+            "num_corpus_samples": len(corpus),
+            "vocab_size": int(fast_tokenizer.vocab_size),
+            "output_dir": str(saved_dir),
+        }
+
     tokenize_summary = None
     if config.tokenize.enabled:
         tokenize_summary = _tokenize_mlm_unsharded(
@@ -262,26 +282,6 @@ def _main(cfg: DictConfig) -> None:
             "enabled": True,
             "stage": "mlm",
             "output_dir": config.sharding.output_dir,
-        }
-
-    bpe_summary = None
-    if config.bpe.enabled:
-        tokenizer = LilyPondTokenizer()
-        corpus = tokenizer.build_corpus(
-            config.output_dir,
-        )
-        fast_tokenizer = tokenizer.train(
-            corpus=corpus,
-            vocab_size=config.bpe.vocab_size,
-            min_frequency=config.bpe.min_frequency,
-            number_placeholders=config.bpe.number_placeholders,
-        )
-        saved_dir = tokenizer.save(config.bpe.output_dir)
-        bpe_summary = {
-            "enabled": True,
-            "num_corpus_samples": len(corpus),
-            "vocab_size": int(fast_tokenizer.vocab_size),
-            "output_dir": str(saved_dir),
         }
 
     print(
