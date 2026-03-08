@@ -86,7 +86,15 @@ class TrainingConfig:
         path = Path(config_path)
         data: Dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
         # Drop legacy alias keys that no longer exist as fields
-        for legacy_key in ("lr", "epochs", "batch_size", "mode", "lora_r", "lora_alpha", "use_lora"):
+        for legacy_key in (
+            "lr",
+            "epochs",
+            "batch_size",
+            "mode",
+            "lora_r",
+            "lora_alpha",
+            "use_lora",
+        ):
             data.pop(legacy_key, None)
         return cls(**data)
 

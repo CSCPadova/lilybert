@@ -19,7 +19,6 @@ import ly.lex
 import ly.lex.lilypond
 from ly.lex import State
 
-
 # ---------------------------------------------------------------------------
 # Token classification
 # ---------------------------------------------------------------------------
@@ -80,15 +79,17 @@ _KEEP_TYPES: tuple = (
 )
 
 # Command strings (``ly.lex.lilypond.Command``) to keep.
-_MUSICAL_COMMANDS: frozenset = frozenset({
-    "\\time",
-    "\\tuplet",
-    "\\grace",
-    "\\appoggiatura",
-    "\\acciaccatura",
-    "\\alternative",
-    "\\bar",
-})
+_MUSICAL_COMMANDS: frozenset = frozenset(
+    {
+        "\\time",
+        "\\tuplet",
+        "\\grace",
+        "\\appoggiatura",
+        "\\acciaccatura",
+        "\\alternative",
+        "\\bar",
+    }
+)
 
 # Known articulation commands for user-macro expansion.
 # Maps a LilyPond command to the command string to emit.
@@ -122,6 +123,7 @@ _EXPANDABLE_COMMANDS: Dict[str, str] = {**_ARTICULATION_COMMANDS}
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class LexerConfig:
     """Configuration for the musical lexer."""
@@ -133,6 +135,7 @@ class LexerConfig:
 # ---------------------------------------------------------------------------
 # MusicalLexer
 # ---------------------------------------------------------------------------
+
 
 class MusicalLexer:
     """Filter python-ly lexer tokens, keeping only musical content.
@@ -240,20 +243,21 @@ class MusicalLexer:
                 i += 1
                 continue
 
-            if isinstance(tok, (
-                ly.lex.lilypond.LineComment,
-                ly.lex.lilypond.BlockCommentStart,
-                ly.lex.lilypond.BlockComment,
-                ly.lex.lilypond.BlockCommentEnd,
-            )):
+            if isinstance(
+                tok,
+                (
+                    ly.lex.lilypond.LineComment,
+                    ly.lex.lilypond.BlockCommentStart,
+                    ly.lex.lilypond.BlockComment,
+                    ly.lex.lilypond.BlockCommentEnd,
+                ),
+            ):
                 i += 1
                 continue
 
             # --- Simultaneous music << >> ---
             if isinstance(tok, ly.lex.lilypond.SimultaneousStart):
-                sim_result, consumed = self._handle_simultaneous(
-                    ly_tokens, i
-                )
+                sim_result, consumed = self._handle_simultaneous(ly_tokens, i)
                 result.extend(sim_result)
                 i += consumed
                 continue
@@ -303,18 +307,19 @@ class MusicalLexer:
                 continue
 
             # --- \new / \context / \change: emit + context name ---
-            if isinstance(tok, (
-                ly.lex.lilypond.New,
-                ly.lex.lilypond.Context,
-                ly.lex.lilypond.Change,
-            )):
+            if isinstance(
+                tok,
+                (
+                    ly.lex.lilypond.New,
+                    ly.lex.lilypond.Context,
+                    ly.lex.lilypond.Change,
+                ),
+            ):
                 result.append(tok_str)
                 i += 1
                 while i < n and isinstance(ly_tokens[i], ly.lex.Space):
                     i += 1
-                if i < n and isinstance(
-                    ly_tokens[i], ly.lex.lilypond.ContextName
-                ):
+                if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.ContextName):
                     result.append(str(ly_tokens[i]))
                     i += 1
                 continue
@@ -331,22 +336,28 @@ class MusicalLexer:
                 continue
 
             # --- Conditional: slurs ---
-            if isinstance(tok, (
-                ly.lex.lilypond.SlurStart,
-                ly.lex.lilypond.SlurEnd,
-                ly.lex.lilypond.PhrasingSlurStart,
-                ly.lex.lilypond.PhrasingSlurEnd,
-            )):
+            if isinstance(
+                tok,
+                (
+                    ly.lex.lilypond.SlurStart,
+                    ly.lex.lilypond.SlurEnd,
+                    ly.lex.lilypond.PhrasingSlurStart,
+                    ly.lex.lilypond.PhrasingSlurEnd,
+                ),
+            ):
                 if self.config.include_slurs:
                     result.append(tok_str)
                 i += 1
                 continue
 
             # --- Conditional: articulations ---
-            if isinstance(tok, (
-                ly.lex.lilypond.ArticulationCommand,
-                ly.lex.lilypond.ScriptAbbreviation,
-            )):
+            if isinstance(
+                tok,
+                (
+                    ly.lex.lilypond.ArticulationCommand,
+                    ly.lex.lilypond.ScriptAbbreviation,
+                ),
+            ):
                 if self.config.include_articulations:
                     result.append(tok_str)
                 i += 1
@@ -367,9 +378,7 @@ class MusicalLexer:
     # Direction handling
     # ------------------------------------------------------------------
 
-    def _handle_direction(
-        self, ly_tokens: list, start: int
-    ) -> Tuple[List[str], int]:
+    def _handle_direction(self, ly_tokens: list, start: int) -> Tuple[List[str], int]:
         """Handle Direction token (``-``, ``^``, ``_``).
 
         Skips Direction if followed by markup or if articulations are
@@ -384,15 +393,16 @@ class MusicalLexer:
         if j < n:
             next_tok = ly_tokens[j]
             # Direction before markup: skip direction
-            if isinstance(next_tok, (
-                ly.lex.lilypond.MarkupStart,
-                ly.lex.lilypond.Markup,
-            )):
+            if isinstance(
+                next_tok,
+                (
+                    ly.lex.lilypond.MarkupStart,
+                    ly.lex.lilypond.Markup,
+                ),
+            ):
                 return [], i - start
             # Direction before articulation: skip if disabled
-            if isinstance(
-                next_tok, ly.lex.lilypond.ScriptAbbreviation
-            ):
+            if isinstance(next_tok, ly.lex.lilypond.ScriptAbbreviation):
                 if not self.config.include_articulations:
                     return [], i - start
         # Emit Direction if articulations are included
@@ -404,9 +414,7 @@ class MusicalLexer:
     # Clef handling
     # ------------------------------------------------------------------
 
-    def _handle_clef(
-        self, ly_tokens: list, start: int
-    ) -> Tuple[List[str], int]:
+    def _handle_clef(self, ly_tokens: list, start: int) -> Tuple[List[str], int]:
         """Handle ``\\clef`` with unquoted or quoted specifier."""
         result = [str(ly_tokens[start])]  # \clef
         i = start + 1
@@ -416,17 +424,13 @@ class MusicalLexer:
         if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.ClefSpecifier):
             result.append(str(ly_tokens[i]))
             i += 1
-        elif i < n and isinstance(
-            ly_tokens[i], ly.lex.lilypond.StringQuotedStart
-        ):
+        elif i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedStart):
             # \clef "treble" — skip quotes, emit clef name
             i += 1
             if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.String):
                 result.append(str(ly_tokens[i]))
                 i += 1
-            if i < n and isinstance(
-                ly_tokens[i], ly.lex.lilypond.StringQuotedEnd
-            ):
+            if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedEnd):
                 i += 1
         return result, i - start
 
@@ -442,16 +446,12 @@ class MusicalLexer:
         n = len(ly_tokens)
         while i < n and isinstance(ly_tokens[i], ly.lex.Space):
             i += 1
-        if i < n and isinstance(
-            ly_tokens[i], ly.lex.lilypond.StringQuotedStart
-        ):
+        if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedStart):
             i += 1
             if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.String):
                 result.append(str(ly_tokens[i]))
                 i += 1
-            if i < n and isinstance(
-                ly_tokens[i], ly.lex.lilypond.StringQuotedEnd
-            ):
+            if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedEnd):
                 i += 1
         return i
 
@@ -481,10 +481,7 @@ class MusicalLexer:
                 depth += 1
             elif isinstance(tok, ly.lex.lilypond.SimultaneousEnd):
                 depth -= 1
-            elif (
-                isinstance(tok, ly.lex.lilypond.VoiceSeparator)
-                and depth == 1
-            ):
+            elif isinstance(tok, ly.lex.lilypond.VoiceSeparator) and depth == 1:
                 has_voice_sep = True
             j += 1
 
@@ -511,9 +508,7 @@ class MusicalLexer:
         result.append(">>")
         return result, i - start
 
-    def _split_voices(
-        self, ly_tokens: list, start: int
-    ) -> Tuple[List[str], int]:
+    def _split_voices(self, ly_tokens: list, start: int) -> Tuple[List[str], int]:
         """Split ``<< { } \\\\ { } >>`` into ``[PART_BEGIN]...[PART_END]``."""
         i = start + 1
         n = len(ly_tokens)
@@ -531,10 +526,7 @@ class MusicalLexer:
                     break
             elif isinstance(tok, ly.lex.lilypond.SimultaneousStart):
                 depth += 1
-            elif (
-                isinstance(tok, ly.lex.lilypond.VoiceSeparator)
-                and depth == 1
-            ):
+            elif isinstance(tok, ly.lex.lilypond.VoiceSeparator) and depth == 1:
                 voice_ranges.append([])
                 i += 1
                 continue
@@ -554,6 +546,7 @@ class MusicalLexer:
 # ---------------------------------------------------------------------------
 # Legacy API — kept for backward compatibility
 # ---------------------------------------------------------------------------
+
 
 def all_lexer_tokens() -> List[str]:
     """Return special tokens emitted by the lexer.

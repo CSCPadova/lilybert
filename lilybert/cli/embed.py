@@ -9,8 +9,8 @@ from typing import List, Optional
 import numpy as np
 import torch
 import typer
-from typing_extensions import Annotated
 from transformers import PreTrainedTokenizerFast
+from typing_extensions import Annotated
 
 from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.models import LilyBERTEncoder
@@ -57,18 +57,26 @@ def _movement_windows(
 
 def main(
     input_dir: Annotated[str, typer.Option(help="Folder containing .ly files")],
-    model_name: Annotated[str, typer.Option(help="Hugging Face model ID or local path")],
+    model_name: Annotated[
+        str, typer.Option(help="Hugging Face model ID or local path")
+    ],
     output_path: Annotated[str, typer.Option(help="Output .npz path for embeddings")],
     tokenizer_path: Annotated[
-        Optional[str], typer.Option(help="Optional tokenizer path; defaults to model_name")
+        Optional[str],
+        typer.Option(help="Optional tokenizer path; defaults to model_name"),
     ] = None,
     max_length: Annotated[int, typer.Option(help="Window max length")] = 2048,
     stride: Annotated[int, typer.Option(help="Window stride")] = 256,
     batch_size: Annotated[int, typer.Option(help="Embedding batch size")] = 32,
     strip: Annotated[
-        Optional[List[str]], typer.Option(help="Sections to strip, repeatable: --strip header --strip comments")
+        Optional[List[str]],
+        typer.Option(
+            help="Sections to strip, repeatable: --strip header --strip comments"
+        ),
     ] = None,
-    recursive: Annotated[bool, typer.Option(help="Recursively search for .ly files")] = False,
+    recursive: Annotated[
+        bool, typer.Option(help="Recursively search for .ly files")
+    ] = False,
     device: Annotated[str, typer.Option(help="Device: cpu, cuda, ...")] = "cpu",
 ) -> None:
     input_path = Path(input_dir)
@@ -109,7 +117,9 @@ def main(
                 continue
 
             for movement in movements:
-                movement_text = str(movement.get("italiano_text") or movement.get("text") or "").strip()
+                movement_text = str(
+                    movement.get("italiano_text") or movement.get("text") or ""
+                ).strip()
                 if not movement_text:
                     continue
 

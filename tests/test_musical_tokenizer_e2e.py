@@ -63,9 +63,9 @@ class TestMusicalTokenizerE2E:
             ids = trained_tokenizer.fast_tokenizer.encode(
                 token, add_special_tokens=False
             )
-            assert len(ids) == 1, (
-                f"Base token {token!r} was split into {len(ids)} IDs: {ids}"
-            )
+            assert (
+                len(ids) == 1
+            ), f"Base token {token!r} was split into {len(ids)} IDs: {ids}"
 
     def test_base_vocab_in_trained_vocab(self, trained_tokenizer):
         """All base vocabulary tokens exist in the trained vocab."""
@@ -116,7 +116,9 @@ class TestMusicalTokenizerE2E:
 
     def test_articulations_mapped(self, trained_tokenizer):
         """Articulation commands map to ART_ tokens."""
-        token_line = trained_tokenizer._movement_to_parser_tokens(r"c4\trill d4\fermata")
+        token_line = trained_tokenizer._movement_to_parser_tokens(
+            r"c4\trill d4\fermata"
+        )
         tokens = token_line.split()
         assert "ART_TRILL" in tokens
         assert "ART_FERMATA" in tokens
@@ -162,13 +164,11 @@ class TestMusicalTokenizerE2E:
             for side in (left, right):
                 parts = side.split(BPE_SEPARATOR)
                 for part in parts:
-                    assert part in vocab, (
-                        f"Merge component {part!r} is not in vocab"
-                    )
+                    assert part in vocab, f"Merge component {part!r} is not in vocab"
                     # Must not be a single character (sign of char-level BPE)
-                    assert len(part) > 1 or part in vocab, (
-                        f"Merge component {part!r} looks like a character merge"
-                    )
+                    assert (
+                        len(part) > 1 or part in vocab
+                    ), f"Merge component {part!r} looks like a character merge"
 
     def test_merged_tokens_use_separator(self, trained_tokenizer):
         """BPE-created tokens in vocab use + separator."""
@@ -199,9 +199,7 @@ class TestMusicalTokenizerE2E:
         assert "NOTE_" in all_text, "Corpus should contain NOTE_ tokens"
         assert "DUR_" in all_text, "Corpus should contain DUR_ tokens"
         # Raw LilyPond commands should NOT appear (they should be mapped)
-        assert "\\clef" not in all_text, (
-            "Raw \\clef should be mapped to CMD_CLEF"
-        )
+        assert "\\clef" not in all_text, "Raw \\clef should be mapped to CMD_CLEF"
 
     def test_encode_real_ly_file(self, trained_tokenizer):
         """Encoding a real .ly file produces non-empty token IDs."""
@@ -220,9 +218,7 @@ class TestMusicalTokenizerE2E:
         assert len(ids) > 0
         # Verify base vocab survives save/load
         for token in ["NOTE_C", "DUR_4", "ART_TRILL"]:
-            loaded_ids = loaded.fast_tokenizer.encode(
-                token, add_special_tokens=False
-            )
-            assert len(loaded_ids) == 1, (
-                f"Base token {token!r} was split after save/load"
-            )
+            loaded_ids = loaded.fast_tokenizer.encode(token, add_special_tokens=False)
+            assert (
+                len(loaded_ids) == 1
+            ), f"Base token {token!r} was split after save/load"

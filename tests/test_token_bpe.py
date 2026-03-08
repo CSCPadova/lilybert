@@ -31,7 +31,10 @@ class TestTokenBPELearn:
         bpe.learn(sequences, num_merges=2)
         assert len(bpe.merges) > 0
         # Most frequent pair should be first merge
-        assert bpe.merges[0] == ("NOTE_C", "DUR_4") or bpe.merges[0] == ("NOTE_D", "DUR_4")
+        assert bpe.merges[0] == ("NOTE_C", "DUR_4") or bpe.merges[0] == (
+            "NOTE_D",
+            "DUR_4",
+        )
 
     def test_min_frequency(self):
         sequences = [

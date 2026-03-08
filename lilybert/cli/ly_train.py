@@ -15,7 +15,6 @@ from omegaconf import DictConfig, OmegaConf
 from lilybert.pretraining import MLMPretrainer, PretrainingConfig
 from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
 
-
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
 
@@ -80,15 +79,21 @@ def _main(cfg: DictConfig) -> None:
             data_dir=data_dir,
             tokenizer_path=tokenizer_path,
             output_dir=output_dir,
-            model_architecture=str(pretrain.get("model_architecture", model_arch.get("name", "bert-base"))),
+            model_architecture=str(
+                pretrain.get("model_architecture", model_arch.get("name", "bert-base"))
+            ),
             hidden_size=int(model_arch.get("hidden_size", 768)),
             num_hidden_layers=int(model_arch.get("num_hidden_layers", 12)),
             num_attention_heads=int(model_arch.get("num_attention_heads", 12)),
             intermediate_size=int(model_arch.get("intermediate_size", 3072)),
-            max_position_embeddings=int(model_arch.get("max_position_embeddings", 2048)),
+            max_position_embeddings=int(
+                model_arch.get("max_position_embeddings", 2048)
+            ),
             max_length=int(pretrain.get("max_length", 2048)),
             mlm_probability=float(pretrain.get("mlm_probability", 0.15)),
-            per_device_train_batch_size=int(pretrain.get("per_device_train_batch_size", 16)),
+            per_device_train_batch_size=int(
+                pretrain.get("per_device_train_batch_size", 16)
+            ),
             num_train_epochs=int(pretrain.get("num_train_epochs", 3)),
             learning_rate=float(pretrain.get("learning_rate", 2e-5)),
             weight_decay=float(pretrain.get("weight_decay", 0.01)),

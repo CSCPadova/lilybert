@@ -68,7 +68,8 @@ class BaroqueMusicDataAPI:
         return sorted(self.processed_dir.glob("*.ly"))
 
     def load_movement(
-        self, movement_id: str,
+        self,
+        movement_id: str,
     ) -> MovementRecord:
         """Load one movement by movement id."""
         path = self.processed_dir / f"{movement_id}.ly"
@@ -113,9 +114,7 @@ class BaroqueMusicDataAPI:
         include_metadata: bool = True,
     ) -> Iterator[MovementRecord]:
         """Iterate movement records after applying augmentations."""
-        for record in self.iter_movements(
-            include_metadata=include_metadata
-        ):
+        for record in self.iter_movements(include_metadata=include_metadata):
             yield MovementRecord(
                 movement_id=record.movement_id,
                 text=self.apply_augmentations(record.text, augmentations),

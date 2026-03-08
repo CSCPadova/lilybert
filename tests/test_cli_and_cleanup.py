@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 def test_legacy_main_points_to_ly_entrypoints():
     from lilybert import __main__ as main_mod
 

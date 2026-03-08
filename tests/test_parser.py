@@ -25,7 +25,7 @@ def _count_notes_from_tokens(tokens: list[str]) -> int:
     count = 0
     for t in tokens:
         if t.startswith("chord:"):
-            inner = t[len("chord:"):]
+            inner = t[len("chord:") :]
             pitches = [p for p in inner.split() if note_re.match(p)]
             count += len(pitches) if pitches else 1
         elif note_re.match(t):

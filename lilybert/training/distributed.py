@@ -70,9 +70,7 @@ def gather_tensors(
 
     Returns the concatenated tensor on every rank.
     """
-    gathered: List[torch.Tensor] = [
-        torch.zeros_like(tensor) for _ in range(world_size)
-    ]
+    gathered: List[torch.Tensor] = [torch.zeros_like(tensor) for _ in range(world_size)]
     dist.all_gather(gathered, tensor)
     return torch.cat(gathered, dim=0)
 

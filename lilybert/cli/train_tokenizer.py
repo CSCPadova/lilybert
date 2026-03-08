@@ -13,9 +13,7 @@ from lilybert.data.tokenizer import LilyPondTokenizer
 def main(
     processed_dir: Annotated[
         str,
-        typer.Option(
-            help="Processed movement root containing .ly files"
-        ),
+        typer.Option(help="Processed movement root containing .ly files"),
     ] = "data/processed",
     output_dir: Annotated[
         str, typer.Option(help="Directory to save trained tokenizer files")

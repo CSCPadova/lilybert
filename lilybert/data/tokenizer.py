@@ -110,9 +110,7 @@ class LilyPondTokenizer:
         if not root.exists():
             raise FileNotFoundError(f"Processed directory not found: {root}")
 
-        movement_files = sorted(
-            self._iter_movement_files(root)
-        )
+        movement_files = sorted(self._iter_movement_files(root))
 
         max_workers = num_workers if num_workers > 0 else (os.cpu_count() or 2)
         corpus: List[str] = []
@@ -351,7 +349,7 @@ class LilyPondTokenizer:
                 if j < len(tokens) and tokens[j] == "[PART_NAME]":
                     j += 1
                 if j < len(tokens) and tokens[j].startswith("part:"):
-                    name = tokens[j][len("part:"):]
+                    name = tokens[j][len("part:") :]
                     j += 1
                 parts.append(f"{name} = {{")
                 open_braces += 1
@@ -402,8 +400,13 @@ class LilyPondTokenizer:
                 music_buf.clear()
 
         structural = {
-            "<<", ">>", "{", "}", "\\score",
-            "\\new", "\\\\",
+            "<<",
+            ">>",
+            "{",
+            "}",
+            "\\score",
+            "\\new",
+            "\\\\",
         }
 
         for part in parts:

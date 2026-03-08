@@ -108,7 +108,9 @@ class TestShardFileWorker:
 
 
 class TestTokenizeMlmUnsharded:
-    def test_produces_npz_splits(self, processed_dir: Path, tokenizer_dir: Path, tmp_path: Path):
+    def test_produces_npz_splits(
+        self, processed_dir: Path, tokenizer_dir: Path, tmp_path: Path
+    ):
         output_dir = tmp_path / "tokenized"
         summary = _tokenize_mlm_unsharded(
             data_dir=str(processed_dir),

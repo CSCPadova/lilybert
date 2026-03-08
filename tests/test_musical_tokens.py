@@ -58,9 +58,7 @@ class TestLyTokensToMusical:
     def test_simple_notes(self):
         tokens = ["c", "4", "d", "8", "e", "4"]
         result = ly_tokens_to_musical(tokens)
-        assert result == [
-            "NOTE_C", "DUR_4", "NOTE_D", "DUR_8", "NOTE_E", "DUR_4"
-        ]
+        assert result == ["NOTE_C", "DUR_4", "NOTE_D", "DUR_8", "NOTE_E", "DUR_4"]
 
     def test_note_with_accidental(self):
         tokens = ["fis", "'", "4"]
@@ -91,8 +89,12 @@ class TestLyTokensToMusical:
         tokens = ["c", "4", "(", "d", "4", ")"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "NOTE_C", "DUR_4", "SLUR_START",
-            "NOTE_D", "DUR_4", "SLUR_END",
+            "NOTE_C",
+            "DUR_4",
+            "SLUR_START",
+            "NOTE_D",
+            "DUR_4",
+            "SLUR_END",
         ]
 
     def test_bar(self):
@@ -153,9 +155,7 @@ class TestLyTokensToMusical:
     def test_chord_delimiters(self):
         tokens = ["<", "c", "e", "g", ">"]
         result = ly_tokens_to_musical(tokens)
-        assert result == [
-            "CHORD_START", "NOTE_C", "NOTE_E", "NOTE_G", "CHORD_END"
-        ]
+        assert result == ["CHORD_START", "NOTE_C", "NOTE_E", "NOTE_G", "CHORD_END"]
 
     def test_simultaneous(self):
         tokens = ["<<", "c", "4", ">>"]
@@ -166,8 +166,15 @@ class TestLyTokensToMusical:
         tokens = ["\\tuplet", "3/2", "{", "c", "4", "d", "4", "e", "4", "}"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "CMD_TUPLET", "3/2", "BLOCK_START",
-            "NOTE_C", "DUR_4", "NOTE_D", "DUR_4", "NOTE_E", "DUR_4",
+            "CMD_TUPLET",
+            "3/2",
+            "BLOCK_START",
+            "NOTE_C",
+            "DUR_4",
+            "NOTE_D",
+            "DUR_4",
+            "NOTE_E",
+            "DUR_4",
             "BLOCK_END",
         ]
 
@@ -175,24 +182,36 @@ class TestLyTokensToMusical:
         tokens = ["[PART_BEGIN]", "[PART_NAME]", "part:violin", "c", "4", "[PART_END]"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "[PART_BEGIN]", "[PART_NAME]", "part:violin",
-            "NOTE_C", "DUR_4", "[PART_END]",
+            "[PART_BEGIN]",
+            "[PART_NAME]",
+            "part:violin",
+            "NOTE_C",
+            "DUR_4",
+            "[PART_END]",
         ]
 
     def test_beams(self):
         tokens = ["c", "8", "[", "d", "8", "]"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "NOTE_C", "DUR_8", "BEAM_START",
-            "NOTE_D", "DUR_8", "BEAM_END",
+            "NOTE_C",
+            "DUR_8",
+            "BEAM_START",
+            "NOTE_D",
+            "DUR_8",
+            "BEAM_END",
         ]
 
     def test_new_staff(self):
         tokens = ["\\new", "Staff", "{", "c", "4", "}"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "CMD_NEW", "CTX_STAFF", "BLOCK_START",
-            "NOTE_C", "DUR_4", "BLOCK_END",
+            "CMD_NEW",
+            "CTX_STAFF",
+            "BLOCK_START",
+            "NOTE_C",
+            "DUR_4",
+            "BLOCK_END",
         ]
 
     def test_bar_type(self):
@@ -209,15 +228,24 @@ class TestLyTokensToMusical:
         tokens = ["\\repeat", "volta", "2", "{", "c", "4", "}"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "CMD_REPEAT", "REPEAT_VOLTA", "2",
-            "BLOCK_START", "NOTE_C", "DUR_4", "BLOCK_END",
+            "CMD_REPEAT",
+            "REPEAT_VOLTA",
+            "2",
+            "BLOCK_START",
+            "NOTE_C",
+            "DUR_4",
+            "BLOCK_END",
         ]
 
     def test_grace(self):
         tokens = ["\\grace", "{", "c", "16", "}"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "CMD_GRACE", "BLOCK_START", "NOTE_C", "DUR_16", "BLOCK_END",
+            "CMD_GRACE",
+            "BLOCK_START",
+            "NOTE_C",
+            "DUR_16",
+            "BLOCK_END",
         ]
 
 

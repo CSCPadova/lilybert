@@ -20,7 +20,9 @@ from lilybert.cli.ly_train import _main as ly_train_main
 
 @pytest.mark.slow
 @pytest.mark.integration
-def test_smoke_e2e_cli_pipeline(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_smoke_e2e_cli_pipeline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     tests_root = Path(__file__).parent
     input_dir = tests_root / "ly"
     labels_path = Path("data/labels/labels_v1.json")

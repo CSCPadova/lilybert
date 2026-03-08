@@ -114,7 +114,9 @@ class ShardedDataset(Dataset):
         data = self._cache.get(shard_idx, shard_info.path)
 
         input_ids = torch.from_numpy(data["input_ids"][local_idx].copy()).long()
-        attention_mask = torch.from_numpy(data["attention_mask"][local_idx].copy()).long()
+        attention_mask = torch.from_numpy(
+            data["attention_mask"][local_idx].copy()
+        ).long()
 
         result: Dict[str, Any] = {
             "input_ids": input_ids,

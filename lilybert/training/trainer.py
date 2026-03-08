@@ -44,7 +44,9 @@ class StratifiedKFoldTrainer:
         self.config = config
         self.tokenizer = tokenizer
         self.model_factory = model_factory
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = torch.device(
+            device or ("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.classification_metrics = ClassificationMetrics(top_k=config.top_k)
 
     def run(self) -> Dict[str, Any]:
@@ -102,7 +104,9 @@ class StratifiedKFoldTrainer:
     def _load_metadata(self) -> Dict[str, Dict[str, Any]]:
         metadata_path = Path(self.config.data_dir) / "metadata.json"
         if not metadata_path.exists():
-            raise FileNotFoundError(f"metadata.json not found in {self.config.data_dir}")
+            raise FileNotFoundError(
+                f"metadata.json not found in {self.config.data_dir}"
+            )
         return json.loads(metadata_path.read_text(encoding="utf-8"))
 
     def _prepare_cv_samples(self, metadata: Dict[str, Dict[str, Any]]):
@@ -136,7 +140,9 @@ class StratifiedKFoldTrainer:
     ) -> BaroqueMusicClassificationDataset:
         tokenizer = self._ensure_tokenizer()
         data_dir = Path(self.config.data_dir)
-        movement_files = [str(data_dir / f"{movement_id}.ly") for movement_id in movement_ids]
+        movement_files = [
+            str(data_dir / f"{movement_id}.ly") for movement_id in movement_ids
+        ]
 
         return BaroqueMusicClassificationDataset(
             movement_files=movement_files,
@@ -150,7 +156,9 @@ class StratifiedKFoldTrainer:
     def _ensure_tokenizer(self):
         if self.tokenizer is not None:
             return self.tokenizer
-        self.tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
+        self.tokenizer = PreTrainedTokenizerFast.from_pretrained(
+            self.config.tokenizer_path
+        )
         return self.tokenizer
 
     def _extract_movement_embeddings(
@@ -173,7 +181,9 @@ class StratifiedKFoldTrainer:
             for batch in loader:
                 input_ids = batch["input_ids"].to(self.device)
                 attention_mask = batch["attention_mask"].to(self.device)
-                pooled = encoder.encode(input_ids=input_ids, attention_mask=attention_mask)
+                pooled = encoder.encode(
+                    input_ids=input_ids, attention_mask=attention_mask
+                )
                 pooled_np = pooled.detach().cpu().numpy()
 
                 labels = batch["label"]
@@ -190,12 +200,19 @@ class StratifiedKFoldTrainer:
                     if movement_id not in movement_labels:
                         label_tensor = labels[idx]
                         if torch.is_tensor(label_tensor):
-                            movement_labels[movement_id] = label_tensor.detach().cpu().numpy()
+                            movement_labels[movement_id] = (
+                                label_tensor.detach().cpu().numpy()
+                            )
                         else:
                             movement_labels[movement_id] = np.asarray(label_tensor)
 
         ordered_ids = sorted(movement_sums.keys())
-        x = np.vstack([movement_sums[movement_id] / max(1, movement_counts[movement_id]) for movement_id in ordered_ids])
+        x = np.vstack(
+            [
+                movement_sums[movement_id] / max(1, movement_counts[movement_id])
+                for movement_id in ordered_ids
+            ]
+        )
         y = np.asarray([movement_labels[movement_id] for movement_id in ordered_ids])
 
         if y.ndim == 2 and y.shape[1] == 1:
@@ -224,7 +241,9 @@ class StratifiedKFoldTrainer:
             )
             classifier.fit(x_train, y_train)
             y_pred = classifier.predict(x_val)
-            metrics = self.classification_metrics.compute_multi_label(y_true=y_val, y_pred=y_pred)
+            metrics = self.classification_metrics.compute_multi_label(
+                y_true=y_val, y_pred=y_pred
+            )
             fold_result = {
                 **{f"avg_{key}": float(value) for key, value in metrics.items()},
                 "best_selection_metric": "avg_f1_micro",
@@ -271,10 +290,7 @@ class StratifiedKFoldTrainer:
         label_to_index: Dict[str, int],
     ) -> Path:
         checkpoint_dir = (
-            Path(self.config.output_dir)
-            / "checkpoints"
-            / f"fold_{fold_index}"
-            / "best"
+            Path(self.config.output_dir) / "checkpoints" / f"fold_{fold_index}" / "best"
         )
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,19 +298,24 @@ class StratifiedKFoldTrainer:
             pickle.dump(classifier, handle)
 
         (checkpoint_dir / "config.json").write_text(
-            json.dumps({
-                "task": self.config.task,
-                "pretrained_model": self.config.pretrained_model,
-                "max_length": self.config.max_length,
-                "stride": self.config.stride,
-                "probe_max_iter": self.config.probe_max_iter,
-                "probe_c": self.config.probe_c,
-                "probe_class_weight": self.config.probe_class_weight,
-            }, indent=2),
+            json.dumps(
+                {
+                    "task": self.config.task,
+                    "pretrained_model": self.config.pretrained_model,
+                    "max_length": self.config.max_length,
+                    "stride": self.config.stride,
+                    "probe_max_iter": self.config.probe_max_iter,
+                    "probe_c": self.config.probe_c,
+                    "probe_class_weight": self.config.probe_class_weight,
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
         (checkpoint_dir / "label_map.json").write_text(
-            json.dumps({str(index): label for label, index in label_to_index.items()}, indent=2),
+            json.dumps(
+                {str(index): label for label, index in label_to_index.items()}, indent=2
+            ),
             encoding="utf-8",
         )
         return checkpoint_dir
@@ -334,7 +355,9 @@ class StratifiedKFoldTrainer:
         return summary_mean, summary_std
 
     def _stratify_label(self, movement_meta: Dict[str, Any]) -> str:
-        labels = movement_meta.get("labels", {}) if isinstance(movement_meta, dict) else {}
+        labels = (
+            movement_meta.get("labels", {}) if isinstance(movement_meta, dict) else {}
+        )
 
         if self.config.task == "composer":
             return str(labels.get("composer", "unknown")).strip().lower()
@@ -343,7 +366,9 @@ class StratifiedKFoldTrainer:
             return str(labels.get("style", "unknown")).strip().lower()
 
         if self.config.task == "instrument":
-            instruments = labels.get("midi_instruments", []) if isinstance(labels, dict) else []
+            instruments = (
+                labels.get("midi_instruments", []) if isinstance(labels, dict) else []
+            )
             if not instruments:
                 return "none"
             normalized = [str(item).strip().lower() for item in instruments]

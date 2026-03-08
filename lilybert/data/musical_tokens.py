@@ -227,10 +227,18 @@ _REPEAT_SPEC_MAP = {
 }
 
 # Tokens that pass through unchanged (structural markers from the lexer).
-_PASSTHROUGH = frozenset({
-    "[PART_BEGIN]", "[PART_NAME]", "[PART_END]",
-    "[CLS]", "[SEP]", "[PAD]", "[UNK]", "[MASK]",
-})
+_PASSTHROUGH = frozenset(
+    {
+        "[PART_BEGIN]",
+        "[PART_NAME]",
+        "[PART_END]",
+        "[CLS]",
+        "[SEP]",
+        "[PAD]",
+        "[UNK]",
+        "[MASK]",
+    }
+)
 
 # Regex for note-like tokens: a-g optionally followed by accidental suffixes.
 _NOTE_RE = re.compile(r"^[a-g](isis|eses|is|es)?$")
@@ -290,6 +298,7 @@ _REV_REPEAT_SPEC = {v: k for k, v in _REPEAT_SPEC_MAP.items()}
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def base_vocabulary() -> List[str]:
     """Return all atomic musical tokens.

@@ -17,12 +17,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Tuple
 
-import typer
-from typing_extensions import Annotated
-
 import numpy as np
+import typer
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
+from typing_extensions import Annotated
 
 from lilybert.data import BaroqueMusicClassificationDataset
 from lilybert.data.sharding import ShardWriter
@@ -383,9 +382,7 @@ def _pretokenize_mlm(
     data_path = Path(data_dir)
     all_files = _collect_ly_files(data_path)
     if not all_files:
-        raise FileNotFoundError(
-            f"No .ly files found in {data_path}"
-        )
+        raise FileNotFoundError(f"No .ly files found in {data_path}")
 
     print(f"Loading tokenizer from {tokenizer_path}")
 

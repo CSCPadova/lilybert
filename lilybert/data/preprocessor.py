@@ -26,9 +26,9 @@ import ly.lex.scheme
 import ly.pitch
 from ly.pitch.abs2rel import abs2rel
 from ly.pitch.rel2abs import rel2abs
-from ly.pitch.translate import translate
 from ly.pitch.transform import inversion as ly_inversion
 from ly.pitch.transform import retrograde as ly_retrograde
+from ly.pitch.translate import translate
 from ly.pitch.transpose import Transposer, transpose
 from transformers import PreTrainedTokenizer
 
@@ -84,17 +84,20 @@ def _preprocess_dataset_file_worker(
         return {"ok": False, "error": str(exc), "file": path}
 
 
-STRIPPABLE_SECTIONS = frozenset({
-    "header",
-    "comments",
-    "layout",
-    "midi",
-    "version",
-    "scheme",
-    "markup",
-    "overrides",
-    "pagebreaks",
-})
+STRIPPABLE_SECTIONS = frozenset(
+    {
+        "header",
+        "comments",
+        "layout",
+        "midi",
+        "version",
+        "scheme",
+        "markup",
+        "overrides",
+        "pagebreaks",
+    }
+)
+
 
 def _generate_transposition_targets(language: str = "english") -> List[str]:
     """Generate all chromatic pitch targets using ly.pitch."""
@@ -213,13 +216,18 @@ class LilyPondPreprocessor:
 
             # --- \version directive ---
             if "version" in self.strip_sections:
-                if isinstance(token, ly.lex.lilypond.Keyword) and token_str == "\\version":
+                if (
+                    isinstance(token, ly.lex.lilypond.Keyword)
+                    and token_str == "\\version"
+                ):
                     i += 1
                     # Skip whitespace
                     while i < n and isinstance(tokens[i], ly.lex._token.Space):
                         i += 1
                     # Skip the quoted string
-                    if i < n and isinstance(tokens[i], ly.lex.lilypond.StringQuotedStart):
+                    if i < n and isinstance(
+                        tokens[i], ly.lex.lilypond.StringQuotedStart
+                    ):
                         i += 1
                         while i < n and not isinstance(
                             tokens[i], ly.lex.lilypond.StringQuotedEnd
@@ -262,9 +270,7 @@ class LilyPondPreprocessor:
                         depth = 1
                         i += 1
                         while i < n and depth > 0:
-                            if isinstance(
-                                tokens[i], ly.lex.lilypond.OpenBracketMarkup
-                            ):
+                            if isinstance(tokens[i], ly.lex.lilypond.OpenBracketMarkup):
                                 depth += 1
                             elif isinstance(
                                 tokens[i], ly.lex.lilypond.CloseBracketMarkup
@@ -522,9 +528,7 @@ class LilyPondPreprocessor:
 
         # Normalise to English internal representation
         base_italiano = movement.get("italiano_text", "")
-        english_text = movement.get(
-            "english_text"
-        ) or self._translate_with_python_ly(
+        english_text = movement.get("english_text") or self._translate_with_python_ly(
             base_italiano,
             source_language="italiano",
             target_language="english",
@@ -561,9 +565,7 @@ class LilyPondPreprocessor:
         if config.enable_transposition:
             transposition_targets = _generate_transposition_targets(language)
             expanded = []
-            for candidate, target in product(
-                current, transposition_targets
-            ):
+            for candidate, target in product(current, transposition_targets):
                 expanded.append(
                     {
                         "text": self._transpose_with_python_ly(
@@ -604,17 +606,13 @@ class LilyPondPreprocessor:
                 expanded.append(candidate)
                 expanded.append(
                     {
-                        "text": self._barline_variant(
-                            candidate["text"], mode="add"
-                        ),
+                        "text": self._barline_variant(candidate["text"], mode="add"),
                         "ops": [*candidate["ops"], "barline_add"],
                     }
                 )
                 expanded.append(
                     {
-                        "text": self._barline_variant(
-                            candidate["text"], mode="remove"
-                        ),
+                        "text": self._barline_variant(candidate["text"], mode="remove"),
                         "ops": [*candidate["ops"], "barline_remove"],
                     }
                 )
@@ -863,9 +861,7 @@ class LilyPondPreprocessor:
                         "composer": (
                             labels_entry.get("composer") if labels_entry else None
                         ),
-                        "style": (
-                            labels_entry.get("style") if labels_entry else None
-                        ),
+                        "style": (labels_entry.get("style") if labels_entry else None),
                         "midi_instruments": (
                             labels_entry.get("midi_instruments") if labels_entry else []
                         ),
@@ -1255,10 +1251,18 @@ class LilyPondPreprocessor:
         """
         # Save current strip_sections, apply engraving-related sections
         saved = self.strip_sections
-        self.strip_sections = frozenset({
-            "header", "layout", "midi", "version", "scheme",
-            "markup", "overrides", "pagebreaks",
-        })
+        self.strip_sections = frozenset(
+            {
+                "header",
+                "layout",
+                "midi",
+                "version",
+                "scheme",
+                "markup",
+                "overrides",
+                "pagebreaks",
+            }
+        )
         try:
             return self._strip_sections_with_lex(text)
         finally:

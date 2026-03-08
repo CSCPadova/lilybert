@@ -137,13 +137,9 @@ class LilyPondParser:
                         paren_stack.pop()
 
             if brace_stack:
-                errors.append(
-                    f"{len(brace_stack)} unclosed brace(s) '{{' found"
-                )
+                errors.append(f"{len(brace_stack)} unclosed brace(s) '{{' found")
             if bracket_stack:
-                errors.append(
-                    f"{len(bracket_stack)} unclosed bracket(s) '[' found"
-                )
+                errors.append(f"{len(bracket_stack)} unclosed bracket(s) '[' found")
             if paren_stack:
                 errors.append(
                     f"{len(paren_stack)} unclosed simultaneous music '<<' found"
@@ -222,8 +218,13 @@ class LilyPondParser:
 
     # Pitch mapping tables
     _ENG_TO_ITA = {
-        "c": "do", "d": "re", "e": "mi", "f": "fa",
-        "g": "sol", "a": "la", "b": "si",
+        "c": "do",
+        "d": "re",
+        "e": "mi",
+        "f": "fa",
+        "g": "sol",
+        "a": "la",
+        "b": "si",
     }
     _ITA_TO_ENG = {v: k for k, v in _ENG_TO_ITA.items()}
 
@@ -243,16 +244,22 @@ class LilyPondParser:
             if target_language == "english":
                 eng_base = self._ITA_TO_ENG.get(base, base)
                 eng_acc = {
-                    "d": "is", "diesis": "is",
-                    "b": "es", "bemolle": "es",
-                    "dd": "isis", "doppio-diesis": "isis",
-                    "bb": "eses", "doppio-bemolle": "eses",
+                    "d": "is",
+                    "diesis": "is",
+                    "b": "es",
+                    "bemolle": "es",
+                    "dd": "isis",
+                    "doppio-diesis": "isis",
+                    "bb": "eses",
+                    "doppio-bemolle": "eses",
                 }.get(acc, "")
                 return eng_base + eng_acc
             # Normalise Italian accidentals to short form
             acc = {
-                "diesis": "d", "bemolle": "b",
-                "doppio-diesis": "dd", "doppio-bemolle": "bb",
+                "diesis": "d",
+                "bemolle": "b",
+                "doppio-diesis": "dd",
+                "doppio-bemolle": "bb",
             }.get(acc, acc)
             return base + acc
 
@@ -264,16 +271,17 @@ class LilyPondParser:
             if target_language == "italiano":
                 ita_base = self._ENG_TO_ITA.get(base, base)
                 ita_acc = {
-                    "is": "d", "es": "b", "isis": "dd", "eses": "bb",
+                    "is": "d",
+                    "es": "b",
+                    "isis": "dd",
+                    "eses": "bb",
                 }.get(acc, "")
                 return ita_base + ita_acc
             return base + acc
 
         return None
 
-    def convert_pitch_language(
-        self, content: str, target_language: str
-    ) -> str:
+    def convert_pitch_language(self, content: str, target_language: str) -> str:
         """Convert all pitches in *content* to *target_language*."""
 
         def _replace(match: re.Match) -> str:
@@ -288,7 +296,5 @@ class LilyPondParser:
             content,
         )
         # English pitches
-        content = re.sub(
-            r"\b([a-g](?:is|es|isis|eses)?)\b", _replace, content
-        )
+        content = re.sub(r"\b([a-g](?:is|es|isis|eses)?)\b", _replace, content)
         return content

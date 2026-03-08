@@ -24,9 +24,8 @@ from pathlib import Path
 from typing import Optional, Set
 
 import typer
-from typing_extensions import Annotated
-
 from tqdm import tqdm
+from typing_extensions import Annotated
 
 from lilybert.data.parser import LilyPondParser
 
@@ -416,9 +415,7 @@ def process_mutopia_dataset(
 
 
 def main(
-    input_dir: Annotated[
-        str, typer.Option(help="Root directory containing .ly files")
-    ],
+    input_dir: Annotated[str, typer.Option(help="Root directory containing .ly files")],
     output_dir: Annotated[
         str, typer.Option(help="Output directory for combined files")
     ] = "./data/combined",

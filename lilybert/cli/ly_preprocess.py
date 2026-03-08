@@ -29,7 +29,6 @@ from lilybert.cli.pretokenize import (
 from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.data.tokenizer import LilyPondTokenizer
 
-
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
 
@@ -258,9 +257,13 @@ def _main(cfg: DictConfig) -> None:
         num_workers=int(preprocess_payload.get("num_workers", 0)),
         input_dir=str(preprocess_payload.get("input_dir", "data/raw")),
         output_dir=str(preprocess_payload.get("output_dir", "data/processed")),
-        labels_path=str(preprocess_payload.get("labels_path", "data/labels/labels_v1.json")),
+        labels_path=str(
+            preprocess_payload.get("labels_path", "data/labels/labels_v1.json")
+        ),
         strip=preprocess_payload.get("strip"),
-        augmentation=AugmentationSettings(**dict(preprocess_payload.get("augmentation", {}))),
+        augmentation=AugmentationSettings(
+            **dict(preprocess_payload.get("augmentation", {}))
+        ),
         tokenize=TokenizeSettings(**dict(preprocess_payload.get("tokenize", {}))),
         sharding=ShardingSettings(**sharding_payload),
         bpe=BPESettings(**dict(preprocess_payload.get("bpe", {}))),

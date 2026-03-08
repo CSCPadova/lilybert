@@ -7,9 +7,8 @@ import json
 import numpy as np
 import pytest
 
-from lilybert.data.sharding import ShardManifest, ShardWriter
 from lilybert.data.sharded_dataset import ShardedDataset, ShardedMLMDataset
-
+from lilybert.data.sharding import ShardManifest, ShardWriter
 
 # ------------------------------------------------------------------
 # ShardWriter + ShardManifest

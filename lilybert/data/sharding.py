@@ -40,7 +40,9 @@ class ShardManifest:
         path.parent.mkdir(parents=True, exist_ok=True)
         data = asdict(self)
         data["shards"] = [asdict(s) for s in self.shards]
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> "ShardManifest":

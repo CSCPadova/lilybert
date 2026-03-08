@@ -145,9 +145,7 @@ def test_pipeline_predict_directory(tmp_path: Path):
         device="cpu",
     )
 
-    results = pipeline.predict_directory(
-        input_dir=str(tmp_path), batch_size=4
-    )
+    results = pipeline.predict_directory(input_dir=str(tmp_path), batch_size=4)
     assert len(results) == 1
     assert results[0]["movement_id"] == "mvt1"
 
@@ -157,9 +155,7 @@ def test_pipeline_predict_directory_missing_raises(tmp_path: Path):
     model = _FakeModel()
     pipeline = InferencePipeline(model=model, tokenizer=tokenizer, device="cpu")
     with pytest.raises(FileNotFoundError):
-        pipeline.predict_directory(
-            input_dir=str(tmp_path / "nonexistent")
-        )
+        pipeline.predict_directory(input_dir=str(tmp_path / "nonexistent"))
 
 
 def test_pipeline_majority_aggregation(tmp_path: Path):

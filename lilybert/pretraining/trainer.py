@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import torch
-from torch.utils.data import Dataset
-
 import wandb
+from torch.utils.data import Dataset
+from tqdm.auto import tqdm
 from transformers import (
     BertConfig,
     BertForMaskedLM,
@@ -20,7 +20,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-from tqdm.auto import tqdm
 
 from lilybert.data.sharded_dataset import ShardedMLMDataset
 
@@ -85,13 +84,9 @@ class MLMPretrainer:
             train_manifest = shards_dir / "train" / "manifest.json"
             eval_manifest = shards_dir / "eval" / "manifest.json"
             if not train_manifest.exists():
-                raise FileNotFoundError(
-                    f"Train manifest not found: {train_manifest}"
-                )
+                raise FileNotFoundError(f"Train manifest not found: {train_manifest}")
             if not eval_manifest.exists():
-                raise FileNotFoundError(
-                    f"Eval manifest not found: {eval_manifest}"
-                )
+                raise FileNotFoundError(f"Eval manifest not found: {eval_manifest}")
             train_dataset = ShardedMLMDataset(manifest_path=str(train_manifest))
             eval_dataset = ShardedMLMDataset(manifest_path=str(eval_manifest))
             if is_main:
