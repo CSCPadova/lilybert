@@ -1,40 +1,39 @@
-preprocess:
+enabled: true
+input_dir: /nfsd/voce/machine_learning/datasets/pdmx/PDMX/ly
+output_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
+labels_path: data/labels/labels_v1.json
+
+augmentation:
+  enable_transposition: false
+  enable_absolute_relative: true
+  enable_articulation_variants: false
+  enable_barline_variants: false
+  enable_retrograde: false
+  enable_inversion: false
+  include_original: true
+
+bpe:
   enabled: true
-  input_dir: /nfsd/voce/machine_learning/datasets/pdmx/PDMX/ly
-  output_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
-  labels_path: data/labels/labels_v1.json
+  output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
+  vocab_size: 10000
+  min_frequency: 40
+  number_placeholders: false
 
-  augmentation:
-    enable_transposition: false
-    enable_absolute_relative: true
-    enable_articulation_variants: false
-    enable_barline_variants: false
-    enable_retrograde: false
-    enable_inversion: false
-    include_original: true
+tokenize:
+  enabled: false
+  tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
+  output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenized
+  max_length: 2048
+  stride: 256
+  eval_ratio: 0.01
+  seed: ${runtime.seed}
 
-  bpe:
-    enabled: true
-    output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
-    vocab_size: 10000
-    min_frequency: 40
-    number_placeholders: false
-
-  tokenize:
-    enabled: false
-    tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
-    output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenized
-    max_length: 2048
-    stride: 256
-    eval_ratio: 0.01
-    seed: ${runtime.seed}
-
-  sharding:
-    enabled: true
-    tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
-    output_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized
-    max_length: 2048
-    stride: 256
-    shard_size: 8192
-    eval_ratio: 0.01
-    seed: ${runtime.seed}
+sharding:
+  enabled: true
+  tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
+  output_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized
+  max_length: 2048
+  stride: 256
+  shard_size: 8192
+  eval_ratio: 0.01
+  seed: ${runtime.seed}
