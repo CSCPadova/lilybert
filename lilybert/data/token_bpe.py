@@ -7,6 +7,7 @@ using ``+`` as a separator (e.g., ``NOTE_C+DUR_4``).
 
 from __future__ import annotations
 
+import array
 import heapq
 import json
 import logging
@@ -19,6 +20,9 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 BPE_SEPARATOR = "+"
+
+# Sentinel value for deleted nodes in the flat linked-list.
+_DELETED = -1
 
 
 def _apply_single_merge(
@@ -58,10 +62,10 @@ class TokenBPE:
     ) -> None:
         """Learn BPE merges from *sequences*.
 
-        Internally encodes every token string to an integer ID so that
-        pair counting, merge application, and index bookkeeping operate
-        on cheap ints instead of variable-length Python strings/tuples.
-        A max-heap accelerates best-pair lookup to amortised O(log n).
+        Uses a flat doubly-linked list over all tokens with an inverted
+        index mapping each pair to the set of positions where it occurs.
+        This makes both pair counting and merge application O(occurrences)
+        with O(1) node deletion, avoiding full-sequence scans.
 
         Args:
             sequences: Token sequences to learn from.
@@ -74,7 +78,7 @@ class TokenBPE:
         frozen = frozen_tokens or set()
         self.merges = []
 
-        # -- Encode strings to integer IDs for speed -----------------------
+        # -- Encode strings to integer IDs ----------------------------------
         str_to_id: dict[str, int] = {}
         id_to_str: list[str] = []
 
@@ -87,7 +91,6 @@ class TokenBPE:
             id_to_str.append(s)
             return sid
 
-        # Pre-compute frozen status per ID (cached).
         frozen_ids: set[int] = set()
 
         def _mark_frozen(sid: int) -> None:
@@ -95,45 +98,64 @@ class TokenBPE:
             if any(part in frozen for part in s.split(BPE_SEPARATOR)):
                 frozen_ids.add(sid)
 
-        # Build flat list of (sequence-as-list-of-ids, frequency=1).
-        # Each sequence is independent (no word-freq collapsing — music
-        # sequences are almost all unique so collapsing wastes time hashing).
-        seqs: list[list[int]] = []
+        # -- Build flat linked list -----------------------------------------
+        # All tokens from all sequences are laid out in one contiguous block.
+        # Arrays: tok[i] = token id, prev[i] = previous node, next[i] = next
+        # node.  Sequence boundaries are marked by prev/next = _DELETED.
+        # Deleted nodes have tok[i] = _DELETED.
+
+        # First pass: count total tokens for pre-allocation.
+        total = 0
+        for seq in sequences:
+            total += len(seq)
+
+        tok = array.array("i", [0]) * total
+        prv = array.array("i", [0]) * total
+        nxt = array.array("i", [0]) * total
+
+        pos = 0
         for seq in tqdm(sequences, desc="BPE encoding"):
-            encoded = [_intern(t) for t in seq]
-            seqs.append(encoded)
+            start = pos
+            for t_str in seq:
+                tid = _intern(t_str)
+                tok[pos] = tid
+                prv[pos] = pos - 1 if pos > start else _DELETED
+                nxt[pos] = pos + 1  # will fix last element below
+                pos += 1
+            if pos > start:
+                nxt[pos - 1] = _DELETED  # end of sequence
 
         # Mark frozen IDs.
         for sid in range(len(id_to_str)):
             _mark_frozen(sid)
 
-        total_tokens = sum(len(s) for s in seqs)
         logger.info(
             "BPE training: %d total tokens, %d sequences, %d unique token types, "
             "up to %d merges",
-            total_tokens,
-            len(seqs),
+            total,
+            len(sequences),
             len(id_to_str),
             num_merges,
         )
 
-        # -- Build initial pair counts and inverted index ------------------
-        # pair (id_a, id_b) -> total count across all sequences
+        # -- Build initial pair counts and position index -------------------
+        # pair -> count
         pair_counts: dict[tuple[int, int], int] = defaultdict(int)
-        # pair -> set of sequence indices that contain this pair
-        pair_to_seqs: dict[tuple[int, int], set[int]] = defaultdict(set)
+        # pair -> set of positions (left node) where pair occurs
+        pair_positions: dict[tuple[int, int], set[int]] = defaultdict(set)
 
-        for si, seq in tqdm(
-            enumerate(seqs), total=len(seqs), desc="BPE pair counting"
-        ):
-            for i in range(len(seq) - 1):
-                if seq[i] in frozen_ids or seq[i + 1] in frozen_ids:
-                    continue
-                p = (seq[i], seq[i + 1])
-                pair_counts[p] += 1
-                pair_to_seqs[p].add(si)
+        for i in tqdm(range(total), desc="BPE pair counting"):
+            j = nxt[i]
+            if j == _DELETED or tok[i] == _DELETED:
+                continue
+            a, b = tok[i], tok[j]
+            if a in frozen_ids or b in frozen_ids:
+                continue
+            p = (a, b)
+            pair_counts[p] += 1
+            pair_positions[p].add(i)
 
-        # Max-heap of (-count, pair).
+        # Max-heap.
         heap: list[tuple[int, tuple[int, int]]] = [
             (-cnt, p) for p, cnt in pair_counts.items()
         ]
@@ -143,7 +165,7 @@ class TokenBPE:
 
         pbar = tqdm(range(num_merges), desc="BPE merges")
         for _step in pbar:
-            # Find best valid pair from heap.
+            # Find best valid pair.
             bp: tuple[int, int] | None = None
             best_count = 0
             while heap:
@@ -164,76 +186,84 @@ class TokenBPE:
             if bp is None or best_count < min_freq:
                 break
 
-            # Register the merged token.
             merged_str = id_to_str[bp[0]] + BPE_SEPARATOR + id_to_str[bp[1]]
             self.merges.append((id_to_str[bp[0]], id_to_str[bp[1]]))
             merged_id = _intern(merged_str)
+            if bp[0] in frozen_ids or bp[1] in frozen_ids:
+                frozen_ids.add(merged_id)
 
             pbar.set_postfix(
                 pair=merged_str[:40],
                 freq=best_count,
                 pairs=len(pair_counts),
             )
-            # Merged tokens containing frozen parts are themselves frozen.
-            if bp[0] in frozen_ids or bp[1] in frozen_ids:
-                frozen_ids.add(merged_id)
 
-            # Process only sequences that contain this pair.
-            affected = pair_to_seqs.pop(bp, set())
+            # Get all positions where this pair occurs and process them.
+            positions = pair_positions.pop(bp, set())
             pair_counts.pop(bp, None)
 
             dirty_pairs: set[tuple[int, int]] = set()
 
-            for si in affected:
-                seq = seqs[si]
-                i = 0
-                while i < len(seq) - 1:
-                    if seq[i] == bp[0] and seq[i + 1] == bp[1]:
-                        # Remove old neighbour pairs.
-                        if i > 0 and seq[i - 1] not in frozen_ids:
-                            lp = (seq[i - 1], seq[i])
-                            pair_counts[lp] -= 1
-                            if pair_counts[lp] <= 0:
-                                pair_counts.pop(lp, None)
-                                pair_to_seqs.pop(lp, None)
-                            else:
-                                s = pair_to_seqs.get(lp)
-                                if s:
-                                    s.discard(si)
-                            dirty_pairs.add(lp)
-                        if i + 2 < len(seq) and seq[i + 2] not in frozen_ids:
-                            rp = (seq[i + 1], seq[i + 2])
-                            pair_counts[rp] -= 1
-                            if pair_counts[rp] <= 0:
-                                pair_counts.pop(rp, None)
-                                pair_to_seqs.pop(rp, None)
-                            else:
-                                s = pair_to_seqs.get(rp)
-                                if s:
-                                    s.discard(si)
-                            dirty_pairs.add(rp)
+            for left_pos in positions:
+                # Validate: node may have been invalidated by an earlier
+                # merge in this same iteration (adjacent merges).
+                if tok[left_pos] != bp[0]:
+                    continue
+                right_pos = nxt[left_pos]
+                if right_pos == _DELETED or tok[right_pos] != bp[1]:
+                    continue
 
-                        # Apply merge in-place.
-                        seq[i] = merged_id
-                        del seq[i + 1]
+                # -- Remove old neighbour pairs --
+                prev_pos = prv[left_pos]
+                next_next = nxt[right_pos]
 
-                        # Add new neighbour pairs.
-                        if i > 0 and seq[i - 1] not in frozen_ids:
-                            nlp = (seq[i - 1], merged_id)
-                            pair_counts[nlp] += 1
-                            pair_to_seqs.setdefault(nlp, set()).add(si)
-                            dirty_pairs.add(nlp)
-                        if i + 1 < len(seq) and seq[i + 1] not in frozen_ids:
-                            nrp = (merged_id, seq[i + 1])
-                            pair_counts[nrp] += 1
-                            pair_to_seqs.setdefault(nrp, set()).add(si)
-                            dirty_pairs.add(nrp)
-
-                        # Don't advance i — check for adjacent merges.
+                if prev_pos != _DELETED and tok[prev_pos] not in frozen_ids:
+                    lp = (tok[prev_pos], bp[0])
+                    pair_counts[lp] -= 1
+                    if pair_counts[lp] <= 0:
+                        pair_counts.pop(lp, None)
+                        pair_positions.pop(lp, None)
                     else:
-                        i += 1
+                        s = pair_positions.get(lp)
+                        if s:
+                            s.discard(prev_pos)
+                    dirty_pairs.add(lp)
 
-            # Re-push dirty pairs into heap.
+                if next_next != _DELETED and tok[next_next] not in frozen_ids:
+                    rp = (bp[1], tok[next_next])
+                    pair_counts[rp] -= 1
+                    if pair_counts[rp] <= 0:
+                        pair_counts.pop(rp, None)
+                        pair_positions.pop(rp, None)
+                    else:
+                        s = pair_positions.get(rp)
+                        if s:
+                            s.discard(right_pos)
+                    dirty_pairs.add(rp)
+
+                # -- Apply merge: left_pos becomes merged, right_pos deleted --
+                tok[left_pos] = merged_id
+                tok[right_pos] = _DELETED
+
+                # Relink: left_pos.next = right_pos.next
+                nxt[left_pos] = next_next
+                if next_next != _DELETED:
+                    prv[next_next] = left_pos
+
+                # -- Add new neighbour pairs --
+                if prev_pos != _DELETED and tok[prev_pos] not in frozen_ids:
+                    nlp = (tok[prev_pos], merged_id)
+                    pair_counts[nlp] += 1
+                    pair_positions[nlp].add(prev_pos)
+                    dirty_pairs.add(nlp)
+
+                if next_next != _DELETED and tok[next_next] not in frozen_ids:
+                    nrp = (merged_id, tok[next_next])
+                    pair_counts[nrp] += 1
+                    pair_positions[nrp].add(left_pos)
+                    dirty_pairs.add(nrp)
+
+            # Re-push dirty pairs.
             for dp in dirty_pairs:
                 cnt = pair_counts.get(dp, 0)
                 if cnt > 0:
