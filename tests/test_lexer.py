@@ -240,6 +240,34 @@ class TestCommands:
         result = lexer.linearize(r"\tempo 4 = 120")
         assert "\\tempo" in result
 
+    def test_tempo_quoted_text(self, lexer):
+        """Quoted tempo text emitted as a single token."""
+        result = lexer.linearize(r'\tempo "Allegro" 4 = 120')
+        assert "\\tempo" in result
+        assert "Allegro" in result
+        assert "4" in result
+
+    def test_tempo_text_only(self, lexer):
+        """Tempo with only text argument and no metronome mark."""
+        result = lexer.linearize(r'\tempo "Andante"')
+        assert "\\tempo" in result
+        assert "Andante" in result
+
+    def test_tempo_unquoted_capitalised(self, lexer):
+        """Unquoted capitalised tempo text reassembled as one token."""
+        result = lexer.linearize(r"\tempo Allegro 4 = 120")
+        assert "\\tempo" in result
+        assert "Allegro" in result
+        assert "4" in result
+        # Should NOT have fragments like "A" or "llegro"
+        assert "llegro" not in result
+
+    def test_tempo_unquoted_lowercase(self, lexer):
+        """Unquoted lowercase tempo text emitted as one token."""
+        result = lexer.linearize(r"\tempo allegro")
+        assert "\\tempo" in result
+        assert "allegro" in result
+
 
 # -------------------------------------------------------------------
 # Tuplets

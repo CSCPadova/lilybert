@@ -4,6 +4,7 @@ import pytest
 
 from lilybert.data.musical_tokens import (
     base_vocabulary,
+    cap_consecutive_rests,
     ly_tokens_to_musical,
     map_note,
     musical_to_ly_tokens,
@@ -49,6 +50,52 @@ class TestMapNote:
 
     def test_eis(self):
         assert map_note("eis") == ["NOTE_E", "ACC_SHARP"]
+
+    # -- Multi-language support (all LilyPond pitch languages) --
+
+    _NOTE_TOKENS = ["NOTE_C", "NOTE_D", "NOTE_E", "NOTE_F", "NOTE_G", "NOTE_A", "NOTE_B"]
+
+    @pytest.mark.parametrize(
+        "lang, notes",
+        [
+            ("nederlands", ["c", "d", "e", "f", "g", "a", "b"]),
+            ("italiano", ["do", "re", "mi", "fa", "sol", "la", "si"]),
+            ("deutsch", ["c", "d", "e", "f", "g", "a", "h"]),
+            ("english", ["c", "d", "e", "f", "g", "a", "b"]),
+            ("espanol", ["do", "re", "mi", "fa", "sol", "la", "si"]),
+            ("catalan", ["do", "re", "mi", "fa", "sol", "la", "si"]),
+            ("norsk", ["c", "d", "e", "f", "g", "a", "h"]),
+            ("portugues", ["do", "re", "mi", "fa", "sol", "la", "si"]),
+            ("suomi", ["c", "d", "e", "f", "g", "a", "h"]),
+            ("svenska", ["c", "d", "e", "f", "g", "a", "h"]),
+            ("vlaams", ["do", "re", "mi", "fa", "sol", "la", "si"]),
+        ],
+    )
+    def test_natural_notes_all_languages(self, lang, notes):
+        for note, expected in zip(notes, self._NOTE_TOKENS):
+            assert map_note(note)[0] == expected, f"{lang}: {note}"
+
+    @pytest.mark.parametrize(
+        "lang, sharp_note, flat_note",
+        [
+            ("nederlands", "cis", "bes"),
+            ("italiano", "dod", "sib"),
+            ("deutsch", "cis", "hes"),
+            ("english", "cs", "bf"),
+            ("espanol", "dos", "sib"),
+            ("catalan", "dod", "sib"),
+            ("norsk", "cis", "hes"),
+            ("portugues", "dos", "sib"),
+            ("suomi", "cis", "hes"),
+            ("svenska", "ciss", "hess"),
+            ("vlaams", "dok", "sib"),
+        ],
+    )
+    def test_accidentals_all_languages(self, lang, sharp_note, flat_note):
+        result = map_note(sharp_note)
+        assert result[1] == "ACC_SHARP", f"{lang}: {sharp_note} -> {result}"
+        result = map_note(flat_note)
+        assert result[1] == "ACC_FLAT", f"{lang}: {flat_note} -> {result}"
 
     def test_unknown_passthrough(self):
         assert map_note("xyz") == ["xyz"]
@@ -105,7 +152,10 @@ class TestLyTokensToMusical:
     def test_commands(self):
         tokens = ["\\key", "c", "\\major", "\\time", "4/4"]
         result = ly_tokens_to_musical(tokens)
-        assert result == ["CMD_KEY", "NOTE_C", "KEY_MAJOR", "CMD_TIME", "4/4"]
+        assert result == [
+            "CMD_KEY", "NOTE_C", "KEY_MAJOR", "CMD_TIME",
+            "FRAC_START", "DIGIT_4", "FRAC_SLASH", "DIGIT_4",
+        ]
 
     def test_clef(self):
         tokens = ["\\clef", "treble"]
@@ -167,7 +217,7 @@ class TestLyTokensToMusical:
         result = ly_tokens_to_musical(tokens)
         assert result == [
             "CMD_TUPLET",
-            "3/2",
+            "FRAC_START", "DIGIT_3", "FRAC_SLASH", "DIGIT_2",
             "BLOCK_START",
             "NOTE_C",
             "DUR_4",
@@ -179,12 +229,10 @@ class TestLyTokensToMusical:
         ]
 
     def test_passthrough_special_tokens(self):
-        tokens = ["[PART_BEGIN]", "[PART_NAME]", "part:violin", "c", "4", "[PART_END]"]
+        tokens = ["[PART_BEGIN]", "c", "4", "[PART_END]"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
             "[PART_BEGIN]",
-            "[PART_NAME]",
-            "part:violin",
             "NOTE_C",
             "DUR_4",
             "[PART_END]",
@@ -230,7 +278,7 @@ class TestLyTokensToMusical:
         assert result == [
             "CMD_REPEAT",
             "REPEAT_VOLTA",
-            "2",
+            "DIGIT_2",
             "BLOCK_START",
             "NOTE_C",
             "DUR_4",
@@ -335,8 +383,8 @@ class TestMusicalToLyTokens:
         result = musical_to_ly_tokens(musical)
         assert result == ["\\clef", "treble"]
 
-    def test_fraction_passthrough(self):
-        musical = ["CMD_TIME", "4/4"]
+    def test_fraction_roundtrip(self):
+        musical = ["CMD_TIME", "FRAC_START", "DIGIT_4", "FRAC_SLASH", "DIGIT_4"]
         result = musical_to_ly_tokens(musical)
         assert result == ["\\time", "4/4"]
 
@@ -428,3 +476,124 @@ class TestBaseVocabulary:
         assert "REST" in vocab
         assert "REST_MULTI" in vocab
         assert "SPACER" in vocab
+
+    def test_contains_digits(self):
+        vocab = set(base_vocabulary())
+        for i in range(10):
+            assert f"DIGIT_{i}" in vocab
+
+    def test_contains_scale_tokens(self):
+        vocab = set(base_vocabulary())
+        assert "SCALE_START" in vocab
+        assert "SCALE_SLASH" in vocab
+        assert "FRAC_START" in vocab
+        assert "FRAC_SLASH" in vocab
+
+
+class TestFallbackValidation:
+    """Verify that the fallback passes through valid tokens and rejects junk."""
+
+    def test_passes_tempo_text(self):
+        """Musical terms emitted by the lexer should pass through."""
+        result = ly_tokens_to_musical(["\\tempo", "Allegro", "4"])
+        assert result == ["CMD_TEMPO", "Allegro", "DUR_4"]
+
+    def test_passes_lowercase_expression(self):
+        result = ly_tokens_to_musical(["\\tempo", "adagio"])
+        assert result == ["CMD_TEMPO", "adagio"]
+
+    def test_rejects_single_char_fragment(self):
+        """Single non-musical characters should be dropped."""
+        result = ly_tokens_to_musical(["c", "4", "#"])
+        assert "#" not in result
+
+    def test_keeps_valid_passthrough(self):
+        """Part names and special markers should still pass through."""
+        result = ly_tokens_to_musical(["[PART_BEGIN]", "c", "4", "[PART_END]"])
+        assert "[PART_BEGIN]" in result
+        assert "[PART_END]" in result
+
+
+class TestScalingDecomposition:
+    """Verify that scaling fractions are decomposed into digit tokens."""
+
+    def test_simple_scaling(self):
+        result = ly_tokens_to_musical(["*2/3"])
+        assert result == ["SCALE_START", "DIGIT_2", "SCALE_SLASH", "DIGIT_3"]
+
+    def test_multi_digit_scaling(self):
+        result = ly_tokens_to_musical(["*20/13"])
+        assert result == [
+            "SCALE_START", "DIGIT_2", "DIGIT_0",
+            "SCALE_SLASH", "DIGIT_1", "DIGIT_3",
+        ]
+
+    def test_fraction_decomposed(self):
+        result = ly_tokens_to_musical(["3/4"])
+        assert result == ["FRAC_START", "DIGIT_3", "FRAC_SLASH", "DIGIT_4"]
+
+    def test_roundtrip_scaling(self):
+        musical = ly_tokens_to_musical(["*2/3"])
+        recovered = musical_to_ly_tokens(musical)
+        assert recovered == ["*2/3"]
+
+    def test_roundtrip_fraction(self):
+        musical = ly_tokens_to_musical(["4/4"])
+        recovered = musical_to_ly_tokens(musical)
+        assert recovered == ["4/4"]
+
+    def test_roundtrip_multi_digit(self):
+        musical = ly_tokens_to_musical(["*20/13"])
+        recovered = musical_to_ly_tokens(musical)
+        assert recovered == ["*20/13"]
+
+
+class TestCapConsecutiveRests:
+    """Verify that long multi-measure rest runs are capped."""
+
+    def _make_rest_run(self, n: int, dur: str = "DUR_1") -> list[str]:
+        """Build a sequence of n bars of multi-measure rests."""
+        tokens: list[str] = []
+        for i in range(n):
+            if i > 0:
+                tokens.append("BAR")
+            tokens.extend(["REST_MULTI", dur])
+        return tokens
+
+    def test_short_run_unchanged(self):
+        tokens = self._make_rest_run(3)
+        result = cap_consecutive_rests(tokens, max_bars=4)
+        assert result == tokens
+
+    def test_exact_cap_unchanged(self):
+        tokens = self._make_rest_run(4)
+        result = cap_consecutive_rests(tokens, max_bars=4)
+        assert result == tokens
+
+    def test_long_run_capped(self):
+        tokens = self._make_rest_run(8)
+        result = cap_consecutive_rests(tokens, max_bars=4)
+        expected = self._make_rest_run(4)
+        assert result == expected
+
+    def test_preserves_surrounding(self):
+        tokens = ["NOTE_C", "DUR_4", "BAR"] + self._make_rest_run(8) + ["BAR", "NOTE_D", "DUR_4"]
+        result = cap_consecutive_rests(tokens, max_bars=4)
+        # Should have NOTE_C DUR_4 BAR + 4 rest bars + BAR NOTE_D DUR_4
+        # The leading BAR before the first REST_MULTI is kept by the main loop
+        # The trailing BAR + NOTE_D is after the rest run
+        assert result[0] == "NOTE_C"
+        assert result[1] == "DUR_4"
+        assert result[2] == "BAR"
+        assert result[-2] == "NOTE_D" or result[-1] == "DUR_4"
+        # Count REST_MULTI occurrences
+        assert result.count("REST_MULTI") == 4
+
+    def test_different_durations_capped_independently(self):
+        """Two separate runs with different durations."""
+        run1 = self._make_rest_run(6, "DUR_1")
+        run2 = self._make_rest_run(6, "DUR_2")
+        tokens = run1 + ["BAR", "NOTE_C", "DUR_4", "BAR"] + run2
+        result = cap_consecutive_rests(tokens, max_bars=4)
+        # Each run should be capped independently
+        assert result.count("REST_MULTI") == 8  # 4 + 4

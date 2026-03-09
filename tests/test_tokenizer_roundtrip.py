@@ -77,7 +77,7 @@ class TestDecodeLilypond:
     def test_part_variable_reconstruction(self, tokenizer):
         ids = tokenizer.encode_lilypond("violin = { c4 d4 e4 }")
         decoded = tokenizer.decode_to_lilypond(ids)
-        assert "violin = {" in decoded
+        assert "voice = {" in decoded
         assert "}" in decoded
 
     def test_score_block(self, tokenizer):

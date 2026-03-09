@@ -9,43 +9,52 @@ Pipeline: LilyPond text -> MusicalLexer -> raw strings -> THIS MODULE -> BPE
 
 from __future__ import annotations
 
+import logging
 import re
+from fractions import Fraction
 from typing import List
+
+import ly.pitch
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Forward mappings: LilyPond string -> musical token(s)
 # ---------------------------------------------------------------------------
 
-_BASE_NOTES = frozenset("cdefgab")
-
-_NOTE_MAP = {
-    "c": "NOTE_C",
-    "d": "NOTE_D",
-    "e": "NOTE_E",
-    "f": "NOTE_F",
-    "g": "NOTE_G",
-    "a": "NOTE_A",
-    "b": "NOTE_B",
+_NUM_TO_NOTE = {
+    0: "NOTE_C",
+    1: "NOTE_D",
+    2: "NOTE_E",
+    3: "NOTE_F",
+    4: "NOTE_G",
+    5: "NOTE_A",
+    6: "NOTE_B",
 }
 
-# Ordered longest-first so greedy suffix match works.
-_ACCIDENTAL_SUFFIXES = [
-    ("isis", "ACC_DSHARP"),
-    ("eses", "ACC_DFLAT"),
-    ("is", "ACC_SHARP"),
-    ("es", "ACC_FLAT"),
+_ALTER_TO_ACC = {
+    Fraction(1, 2): "ACC_SHARP",
+    Fraction(-1, 2): "ACC_FLAT",
+    Fraction(1, 1): "ACC_DSHARP",
+    Fraction(-1, 1): "ACC_DFLAT",
+}
+
+# Languages to try, in order.  Nederlands is the python-ly default.
+_PITCH_LANGUAGES = [
+    "nederlands",
+    "italiano",
+    "deutsch",
+    "english",
+    "espanol",
+    "catalan",
+    "norsk",
+    "portugues",
+    "suomi",
+    "svenska",
+    "vlaams",
 ]
 
-# Special-case note strings where the standard suffix-stripping fails.
-# In LilyPond (Dutch): "as" = A-flat, "es" = E-flat, "aes" = A-flat (alt),
-# "ais" = A-sharp, etc.  Most are handled by suffix stripping, but "as" and
-# "es" need explicit entries because stripping "s" is not in _ACCIDENTAL_SUFFIXES.
-_SPECIAL_NOTE_MAP = {
-    "as": ["NOTE_A", "ACC_FLAT"],
-    "es": ["NOTE_E", "ACC_FLAT"],
-    "ases": ["NOTE_A", "ACC_DFLAT"],
-    "eses": ["NOTE_E", "ACC_DFLAT"],
-}
+_pitch_readers = [ly.pitch.pitchReader(lang) for lang in _PITCH_LANGUAGES]
 
 _OCTAVE_MAP = {
     "'": "OCT_1",
@@ -230,7 +239,6 @@ _REPEAT_SPEC_MAP = {
 _PASSTHROUGH = frozenset(
     {
         "[PART_BEGIN]",
-        "[PART_NAME]",
         "[PART_END]",
         "[CLS]",
         "[SEP]",
@@ -240,23 +248,17 @@ _PASSTHROUGH = frozenset(
     }
 )
 
-# Regex for note-like tokens: a-g optionally followed by accidental suffixes.
-_NOTE_RE = re.compile(r"^[a-g](isis|eses|is|es)?$")
-
 # Regex for octave tokens: one or more ' or one or more ,
 _OCTAVE_RE = re.compile(r"^('+|,+)$")
 
 # Regex for duration tokens: pure digits
 _DURATION_RE = re.compile(r"^\d+$")
 
-# Regex for scaling (tuplet fractions): *N/M
-_SCALING_RE = re.compile(r"^\*?\d+/\d+$")
+# Regex for scaling (tuplet fractions): *N/M — requires leading *
+_SCALING_RE = re.compile(r"^\*\d+/\d+$")
 
 # Regex for fraction tokens (time signatures): N/M
 _FRACTION_RE = re.compile(r"^\d+/\d+$")
-
-# Regex for part:name tokens
-_PART_NAME_RE = re.compile(r"^part:.+$")
 
 # Regex for fingering: single digit 0-5
 _FINGERING_RE = re.compile(r"^[0-5]$")
@@ -264,12 +266,101 @@ _FINGERING_RE = re.compile(r"^[0-5]$")
 # Regex for repeat count: pure digits (same as duration, disambiguated by context)
 _REPEAT_COUNT_RE = re.compile(r"^\d+$")
 
+# Regex for validating tokens at the fallback — rejects fragments.
+# Accepts: uppercase musical tokens (NOTE_C), special brackets ([PART_BEGIN]),
+# part:name tokens, scaling fractions (*N/M), bare fractions (N/M), bare
+# digits, single-char musical punctuation, and alphabetic words (tempo/
+# expression markings like "Allegro", "rubato", "rit").
+_VALID_PASSTHROUGH_RE = re.compile(
+    r"^([A-Z][A-Z0-9_]*|\[.+\]|\*\d+/\d+|\d+/\d+|\d+|[=]|[A-Za-z]{2,})$"
+)
+
+
+def _digits(n: str) -> List[str]:
+    """Convert a numeric string to a list of DIGIT_X tokens."""
+    return [f"DIGIT_{ch}" for ch in n]
+
+
+def _decompose_scaling(tok: str) -> List[str]:
+    """Decompose a scaling fraction like ``*2/3`` into digit tokens."""
+    raw = tok.lstrip("*")
+    num, den = raw.split("/")
+    return ["SCALE_START", *_digits(num), "SCALE_SLASH", *_digits(den)]
+
+
+def _decompose_fraction(tok: str) -> List[str]:
+    """Decompose a bare fraction like ``3/4`` into digit tokens."""
+    num, den = tok.split("/")
+    return ["FRAC_START", *_digits(num), "FRAC_SLASH", *_digits(den)]
+
+
+def cap_consecutive_rests(tokens: List[str], max_bars: int = 4) -> List[str]:
+    """Truncate long runs of multi-measure rests.
+
+    Scans *tokens* for consecutive ``BAR REST_MULTI DUR_*`` patterns and
+    keeps at most *max_bars* repetitions of each run.  Runs with different
+    durations are capped independently.
+
+    The first rest in a run does not need to be preceded by ``BAR`` (it may
+    start the sequence).
+    """
+    result: List[str] = []
+    i = 0
+    n = len(tokens)
+
+    while i < n:
+        # Detect the start of a multi-measure rest run.
+        # Pattern: REST_MULTI DUR_* (optionally preceded by BAR).
+        if tokens[i] == "REST_MULTI" and i + 1 < n and tokens[i + 1].startswith("DUR_"):
+            dur = tokens[i + 1]
+            count = 0
+
+            # Check if there's a BAR before this REST_MULTI that we already
+            # appended — we need to count it as part of the first bar.
+            has_leading_bar = len(result) > 0 and result[-1] == "BAR"
+
+            # Collect the full run
+            run_start = i
+            positions: list[tuple[int, int]] = []  # (start, end) of each bar
+            # First bar: REST_MULTI DUR_X (BAR was already in result)
+            positions.append((i, i + 2))
+            i += 2
+            # Subsequent bars: BAR REST_MULTI DUR_X
+            while (
+                i + 2 < n
+                and tokens[i] == "BAR"
+                and tokens[i + 1] == "REST_MULTI"
+                and tokens[i + 2] == dur
+            ):
+                positions.append((i, i + 3))
+                i += 3
+
+            # Emit at most max_bars
+            # First bar (REST_MULTI DUR_X) — leading BAR is already in result
+            for bar_idx, (s, e) in enumerate(positions):
+                if bar_idx >= max_bars:
+                    break
+                result.extend(tokens[s:e])
+
+            # If we had a leading BAR and capped, the result already has it
+            continue
+
+        result.append(tokens[i])
+        i += 1
+
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Reverse mappings: musical token -> LilyPond string
 # ---------------------------------------------------------------------------
 
-_REV_NOTE = {v: k for k, v in _NOTE_MAP.items()}
+# Reverse note mapping: NOTE_C -> 0, NOTE_D -> 1, etc.
+_note_writer = ly.pitch.pitchWriter("nederlands")
+_REV_NOTE = {tok: num for num, tok in _NUM_TO_NOTE.items()}
+
+# Reverse accidental mapping: ACC_SHARP -> Fraction(1,2), etc.
+_REV_ACC_ALTER = {v: k for k, v in _ALTER_TO_ACC.items()}
 _REV_ACC = {
     "ACC_SHARP": "is",
     "ACC_FLAT": "es",
@@ -309,7 +400,7 @@ def base_vocabulary() -> List[str]:
     tokens: list[str] = []
 
     # Notes
-    tokens.extend(_NOTE_MAP.values())
+    tokens.extend(_NUM_TO_NOTE.values())
 
     # Accidentals
     tokens.extend(["ACC_SHARP", "ACC_FLAT", "ACC_DSHARP", "ACC_DFLAT", "ACC_NAT"])
@@ -374,6 +465,15 @@ def base_vocabulary() -> List[str]:
     # Tremolo
     tokens.extend(["TREMOLO_COLON", "TREMOLO"])
 
+    # Digits (for decomposed fractions)
+    tokens.extend(f"DIGIT_{i}" for i in range(10))
+
+    # Scale fraction delimiters (*N/M tuplet scaling)
+    tokens.extend(["SCALE_START", "SCALE_SLASH"])
+
+    # Time-signature fraction delimiters (N/M)
+    tokens.extend(["FRAC_START", "FRAC_SLASH"])
+
     # Deduplicate while preserving order
     seen: set[str] = set()
     unique: list[str] = []
@@ -387,27 +487,27 @@ def base_vocabulary() -> List[str]:
 def map_note(note_str: str) -> List[str]:
     """Decompose a python-ly note string into musical tokens.
 
+    Uses python-ly's pitch API to parse note names in any LilyPond
+    language (Nederlands, Italiano, Deutsch, English, etc.) and maps
+    them to canonical ``NOTE_X`` / ``ACC_X`` tokens.
+
     Examples:
-        ``"c"``   -> ``["NOTE_C"]``
-        ``"fis"`` -> ``["NOTE_F", "ACC_SHARP"]``
-        ``"bes"`` -> ``["NOTE_B", "ACC_FLAT"]``
-        ``"as"``  -> ``["NOTE_A", "ACC_FLAT"]``
+        ``"c"``    -> ``["NOTE_C"]``
+        ``"fis"``  -> ``["NOTE_F", "ACC_SHARP"]``
+        ``"do"``   -> ``["NOTE_C"]``
+        ``"dod"``  -> ``["NOTE_C", "ACC_SHARP"]``
+        ``"as"``   -> ``["NOTE_A", "ACC_FLAT"]``
         ``"cisis"`` -> ``["NOTE_C", "ACC_DSHARP"]``
     """
-    # Check special cases first
-    if note_str in _SPECIAL_NOTE_MAP:
-        return list(_SPECIAL_NOTE_MAP[note_str])
-
-    # Try suffix stripping (longest first)
-    for suffix, acc_token in _ACCIDENTAL_SUFFIXES:
-        if note_str.endswith(suffix):
-            base = note_str[: -len(suffix)]
-            if base in _BASE_NOTES:
-                return [_NOTE_MAP[base], acc_token]
-
-    # Plain note
-    if note_str in _NOTE_MAP:
-        return [_NOTE_MAP[note_str]]
+    for reader in _pitch_readers:
+        result = reader(note_str)
+        if result is not False:
+            note_num, alter = result
+            tokens = [_NUM_TO_NOTE[note_num]]
+            acc = _ALTER_TO_ACC.get(alter)
+            if acc is not None:
+                tokens.append(acc)
+            return tokens
 
     # Unknown note-like token: pass through
     return [note_str]
@@ -432,7 +532,7 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
         tok = tokens[i]
 
         # Pass-through tokens (special markers)
-        if tok in _PASSTHROUGH or _PART_NAME_RE.match(tok):
+        if tok in _PASSTHROUGH:
             result.append(tok)
             i += 1
             continue
@@ -506,9 +606,10 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
             i += 1
             continue
 
-        # Note-like tokens (a-g with optional accidentals)
-        if _NOTE_RE.match(tok):
-            result.extend(map_note(tok))
+        # Note-like tokens: try python-ly pitch readers across all languages
+        mapped_note = map_note(tok)
+        if mapped_note[0] != tok:  # map_note returns [tok] if unrecognized
+            result.extend(mapped_note)
             prev_category = "note"
             i += 1
             continue
@@ -539,16 +640,16 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
             i += 1
             continue
 
-        # Scaling (e.g., *2/3 for tuplets)
+        # Scaling (e.g., *2/3 for tuplets) — decompose into digits
         if _SCALING_RE.match(tok):
-            result.append(tok)
+            result.extend(_decompose_scaling(tok))
             prev_category = "scaling"
             i += 1
             continue
 
-        # Fraction (time signatures like 3/4, 6/8)
+        # Fraction (time signatures like 3/4, 6/8) — decompose into digits
         if _FRACTION_RE.match(tok):
-            result.append(tok)
+            result.extend(_decompose_fraction(tok))
             prev_category = "fraction"
             i += 1
             continue
@@ -556,8 +657,8 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
         # Duration digits (but not after repeat specifier — those are counts)
         if _DURATION_RE.match(tok):
             if prev_category == "repeat_spec":
-                # Repeat count: pass through as-is
-                result.append(tok)
+                # Repeat count: decompose into digits
+                result.extend(_digits(tok))
                 prev_category = "repeat_count"
             else:
                 mapped = _DURATION_MAP.get(tok)
@@ -565,8 +666,8 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
                     result.append(mapped)
                     prev_category = "duration"
                 else:
-                    # Unknown duration: pass through
-                    result.append(tok)
+                    # Non-standard number (e.g. tempo BPM): decompose
+                    result.extend(_digits(tok))
                     prev_category = "other"
             i += 1
             continue
@@ -625,9 +726,12 @@ def ly_tokens_to_musical(tokens: List[str]) -> List[str]:
             i += 1
             continue
 
-        # Fallback: pass through unchanged
-        result.append(tok)
-        prev_category = "other"
+        # Fallback: pass through only if it looks like a valid token
+        if _VALID_PASSTHROUGH_RE.match(tok):
+            result.append(tok)
+            prev_category = "other"
+        else:
+            logger.debug("Dropping unrecognised token: %r", tok)
         i += 1
 
     return result
@@ -647,20 +751,14 @@ def musical_to_ly_tokens(tokens: List[str]) -> List[str]:
 
         # Note token: may need to combine with following accidental
         if tok.startswith("NOTE_") and tok in _REV_NOTE:
-            base_ly = _REV_NOTE[tok]
+            note_num = _REV_NOTE[tok]
             # Peek for accidental
-            if i + 1 < n and tokens[i + 1] in _REV_ACC:
-                acc_suffix = _REV_ACC[tokens[i + 1]]
-                # Special case: "a" + "es" → "as", "e" + "es" → "es"
-                if base_ly == "a" and acc_suffix == "es":
-                    result.append("as")
-                elif base_ly == "e" and acc_suffix == "es":
-                    result.append("es")
-                else:
-                    result.append(base_ly + acc_suffix)
+            if i + 1 < n and tokens[i + 1] in _REV_ACC_ALTER:
+                alter = _REV_ACC_ALTER[tokens[i + 1]]
+                result.append(_note_writer(note_num, alter))
                 i += 2
                 continue
-            result.append(base_ly)
+            result.append(_note_writer(note_num, 0))
             i += 1
             continue
 
@@ -796,7 +894,48 @@ def musical_to_ly_tokens(tokens: List[str]) -> List[str]:
             i += 1
             continue
 
-        # Pass-through (unknown tokens, special markers, scaling, fractions)
+        # Scaling fraction: SCALE_START digits SCALE_SLASH digits → *N/M
+        if tok == "SCALE_START":
+            num_digits: list[str] = []
+            i += 1
+            while i < n and tokens[i].startswith("DIGIT_"):
+                num_digits.append(tokens[i][-1])
+                i += 1
+            if i < n and tokens[i] == "SCALE_SLASH":
+                i += 1
+            den_digits: list[str] = []
+            while i < n and tokens[i].startswith("DIGIT_"):
+                den_digits.append(tokens[i][-1])
+                i += 1
+            result.append("*" + "".join(num_digits) + "/" + "".join(den_digits))
+            continue
+
+        # Bare fraction: FRAC_START digits FRAC_SLASH digits → N/M
+        if tok == "FRAC_START":
+            num_digits_f: list[str] = []
+            i += 1
+            while i < n and tokens[i].startswith("DIGIT_"):
+                num_digits_f.append(tokens[i][-1])
+                i += 1
+            if i < n and tokens[i] == "FRAC_SLASH":
+                i += 1
+            den_digits_f: list[str] = []
+            while i < n and tokens[i].startswith("DIGIT_"):
+                den_digits_f.append(tokens[i][-1])
+                i += 1
+            result.append("".join(num_digits_f) + "/" + "".join(den_digits_f))
+            continue
+
+        # Bare digit sequence (repeat count, BPM, etc.): DIGIT_X... → number
+        if tok.startswith("DIGIT_"):
+            digits: list[str] = []
+            while i < n and tokens[i].startswith("DIGIT_"):
+                digits.append(tokens[i][-1])
+                i += 1
+            result.append("".join(digits))
+            continue
+
+        # Pass-through (unknown tokens, special markers)
         result.append(tok)
         i += 1
 

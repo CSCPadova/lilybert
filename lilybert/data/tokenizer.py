@@ -18,7 +18,12 @@ from tokenizers.pre_tokenizers import WhitespaceSplit
 from transformers import PreTrainedTokenizerFast
 
 from .lexer import LexerConfig, MusicalLexer
-from .musical_tokens import base_vocabulary, ly_tokens_to_musical, musical_to_ly_tokens
+from .musical_tokens import (
+    base_vocabulary,
+    cap_consecutive_rests,
+    ly_tokens_to_musical,
+    musical_to_ly_tokens,
+)
 from .parser import LilyPondParser
 from .token_bpe import BPE_SEPARATOR, TokenBPE
 
@@ -68,7 +73,6 @@ class LilyPondTokenizer:
         "[UNK]",
         "[MASK]",
         "[PART_BEGIN]",
-        "[PART_NAME]",
         "[PART_END]",
     ]
 
@@ -196,9 +200,7 @@ class LilyPondTokenizer:
 
         # 3. Train token-level BPE
         # Freeze structural tokens so they never participate in merges
-        frozen = set(self.SPECIAL_TOKENS) | {
-            t for t in all_corpus_tokens if t.startswith("part:")
-        }
+        frozen = set(self.SPECIAL_TOKENS) | {"REST_MULTI"}
         num_merges = max(0, vocab_size - base_vocab_size)
         bpe = TokenBPE()
         bpe.learn(
@@ -342,18 +344,11 @@ class LilyPondTokenizer:
                 i += 1
                 continue
 
-            # [PART_BEGIN] [PART_NAME] part:X  ->  X = {
+            # [PART_BEGIN]  ->  voice = {
             if tok == "[PART_BEGIN]":
-                name = "voice"
-                j = i + 1
-                if j < len(tokens) and tokens[j] == "[PART_NAME]":
-                    j += 1
-                if j < len(tokens) and tokens[j].startswith("part:"):
-                    name = tokens[j][len("part:") :]
-                    j += 1
-                parts.append(f"{name} = {{")
+                parts.append("voice = {")
                 open_braces += 1
-                i = j
+                i += 1
                 continue
 
             # [PART_END]  ->  }
@@ -487,11 +482,10 @@ class LilyPondTokenizer:
                 if not raw_tokens:
                     continue
                 musical = ly_tokens_to_musical(raw_tokens)
+                musical = cap_consecutive_rests(musical)
                 tokens.extend(
                     [
                         "[PART_BEGIN]",
-                        "[PART_NAME]",
-                        f"part:{name.lower()}",
                         *musical,
                         "[PART_END]",
                     ]
@@ -501,6 +495,7 @@ class LilyPondTokenizer:
         # No part variables — tokenize the full text
         raw_tokens = self.lexer.linearize(text, macro_map=macro_map)
         musical = ly_tokens_to_musical(raw_tokens)
+        musical = cap_consecutive_rests(musical)
         return " ".join(musical).strip()
 
     def _extract_part_variables(self, text: str) -> List[tuple[str, str]]:

@@ -275,6 +275,13 @@ class MusicalLexer:
                 i += consumed
                 continue
 
+            # --- Tempo: emit command, skip text argument ---
+            if isinstance(tok, ly.lex.lilypond.Tempo):
+                tempo_result, consumed = self._handle_tempo(ly_tokens, i)
+                result.extend(tempo_result)
+                i += consumed
+                continue
+
             # --- Clef: handle quoted specifier ---
             if isinstance(tok, ly.lex.lilypond.Clef):
                 clef_result, consumed = self._handle_clef(ly_tokens, i)
@@ -432,6 +439,85 @@ class MusicalLexer:
                 i += 1
             if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedEnd):
                 i += 1
+        return result, i - start
+
+    # ------------------------------------------------------------------
+    # Tempo handling
+    # ------------------------------------------------------------------
+
+    def _handle_tempo(self, ly_tokens: list, start: int) -> Tuple[List[str], int]:
+        r"""Handle ``\tempo`` with optional text argument.
+
+        Emits ``\tempo`` and then the tempo text (if any) as a single
+        token.  Handles three forms:
+
+        * Quoted:   ``\tempo "Allegro" 4 = 120``
+        * Unquoted capitalised: ``\tempo Allegro 4 = 120``
+          (python-ly: ``Unparsed("A") + Note("llegro")``)
+        * Unquoted lowercase: ``\tempo allegro 4 = 120``
+          (python-ly: ``Note("allegro")``)
+
+        Subsequent metronome-mark tokens (``Length``, ``=``, integer)
+        are left for the main loop.
+        """
+        result = [str(ly_tokens[start])]  # \tempo
+        i = start + 1
+        n = len(ly_tokens)
+        # Skip whitespace
+        while i < n and isinstance(ly_tokens[i], ly.lex.Space):
+            i += 1
+        # --- Quoted string: "Allegro" ---
+        if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedStart):
+            i += 1  # skip opening quote
+            if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.String):
+                result.append(str(ly_tokens[i]))
+                i += 1
+            if i < n and isinstance(ly_tokens[i], ly.lex.lilypond.StringQuotedEnd):
+                i += 1  # skip closing quote
+        # --- Unquoted capitalised: Unparsed("A") + Note("llegro") ---
+        elif i < n and isinstance(ly_tokens[i], ly.lex._token.Unparsed):
+            text_parts = [str(ly_tokens[i])]
+            i += 1
+            while i < n and not isinstance(ly_tokens[i], ly.lex.Space):
+                if isinstance(
+                    ly_tokens[i],
+                    (ly.lex.lilypond.Length, ly.lex.lilypond.EqualSign),
+                ):
+                    break
+                text_parts.append(str(ly_tokens[i]))
+                i += 1
+            result.append("".join(text_parts))
+        # --- Unquoted lowercase: Note("allegro") ---
+        # A real note after \tempo would be a Length, not a Note, so any
+        # Note token here is tempo text.
+        elif i < n and isinstance(ly_tokens[i], ly.lex.lilypond.Note):
+            text_parts = [str(ly_tokens[i])]
+            i += 1
+            # Collect additional words (e.g., "con moto" → Note + Note)
+            while i < n:
+                if isinstance(ly_tokens[i], ly.lex.Space):
+                    # Peek past whitespace for more text words
+                    j = i + 1
+                    while j < n and isinstance(ly_tokens[j], ly.lex.Space):
+                        j += 1
+                    if j < n and isinstance(
+                        ly_tokens[j],
+                        (ly.lex.lilypond.Note, ly.lex._token.Unparsed),
+                    ):
+                        text_parts.append(" ")
+                        i = j
+                        text_parts.append(str(ly_tokens[i]))
+                        i += 1
+                        continue
+                    break
+                if isinstance(
+                    ly_tokens[i],
+                    (ly.lex.lilypond.Length, ly.lex.lilypond.EqualSign),
+                ):
+                    break
+                text_parts.append(str(ly_tokens[i]))
+                i += 1
+            result.append("".join(text_parts))
         return result, i - start
 
     # ------------------------------------------------------------------
