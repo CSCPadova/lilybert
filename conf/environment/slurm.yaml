@@ -1,3 +1,5 @@
+# @package _global_
+
 dataset:
   processed_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
   tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
