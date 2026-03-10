@@ -22,9 +22,9 @@ train:
   pretrain:
     max_length: 2048
     mlm_probability: 0.15
-    per_device_train_batch_size: 16
-    per_device_eval_batch_size: 16
-    num_train_epochs: 3
+    per_device_train_batch_size: 24
+    per_device_eval_batch_size: 24
+    num_train_epochs: 1
     learning_rate: 2e-5
     lr_scheduler_type: cosine
     grad_clip_norm: 1.0

@@ -40,12 +40,16 @@ class PretrainingConfig:
     max_length: int = BaseModelConfig.max_length
     mlm_probability: float = 0.15
     per_device_train_batch_size: int = BaseTrainingConfig.per_device_train_batch_size
+    per_device_eval_batch_size: int = BaseTrainingConfig.per_device_train_batch_size
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
+    lr_scheduler_type: str = "cosine"
+    max_grad_norm: float = 1.0
     weight_decay: float = BaseTrainingConfig.weight_decay
     warmup_ratio: float = 0.06
     max_steps: int = -1
     logging_steps: int = 50
+    eval_steps: int = 200
     save_steps: int = 500
     seed: int = BaseModelConfig.seed
     pretokenized_shards_dir: Optional[str] = None

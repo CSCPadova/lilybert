@@ -135,8 +135,11 @@ class MLMPretrainer:
         ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
+            per_device_eval_batch_size=self.config.per_device_eval_batch_size,
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
+            lr_scheduler_type=self.config.lr_scheduler_type,
+            max_grad_norm=self.config.max_grad_norm,
             weight_decay=self.config.weight_decay,
             warmup_ratio=self.config.warmup_ratio,
             max_steps=self.config.max_steps,
@@ -149,7 +152,7 @@ class MLMPretrainer:
             disable_tqdm=not is_main,
             remove_unused_columns=False,
             eval_strategy="steps",
-            eval_steps=1000,
+            eval_steps=self.config.eval_steps,
             save_strategy="steps",
             metric_for_best_model="eval_loss",
         )

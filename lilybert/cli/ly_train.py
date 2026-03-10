@@ -94,12 +94,18 @@ def _main(cfg: DictConfig) -> None:
             per_device_train_batch_size=int(
                 pretrain.get("per_device_train_batch_size", 16)
             ),
+            per_device_eval_batch_size=int(
+                pretrain.get("per_device_eval_batch_size", 16)
+            ),
             num_train_epochs=int(pretrain.get("num_train_epochs", 3)),
             learning_rate=float(pretrain.get("learning_rate", 2e-5)),
+            lr_scheduler_type=str(pretrain.get("lr_scheduler_type", "cosine")),
+            max_grad_norm=float(pretrain.get("grad_clip_norm", 1.0)),
             weight_decay=float(pretrain.get("weight_decay", 0.01)),
             warmup_ratio=float(pretrain.get("warmup_ratio", 0.1)),
             max_steps=int(pretrain.get("max_steps", -1)),
             logging_steps=int(pretrain.get("logging_steps", 50)),
+            eval_steps=int(pretrain.get("eval_steps", 200)),
             save_steps=int(pretrain.get("save_steps", 500)),
             pretokenized_shards_dir=dataset.get("pretokenized_shards_dir"),
             dataloader_num_workers=dataloader_num_workers,
