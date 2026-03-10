@@ -30,7 +30,7 @@ train:
     grad_clip_norm: 1.0
     weight_decay: 0.01
     warmup_ratio: 0.1
-    max_steps: 0
+    max_steps: -1
     eval_steps: 200
     log_steps: 20
     logging_steps: 50

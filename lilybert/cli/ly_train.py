@@ -98,7 +98,7 @@ def _main(cfg: DictConfig) -> None:
             learning_rate=float(pretrain.get("learning_rate", 2e-5)),
             weight_decay=float(pretrain.get("weight_decay", 0.01)),
             warmup_ratio=float(pretrain.get("warmup_ratio", 0.1)),
-            max_steps=int(pretrain.get("max_steps", 0)),
+            max_steps=int(pretrain.get("max_steps", -1)),
             logging_steps=int(pretrain.get("logging_steps", 50)),
             save_steps=int(pretrain.get("save_steps", 500)),
             pretokenized_shards_dir=dataset.get("pretokenized_shards_dir"),
