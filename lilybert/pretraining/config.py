@@ -53,6 +53,7 @@ class PretrainingConfig:
     save_steps: int = 500
     seed: int = BaseModelConfig.seed
     pretokenized_shards_dir: Optional[str] = None
+    resume_from_checkpoint: Optional[str] = None
     dataloader_num_workers: int = 0
 
     # --- logging (from LoggingConfig) ---

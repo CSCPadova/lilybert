@@ -36,3 +36,4 @@ train:
     logging_steps: 50
     save_steps: 500
     model_architecture: bert-base
+    resume_from_checkpoint: null

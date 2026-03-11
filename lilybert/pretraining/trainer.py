@@ -129,8 +129,20 @@ class MLMPretrainer:
                 max_length=self.config.max_length,
             )
 
-        model_config = self._build_model_config(vocab_size=self._vocab_size(tokenizer))
-        model = BertForMaskedLM(model_config)
+        if self.config.resume_from_checkpoint:
+            ckpt_path = Path(self.config.resume_from_checkpoint)
+            if not ckpt_path.exists():
+                raise FileNotFoundError(
+                    f"Checkpoint not found: {ckpt_path}"
+                )
+            model = BertForMaskedLM.from_pretrained(str(ckpt_path))
+            if is_main:
+                print(f"Loaded pretrained weights from {ckpt_path}")
+        else:
+            model_config = self._build_model_config(
+                vocab_size=self._vocab_size(tokenizer)
+            )
+            model = BertForMaskedLM(model_config)
 
         ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,

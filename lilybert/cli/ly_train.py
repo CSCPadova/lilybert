@@ -108,6 +108,7 @@ def _main(cfg: DictConfig) -> None:
             eval_steps=int(pretrain.get("eval_steps", 200)),
             save_steps=int(pretrain.get("save_steps", 500)),
             pretokenized_shards_dir=dataset.get("pretokenized_shards_dir"),
+            resume_from_checkpoint=pretrain.get("resume_from_checkpoint"),
             dataloader_num_workers=dataloader_num_workers,
             wandb_enabled=wandb_enabled,
             wandb_project=wandb_project,
