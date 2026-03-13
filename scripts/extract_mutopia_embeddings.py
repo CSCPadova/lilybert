@@ -82,6 +82,9 @@ def extract_layer_embeddings(
             else:
                 layer_sums[layer] += cls_vec.sum(dim=0)
 
+        del outputs, batch_ids, batch_mask
+        torch.cuda.empty_cache()
+
     # Average across all windows
     result = {}
     for layer in layers:
@@ -107,7 +110,7 @@ def main(
     ] = None,
     max_length: Annotated[int, typer.Option(help="Window max length")] = 2048,
     stride: Annotated[int, typer.Option(help="Window stride")] = 256,
-    batch_size: Annotated[int, typer.Option(help="Batch size")] = 32,
+    batch_size: Annotated[int, typer.Option(help="Batch size")] = 4,
     device: Annotated[str, typer.Option(help="Device: cpu, cuda, ...")] = "cpu",
     max_entries: Annotated[
         Optional[int],
