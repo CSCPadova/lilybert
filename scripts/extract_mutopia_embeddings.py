@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Extract layer-wise BERT embeddings for the Mutopia dataset.
 
-For each entry in dataset_mutopia.json, preprocesses the .ly file,
-tokenizes, and extracts [CLS] embeddings at specified layers.
-Saves per-movement .npy files and updates the JSON with embedding paths.
+For each entry in dataset_mutopia.json, strips non-musical content from the
+.ly file, tokenizes, and extracts [CLS] embeddings at specified layers.
+Saves per-entry .npy files and updates the JSON with embedding paths.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,7 +29,12 @@ from lilybert.cli.embed import _movement_windows
 from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.models import LilyBERTEncoder
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+)
 logger = logging.getLogger(__name__)
 
 DEFAULT_STRIP = [
@@ -42,6 +48,21 @@ DEFAULT_STRIP = [
 ]
 
 
+def strip_only(preprocessor: LilyPondPreprocessor, raw_text: str) -> str:
+    """Lightweight strip: remove non-musical sections without the full pipeline.
+
+    Calls _remove_comments_and_cleanup, _strip_engraving, variable inlining,
+    and _postprocess. Skips movement extraction, translation, and other heavy
+    processing in process_content().
+    """
+    text = preprocessor._remove_comments_and_cleanup(raw_text)
+    text = preprocessor._strip_engraving(text)
+    assignments = preprocessor._parse_assignments(text)
+    text = preprocessor._inline_variables(text, assignments)
+    text = preprocessor._postprocess(text)
+    return text.strip()
+
+
 def extract_layer_embeddings(
     encoder: LilyBERTEncoder,
     ids_tensor: torch.Tensor,
@@ -50,12 +71,7 @@ def extract_layer_embeddings(
     batch_size: int,
     device: torch.device,
 ) -> Dict[int, np.ndarray]:
-    """Extract [CLS] embeddings at specified layers, averaged across windows.
-
-    Returns:
-        Dict mapping layer number to (hidden_size,) numpy array.
-    """
-    # Accumulate per-layer [CLS] vectors across batches
+    """Extract [CLS] embeddings at specified layers, averaged across windows."""
     layer_sums: Dict[int, torch.Tensor] = {}
     total_windows = 0
 
@@ -75,8 +91,7 @@ def extract_layer_embeddings(
         total_windows += n_windows
 
         for layer in layers:
-            # hidden_states[0] = embedding layer, hidden_states[layer] = transformer layer
-            cls_vec = outputs.hidden_states[layer][:, 0, :].detach().cpu()  # (batch, hidden)
+            cls_vec = outputs.hidden_states[layer][:, 0, :].detach().cpu()
             if layer not in layer_sums:
                 layer_sums[layer] = cls_vec.sum(dim=0)
             else:
@@ -85,7 +100,6 @@ def extract_layer_embeddings(
         del outputs, batch_ids, batch_mask
         torch.cuda.empty_cache()
 
-    # Average across all windows
     result = {}
     for layer in layers:
         result[layer] = (layer_sums[layer] / total_windows).numpy()
@@ -116,9 +130,20 @@ def main(
         Optional[int],
         typer.Option(help="Max entries to process (for testing)"),
     ] = None,
+    save_every: Annotated[
+        int,
+        typer.Option(help="Save JSON checkpoint every N entries"),
+    ] = 100,
+    resume: Annotated[
+        bool,
+        typer.Option(help="Skip entries that already have embeddings"),
+    ] = False,
 ) -> None:
     if layers is None:
         layers = [3, 6, 9, 12]
+
+    # Force flush stdout for SLURM
+    sys.stdout.reconfigure(line_buffering=True)
 
     dataset_path = Path(dataset_json)
     output_base = Path(output_dir)
@@ -132,8 +157,11 @@ def main(
     with open(dataset_path) as f:
         dataset = json.load(f)
 
+    total_entries = len(dataset)
     if max_entries:
         dataset = dataset[:max_entries]
+
+    logger.info(f"Dataset: {len(dataset)} entries (total in file: {total_entries})")
 
     # Load model and tokenizer
     tokenizer_ref = tokenizer_path or model
@@ -151,14 +179,25 @@ def main(
 
     preprocessor = LilyPondPreprocessor(strip_sections=DEFAULT_STRIP)
 
-    stats = {"total": len(dataset), "success": 0, "no_movements": 0, "errors": 0}
+    logger.info(f"Model loaded on {device}. Layers: {layers}. Batch size: {batch_size}")
+
+    stats = {"total": len(dataset), "success": 0, "empty": 0, "errors": 0, "skipped": 0}
+    t_start = time.time()
 
     with torch.no_grad():
         for idx, entry in enumerate(dataset):
+            t_file = time.time()
+
+            # Resume support: skip entries that already have embeddings
+            if resume and entry.get("embeddings") is not None:
+                stats["skipped"] += 1
+                continue
+
             local_path = entry.get("localPath")
             if not local_path:
                 entry["embeddings"] = None
                 stats["errors"] += 1
+                logger.warning(f"[{idx}] No localPath")
                 continue
 
             file_path = mutopia_root / local_path
@@ -168,84 +207,84 @@ def main(
                 stats["errors"] += 1
                 continue
 
+            raw_text = file_path.read_text(encoding="utf-8", errors="ignore")
+
+            # Lightweight strip only — no movement extraction or translation
             try:
-                raw_text = file_path.read_text(encoding="utf-8", errors="ignore")
-                movements = preprocessor.process_content(raw_text, file_path.name, {})
+                stripped_text = strip_only(preprocessor, raw_text)
             except Exception as e:
-                logger.warning(f"[{idx}] Preprocessing failed for {local_path}: {e}")
+                logger.warning(f"[{idx}] Strip failed for {local_path}: {e}")
                 entry["embeddings"] = None
                 stats["errors"] += 1
                 continue
 
-            if not movements:
-                logger.warning(f"[{idx}] No movements from {local_path}")
+            if not stripped_text:
+                logger.warning(f"[{idx}] Empty after stripping: {local_path}")
                 entry["embeddings"] = None
-                stats["no_movements"] += 1
+                stats["empty"] += 1
                 continue
 
-            embeddings_map: Dict[str, List[str]] = {
-                f"layer_{l}": [] for l in layers
-            }
-            movement_count = 0
-
-            for mov_idx, movement in enumerate(movements):
-                movement_text = str(
-                    movement.get("italiano_text") or movement.get("text") or ""
-                ).strip()
-                if not movement_text:
-                    continue
-
-                token_ids = tokenizer.encode(movement_text, add_special_tokens=False)
-                if not token_ids:
-                    continue
-
-                ids_tensor, mask_tensor = _movement_windows(
-                    token_ids,
-                    max_length=max_length,
-                    stride=stride,
-                    cls_id=cls_id,
-                    sep_id=sep_id,
-                    pad_id=pad_id,
-                )
-
-                layer_embeddings = extract_layer_embeddings(
-                    encoder, ids_tensor, mask_tensor, layers, batch_size, device_obj
-                )
-
-                for layer, emb in layer_embeddings.items():
-                    filename = f"{idx}_{mov_idx}.npy"
-                    save_path = output_base / f"layer_{layer}" / filename
-                    np.save(save_path, emb)
-                    # Store path relative to mutopia_root
-                    rel_path = str(save_path.relative_to(mutopia_root))
-                    embeddings_map[f"layer_{layer}"].append(rel_path)
-
-                movement_count += 1
-
-            if movement_count > 0:
-                entry["embeddings"] = embeddings_map
-                stats["success"] += 1
-            else:
+            token_ids = tokenizer.encode(stripped_text, add_special_tokens=False)
+            if not token_ids:
+                logger.warning(f"[{idx}] No tokens from {local_path}")
                 entry["embeddings"] = None
-                stats["no_movements"] += 1
+                stats["empty"] += 1
+                continue
 
-            if (idx + 1) % 50 == 0 or idx + 1 == len(dataset):
-                logger.info(
-                    f"Progress: {idx + 1}/{len(dataset)} "
-                    f"(success={stats['success']}, no_mov={stats['no_movements']}, err={stats['errors']})"
-                )
+            ids_tensor, mask_tensor = _movement_windows(
+                token_ids,
+                max_length=max_length,
+                stride=stride,
+                cls_id=cls_id,
+                sep_id=sep_id,
+                pad_id=pad_id,
+            )
 
-    # Write updated JSON
+            layer_embeddings = extract_layer_embeddings(
+                encoder, ids_tensor, mask_tensor, layers, batch_size, device_obj
+            )
+
+            embeddings_map: Dict[str, str] = {}
+            for layer, emb in layer_embeddings.items():
+                filename = f"{idx}.npy"
+                save_path = output_base / f"layer_{layer}" / filename
+                np.save(save_path, emb)
+                rel_path = str(save_path.relative_to(mutopia_root))
+                embeddings_map[f"layer_{layer}"] = rel_path
+
+            entry["embeddings"] = embeddings_map
+            stats["success"] += 1
+
+            elapsed_file = time.time() - t_file
+            elapsed_total = time.time() - t_start
+            rate = (idx + 1 - stats["skipped"]) / elapsed_total if elapsed_total > 0 else 0
+
+            logger.info(
+                f"[{idx+1}/{len(dataset)}] {local_path} "
+                f"| {len(token_ids)} tok | {ids_tensor.shape[0]} win "
+                f"| {elapsed_file:.1f}s | rate={rate:.1f}/s"
+            )
+
+            # Periodic JSON checkpoint
+            if (idx + 1) % save_every == 0:
+                with open(dataset_path, "w") as f:
+                    json.dump(dataset, f, indent=4, ensure_ascii=False)
+                logger.info(f"  >> Checkpoint saved at entry {idx+1}")
+
+    # Final save
     with open(dataset_path, "w") as f:
         json.dump(dataset, f, indent=4, ensure_ascii=False)
 
+    elapsed = time.time() - t_start
     logger.info("=" * 60)
     logger.info("EXTRACTION COMPLETE")
     logger.info(f"  Total entries:  {stats['total']}")
     logger.info(f"  Success:        {stats['success']}")
-    logger.info(f"  No movements:   {stats['no_movements']}")
+    logger.info(f"  Skipped:        {stats['skipped']}")
+    logger.info(f"  Empty:          {stats['empty']}")
     logger.info(f"  Errors:         {stats['errors']}")
     logger.info(f"  Layers:         {layers}")
+    logger.info(f"  Elapsed:        {elapsed/60:.1f} min")
     logger.info(f"  Output dir:     {output_base.resolve()}")
     logger.info("=" * 60)
 
