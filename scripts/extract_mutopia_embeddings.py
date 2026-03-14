@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import signal
 import sys
 import time
 from pathlib import Path
@@ -48,19 +49,35 @@ DEFAULT_STRIP = [
 ]
 
 
-def strip_only(preprocessor: LilyPondPreprocessor, raw_text: str) -> str:
+class StripTimeout(Exception):
+    pass
+
+
+def _timeout_handler(signum, frame):
+    raise StripTimeout("Strip timed out")
+
+
+def strip_only(
+    preprocessor: LilyPondPreprocessor, raw_text: str, timeout_sec: int = 30
+) -> str:
     """Lightweight strip: remove non-musical sections without the full pipeline.
 
     Calls _remove_comments_and_cleanup, _strip_engraving, variable inlining,
     and _postprocess. Skips movement extraction, translation, and other heavy
     processing in process_content().
     """
-    text = preprocessor._remove_comments_and_cleanup(raw_text)
-    text = preprocessor._strip_engraving(text)
-    assignments = preprocessor._parse_assignments(text)
-    text = preprocessor._inline_variables(text, assignments)
-    text = preprocessor._postprocess(text)
-    return text.strip()
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(timeout_sec)
+    try:
+        text = preprocessor._remove_comments_and_cleanup(raw_text)
+        text = preprocessor._strip_engraving(text)
+        assignments = preprocessor._parse_assignments(text)
+        text = preprocessor._inline_variables(text, assignments)
+        text = preprocessor._postprocess(text)
+        return text.strip()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 def extract_layer_embeddings(
@@ -208,10 +225,16 @@ def main(
                 continue
 
             raw_text = file_path.read_text(encoding="utf-8", errors="ignore")
+            logger.info(f"[{idx+1}/{len(dataset)}] Processing {local_path} ({len(raw_text)//1024}KB)...")
 
             # Lightweight strip only — no movement extraction or translation
             try:
                 stripped_text = strip_only(preprocessor, raw_text)
+            except StripTimeout:
+                logger.warning(f"[{idx}] TIMEOUT stripping {local_path}")
+                entry["embeddings"] = None
+                stats["errors"] += 1
+                continue
             except Exception as e:
                 logger.warning(f"[{idx}] Strip failed for {local_path}: {e}")
                 entry["embeddings"] = None
