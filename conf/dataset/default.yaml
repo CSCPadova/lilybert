@@ -1,5 +1,6 @@
 raw_dir: data/raw
 processed_dir: data/processed
 labels_path: data/labels/labels_v1.json
+tokenizer_type: musical  # "musical" or "bbpe"
 tokenizer_path: artifacts/tokenizer
 pretokenized_shards_dir: artifacts/pretokenized

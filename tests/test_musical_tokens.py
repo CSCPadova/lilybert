@@ -53,7 +53,15 @@ class TestMapNote:
 
     # -- Multi-language support (all LilyPond pitch languages) --
 
-    _NOTE_TOKENS = ["NOTE_C", "NOTE_D", "NOTE_E", "NOTE_F", "NOTE_G", "NOTE_A", "NOTE_B"]
+    _NOTE_TOKENS = [
+        "NOTE_C",
+        "NOTE_D",
+        "NOTE_E",
+        "NOTE_F",
+        "NOTE_G",
+        "NOTE_A",
+        "NOTE_B",
+    ]
 
     @pytest.mark.parametrize(
         "lang, notes",
@@ -153,8 +161,14 @@ class TestLyTokensToMusical:
         tokens = ["\\key", "c", "\\major", "\\time", "4/4"]
         result = ly_tokens_to_musical(tokens)
         assert result == [
-            "CMD_KEY", "NOTE_C", "KEY_MAJOR", "CMD_TIME",
-            "FRAC_START", "DIGIT_4", "FRAC_SLASH", "DIGIT_4",
+            "CMD_KEY",
+            "NOTE_C",
+            "KEY_MAJOR",
+            "CMD_TIME",
+            "FRAC_START",
+            "DIGIT_4",
+            "FRAC_SLASH",
+            "DIGIT_4",
         ]
 
     def test_clef(self):
@@ -217,7 +231,10 @@ class TestLyTokensToMusical:
         result = ly_tokens_to_musical(tokens)
         assert result == [
             "CMD_TUPLET",
-            "FRAC_START", "DIGIT_3", "FRAC_SLASH", "DIGIT_2",
+            "FRAC_START",
+            "DIGIT_3",
+            "FRAC_SLASH",
+            "DIGIT_2",
             "BLOCK_START",
             "NOTE_C",
             "DUR_4",
@@ -524,8 +541,12 @@ class TestScalingDecomposition:
     def test_multi_digit_scaling(self):
         result = ly_tokens_to_musical(["*20/13"])
         assert result == [
-            "SCALE_START", "DIGIT_2", "DIGIT_0",
-            "SCALE_SLASH", "DIGIT_1", "DIGIT_3",
+            "SCALE_START",
+            "DIGIT_2",
+            "DIGIT_0",
+            "SCALE_SLASH",
+            "DIGIT_1",
+            "DIGIT_3",
         ]
 
     def test_fraction_decomposed(self):
@@ -577,7 +598,11 @@ class TestCapConsecutiveRests:
         assert result == expected
 
     def test_preserves_surrounding(self):
-        tokens = ["NOTE_C", "DUR_4", "BAR"] + self._make_rest_run(8) + ["BAR", "NOTE_D", "DUR_4"]
+        tokens = (
+            ["NOTE_C", "DUR_4", "BAR"]
+            + self._make_rest_run(8)
+            + ["BAR", "NOTE_D", "DUR_4"]
+        )
         result = cap_consecutive_rests(tokens, max_bars=4)
         # Should have NOTE_C DUR_4 BAR + 4 rest bars + BAR NOTE_D DUR_4
         # The leading BAR before the first REST_MULTI is kept by the main loop

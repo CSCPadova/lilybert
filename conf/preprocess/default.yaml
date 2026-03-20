@@ -25,6 +25,7 @@ augmentation:
 
 bpe:
   enabled: false
+  tokenizer_type: ${dataset.tokenizer_type}
   output_dir: ${dataset.tokenizer_path}
   vocab_size: 10000
   min_frequency: 40

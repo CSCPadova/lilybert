@@ -14,6 +14,7 @@ augmentation:
 
 bpe:
   enabled: true
+  tokenizer_type: ${dataset.tokenizer_type}
   output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
   vocab_size: 10000
   min_frequency: 40

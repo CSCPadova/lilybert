@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
-
 import numpy as np
-import pytest
 
 from lilybert.data.sharded_dataset import ShardedDataset, ShardedMLMDataset
 from lilybert.data.sharding import ShardManifest, ShardWriter

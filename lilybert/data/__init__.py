@@ -1,30 +1,26 @@
 """Data processing and dataset utilities for LilyPond music notation."""
 
 # Always available - core parsing functionality
+from .bbpe_tokenizer import BBPETokenizer
 from .lexer import LexerConfig, MusicalLexer
 from .parser import LilyPondParser
+from .preprocessor import LilyPondPreprocessor
+from .pretokenized_dataset import PreTokenizedDataset
+from .repository import BaroqueMusicDataAPI, MovementRecord
+from .tokenizer import LilyPondTokenizer
+from .tokenizer_factory import create_tokenizer, get_tokenizer_type, load_tokenizer
 
-# Conditional imports for ML-dependent modules
-try:
-    from .preprocessor import LilyPondPreprocessor
-    from .pretokenized_dataset import PreTokenizedDataset
-    from .repository import BaroqueMusicDataAPI, MovementRecord
-    from .tokenizer import LilyPondTokenizer
-
-    __all__ = [
-        "PreTokenizedDataset",
-        "LilyPondParser",
-        "LilyPondPreprocessor",
-        "LilyPondTokenizer",
-        "MusicalLexer",
-        "LexerConfig",
-        "BaroqueMusicDataAPI",
-        "MovementRecord",
-    ]
-
-except ImportError as e:
-    # If torch/transformers aren't installed, still allow parser-only use
-    import logging
-
-    logging.warning(f"ML modules not available: {e}")
-    __all__ = ["LilyPondParser", "MusicalLexer", "LexerConfig"]
+__all__ = [
+    "BBPETokenizer",
+    "PreTokenizedDataset",
+    "LilyPondParser",
+    "LilyPondPreprocessor",
+    "LilyPondTokenizer",
+    "MusicalLexer",
+    "LexerConfig",
+    "BaroqueMusicDataAPI",
+    "MovementRecord",
+    "create_tokenizer",
+    "get_tokenizer_type",
+    "load_tokenizer",
+]

@@ -28,6 +28,7 @@ from lilybert.cli.pretokenize import (
 )
 from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.data.tokenizer import LilyPondTokenizer
+from lilybert.data.tokenizer_factory import create_tokenizer, get_tokenizer_type
 
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
@@ -69,6 +70,7 @@ class TokenizeSettings:
 @dataclass
 class BPESettings:
     enabled: bool = False
+    tokenizer_type: str = "musical"
     output_dir: str = "artifacts/tokenizer"
     vocab_size: int = 8000
     min_frequency: int = 0
@@ -108,6 +110,7 @@ def _tokenize_file_worker(
     tokenizer_path: str,
     max_length: int,
     stride: int,
+    tokenizer_type: str = "musical",
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
     """Tokenize a single .ly file into windowed (input_ids, attention_mask) rows.
 
@@ -117,13 +120,17 @@ def _tokenize_file_worker(
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    lily_tokenizer = LilyPondTokenizer()
-    parser_tokens = lily_tokenizer._movement_to_parser_tokens(text)
-    if not parser_tokens.strip():
+    if tokenizer_type == "musical":
+        lily_tokenizer = LilyPondTokenizer()
+        text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
+    else:
+        text_to_encode = text
+
+    if not text_to_encode.strip():
         return (fp.stem, [], [])
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
-    token_ids = tokenizer.encode(parser_tokens, add_special_tokens=False)
+    token_ids = tokenizer.encode(text_to_encode, add_special_tokens=False)
     if not token_ids:
         return (fp.stem, [], [])
 
@@ -174,6 +181,8 @@ def _tokenize_mlm_unsharded(
     if not all_files:
         raise FileNotFoundError(f"No .ly files found in {data_path}")
 
+    tok_type = get_tokenizer_type(tokenizer_path)
+
     rng = random.Random(seed)
     shuffled = list(all_files)
     rng.shuffle(shuffled)
@@ -200,6 +209,7 @@ def _tokenize_mlm_unsharded(
                     tokenizer_path,
                     max_length,
                     stride,
+                    tok_type,
                 ): fp
                 for fp in files
             }
@@ -292,20 +302,23 @@ def _main(cfg: DictConfig) -> None:
 
     bpe_summary = None
     if config.bpe.enabled:
-        tokenizer = LilyPondTokenizer()
+        tokenizer = create_tokenizer(config.bpe.tokenizer_type)
         corpus = tokenizer.build_corpus(
             config.output_dir,
             num_workers=workers,
         )
-        fast_tokenizer = tokenizer.train(
+        train_kwargs: dict = dict(
             corpus=corpus,
             vocab_size=config.bpe.vocab_size,
             min_frequency=config.bpe.min_frequency,
-            number_placeholders=config.bpe.number_placeholders,
         )
+        if config.bpe.tokenizer_type == "musical":
+            train_kwargs["number_placeholders"] = config.bpe.number_placeholders
+        fast_tokenizer = tokenizer.train(**train_kwargs)
         saved_dir = tokenizer.save(config.bpe.output_dir)
         bpe_summary = {
             "enabled": True,
+            "tokenizer_type": config.bpe.tokenizer_type,
             "num_corpus_samples": len(corpus),
             "vocab_size": int(fast_tokenizer.vocab_size),
             "output_dir": str(saved_dir),

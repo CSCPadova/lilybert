@@ -5,6 +5,7 @@ Pipeline: LilyPond text -> python-ly lexer -> MusicalLexer -> BPE
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -241,7 +242,7 @@ class LilyPondTokenizer:
     _TOKEN_BPE_FILENAME = "token_bpe.json"
 
     def save(self, path: str | Path) -> Path:
-        """Save tokenizer (HF files + token BPE merges)."""
+        """Save tokenizer (HF files + token BPE merges + metadata)."""
         if self.fast_tokenizer is None:
             raise ValueError("Tokenizer has not been trained/loaded yet")
 
@@ -250,6 +251,14 @@ class LilyPondTokenizer:
         self.fast_tokenizer.save_pretrained(str(output_dir))
         if self._token_bpe is not None:
             self._token_bpe.save(output_dir / self._TOKEN_BPE_FILENAME)
+
+        from .bbpe_tokenizer import TOKENIZER_META_FILENAME
+
+        meta_path = output_dir / TOKENIZER_META_FILENAME
+        meta_path.write_text(
+            json.dumps({"type": "musical"}, indent=2),
+            encoding="utf-8",
+        )
         return output_dir
 
     @classmethod

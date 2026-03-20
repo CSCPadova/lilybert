@@ -132,9 +132,7 @@ class MLMPretrainer:
         if self.config.resume_from_checkpoint:
             ckpt_path = Path(self.config.resume_from_checkpoint)
             if not ckpt_path.exists():
-                raise FileNotFoundError(
-                    f"Checkpoint not found: {ckpt_path}"
-                )
+                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
             model = BertForMaskedLM.from_pretrained(str(ckpt_path))
             if is_main:
                 print(f"Loaded pretrained weights from {ckpt_path}")

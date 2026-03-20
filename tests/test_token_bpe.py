@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from lilybert.data.token_bpe import BPE_SEPARATOR, TokenBPE, _apply_single_merge
 
 

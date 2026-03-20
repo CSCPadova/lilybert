@@ -13,7 +13,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fractions import Fraction
 from hashlib import sha1
 from itertools import product

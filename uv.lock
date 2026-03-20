@@ -1505,7 +1505,6 @@ dependencies = [
     { name = "pandas" },
     { name = "python-ly" },
     { name = "pyyaml" },
-    { name = "scikit-learn" },
     { name = "scipy" },
     { name = "tensorboard" },
     { name = "tokenizers" },
@@ -1535,6 +1534,7 @@ dev = [
 ]
 notebook = [
     { name = "notebook" },
+    { name = "scikit-learn" },
 ]
 
 [package.metadata]
@@ -1551,7 +1551,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "python-ly", specifier = ">=0.9.9" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "scikit-learn", specifier = ">=1.2.0" },
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "tensorboard", specifier = ">=2.13.0" },
     { name = "tokenizers", specifier = ">=0.13.0" },
@@ -1571,7 +1570,10 @@ dev = [
     { name = "pytest", specifier = ">=7.3.0" },
     { name = "pytest-cov", specifier = ">=4.1.0" },
 ]
-notebook = [{ name = "notebook", specifier = ">=7.5.5" }]
+notebook = [
+    { name = "notebook", specifier = ">=7.5.5" },
+    { name = "scikit-learn", specifier = ">=1.8.0" },
+]
 
 [[package]]
 name = "markdown"
