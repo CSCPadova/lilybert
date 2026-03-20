@@ -4,13 +4,14 @@ Guidance for coding agents working in this repository.
 
 ## Project Summary
 
-lilyBERT is a Python project for MIR classification on LilyPond notation.
+lilyBERT is a Python project for BERT pretraining on LilyPond notation.
 
-Focus on classification workflows:
+Focus on:
 - preprocessing LilyPond scores into movement-level artifacts,
 - parser-aware tokenizer training,
-- label encoding for supported tasks,
-- grouped stratified cross-validation linear probing on frozen encoder embeddings.
+- MLM pretraining / finetuning of a BERT model on LilyPond corpora.
+
+Probing and classification tasks are handled externally in notebooks.
 
 ## Environment
 
@@ -25,14 +26,11 @@ Focus on classification workflows:
 - Base shared config: `conf/config.yaml`
 - CLI wrappers (`train.yaml`, `preprocess.yaml`) are thin and import `config`.
 - Shared groups: `dataset/default.yaml`, `model/default.yaml`, `runtime/default.yaml`, `environment/{local,slurm}.yaml`.
-- Training modes are nested under `train`:
-  - `train.mode=classify` with `train.classify.*` (frozen embeddings + sklearn linear probe)
-  - `train.mode=pretrain` with `train.pretrain.*`
+- Training settings are under `train.*` (MLM pretraining hyper-parameters).
 
 Common override examples:
-- `ly-train train.mode=classify train.task=composer runtime.output_dir=outputs/cv`
-- `ly-train train.mode=pretrain train.pretrain.max_steps=10`
-- `ly-preprocess preprocess.input_dir=data/raw preprocess.output_dir=data/processed`
+- `train train.max_steps=10 train.learning_rate=5e-5`
+- `preprocess preprocess.input_dir=data/raw preprocess.output_dir=data/processed`
 
 ## Common Commands
 
@@ -60,8 +58,9 @@ flake8 lilybert/ tests/
 
 ### Entry points
 ```bash
-ly-preprocess
-ly-train
+preprocess
+train
+embed
 ```
 
 ## Architecture
@@ -74,21 +73,17 @@ ly-train
   - Multilingual notation support
 - `preprocessor.py`
 - `tokenizer.py`
-- `label_encoder.py`
-- `dataset.py`
 - `repository.py`
 
 ### Models (`lilybert/models/`)
-- `bert_classifier.py`
-- `config.py`
+- `bert_classifier.py` - LilyBERTEncoder (BERT wrapper for training and embedding extraction)
 
 ### Training (`lilybert/training/`)
-- `cross_validation.py`
-- `config.py`
-- `trainer.py`
-- `cli.py`
+- `config.py` - TrainingConfig dataclass
+- `trainer.py` - MLMPretrainer (HuggingFace Trainer-based MLM training)
+- `distributed.py` - DDP/FSDP utilities
 
-### Scripts (`lilybert/scripts/`)
+### Scripts (`scripts/`)
 - auxiliary project scripts
 
 ## Development Guidelines

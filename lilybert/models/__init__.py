@@ -1,21 +1,7 @@
-"""Model components for lilyBERT classification."""
+"""Model components for lilyBERT."""
 
-from .bert_classifier import (
-    ComposerClassifier,
-    InstrumentClassifier,
-    KeyRootClassifier,
-    LilyBERTClassifier,
-    LilyBERTEncoder,
-    LilyBERTTaskClassifier,
-    StyleClassifier,
-)
+from .bert_classifier import LilyBERTEncoder
 
 __all__ = [
     "LilyBERTEncoder",
-    "LilyBERTTaskClassifier",
-    "LilyBERTClassifier",
-    "ComposerClassifier",
-    "StyleClassifier",
-    "InstrumentClassifier",
-    "KeyRootClassifier",
 ]

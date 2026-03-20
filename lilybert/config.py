@@ -1,9 +1,9 @@
 """Shared configuration building blocks for lilyBERT.
 
 All default values are defined here *once*. Module-specific configs
-(TrainingConfig, PretrainingConfig) compose or inherit from these
-base dataclasses so that there is a single source of truth for paths,
-model defaults, and training hyper-parameters.
+(TrainingConfig) compose or inherit from these base dataclasses so
+that there is a single source of truth for paths, model defaults,
+and training hyper-parameters.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ class PathConfig:
     """Canonical filesystem paths used across the project."""
 
     data_dir: str = "data/processed"
-    labels_path: str = "data/labels/labels_v1.json"
     tokenizer_path: str = "artifacts/tokenizer"
     output_dir: str = "outputs"
 

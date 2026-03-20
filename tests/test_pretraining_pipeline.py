@@ -1,11 +1,11 @@
-"""Tests for pretraining utilities and unified train-task normalization."""
+"""Tests for training utilities."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from lilybert.data.preprocessor import AugmentationConfig
-from lilybert.pretraining.trainer import MLMPretrainer
+from lilybert.training.trainer import MLMPretrainer
 
 
 def test_augmentation_config_parses_flags():
@@ -22,17 +22,6 @@ def test_augmentation_config_parses_flags():
     assert config.enable_absolute_relative is True
     assert config.enable_articulation_variants is True
     assert config.enable_barline_variants is False
-
-
-def test_ly_train_task_aliases():
-    from lilybert.cli.ly_train import _normalize_task
-
-    assert _normalize_task("composer") == "composer"
-    assert _normalize_task("style") == "style"
-    assert _normalize_task("instruments") == "instrument"
-    assert _normalize_task("instrument") == "instrument"
-    assert _normalize_task("musical_key") == "key_root"
-    assert _normalize_task("key") == "key_root"
 
 
 def test_count_corpus_tokens_includes_augmented_files(tmp_path: Path):

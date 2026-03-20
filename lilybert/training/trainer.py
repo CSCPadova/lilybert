@@ -1,381 +1,321 @@
-"""Grouped stratified CV linear-probing trainer for lilyBERT embeddings."""
+"""MLM training for LilyPond corpora."""
 
 from __future__ import annotations
 
 import json
-import pickle
-from collections import defaultdict
+import os
+import random
 from pathlib import Path
-from statistics import mean, stdev
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Tuple
 
-import numpy as np
 import torch
-from sklearn.linear_model import LogisticRegression
-from sklearn.multiclass import OneVsRestClassifier
-from torch.utils.data import DataLoader
-from transformers import PreTrainedTokenizerFast
+import wandb
+from torch.utils.data import Dataset
+from tqdm.auto import tqdm
+from transformers import (
+    BertConfig,
+    BertForMaskedLM,
+    DataCollatorForLanguageModeling,
+    PreTrainedTokenizerFast,
+    Trainer,
+    TrainingArguments,
+)
 
-try:
-    import wandb
-except Exception:  # pragma: no cover
-    wandb = None
-
-from lilybert.data import BaroqueMusicClassificationDataset
-from lilybert.evaluation import ClassificationMetrics
-from lilybert.models import LilyBERTEncoder
+from lilybert.data.sharded_dataset import ShardedMLMDataset
 
 from .config import TrainingConfig
-from .cross_validation import build_grouped_stratified_folds
 
 
-class StratifiedKFoldTrainer:
-    """Run grouped stratified CV with frozen encoder embeddings + linear probe."""
-
-    MULTI_LABEL_TASKS = {"instrument"}
+class LilyPondMLMDataset(Dataset):
+    """Simple text dataset for masked language modeling."""
 
     def __init__(
         self,
-        config: TrainingConfig,
-        tokenizer: Optional[Any] = None,
-        model_factory: Optional[Any] = None,
-        device: Optional[str] = None,
+        files: List[Path],
+        tokenizer: PreTrainedTokenizerFast,
+        max_length: int,
     ):
-        self.config = config
+        self.files = files
         self.tokenizer = tokenizer
-        self.model_factory = model_factory
-        self.device = torch.device(
-            device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.max_length = max_length
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        text = self.files[idx].read_text(encoding="utf-8", errors="ignore")
+        encoded = self.tokenizer(
+            text,
+            truncation=True,
+            max_length=self.max_length,
+            padding="max_length",
+            return_tensors="pt",
         )
-        self.classification_metrics = ClassificationMetrics(top_k=config.top_k)
+        return {
+            "input_ids": encoded["input_ids"].squeeze(0),
+            "attention_mask": encoded["attention_mask"].squeeze(0),
+        }
+
+
+class MLMPretrainer:
+    """Trainer wrapper for BERT-base MLM pretraining from scratch."""
+
+    def __init__(self, config: TrainingConfig):
+        self.config = config
 
     def run(self) -> Dict[str, Any]:
-        metadata = self._load_metadata()
-        sample_ids, labels, groups = self._prepare_cv_samples(metadata)
+        is_main = int(os.environ.get("RANK", 0)) == 0
 
-        folds = build_grouped_stratified_folds(
-            sample_ids=sample_ids,
-            labels=labels,
-            groups=groups,
-            n_splits=self.config.n_folds,
-            seed=self.config.seed,
-        )
-
-        encoder = self._load_encoder()
-
-        fold_metrics: List[Dict[str, Any]] = []
-        for fold_index, fold in enumerate(folds, start=1):
-            train_dataset = self._build_dataset(fold["train_ids"], metadata)
-            val_dataset = self._build_dataset(fold["val_ids"], metadata)
-            metrics = self._train_and_evaluate_fold(
-                fold_index=fold_index,
-                encoder=encoder,
-                train_dataset=train_dataset,
-                val_dataset=val_dataset,
+        # Initialize wandb before HF Trainer so it reuses the existing run
+        if self.config.wandb_enabled and is_main:
+            wandb.init(
+                project=self.config.wandb_project,
+                entity=self.config.wandb_entity,
+                mode=self.config.wandb_mode,
+                name=self.config.wandb_run_name
+                or f"bert-mlm-{self.config.model_architecture}",
+                config=self.config.to_dict(),
             )
-            fold_metrics.append(metrics)
 
-        summary_mean, summary_std = self._summarize_fold_metrics(fold_metrics)
+        tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
 
-        output_dir = Path(self.config.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        results_path = output_dir / f"cv_results_{self.config.task}.json"
-
-        results = {
-            "task": self.config.task,
-            "mode": "linear_probe",
-            "n_folds": self.config.n_folds,
-            "fold_metrics": fold_metrics,
-            "mean": summary_mean,
-            "std": summary_std,
-            "results_path": str(results_path),
-        }
-        results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
-        return results
-
-    def _load_encoder(self) -> LilyBERTEncoder:
-        encoder = LilyBERTEncoder.from_pretrained(self.config.pretrained_model)
-        encoder.to(self.device)
-        encoder.eval()
-        for parameter in encoder.parameters():
-            parameter.requires_grad = False
-        return encoder
-
-    def _load_metadata(self) -> Dict[str, Dict[str, Any]]:
-        metadata_path = Path(self.config.data_dir) / "metadata.json"
-        if not metadata_path.exists():
-            raise FileNotFoundError(
-                f"metadata.json not found in {self.config.data_dir}"
-            )
-        return json.loads(metadata_path.read_text(encoding="utf-8"))
-
-    def _prepare_cv_samples(self, metadata: Dict[str, Dict[str, Any]]):
-        data_dir = Path(self.config.data_dir)
-        if not data_dir.exists():
-            raise FileNotFoundError(f"Data directory not found: {data_dir}")
-
-        sample_ids: List[str] = []
-        labels: List[str] = []
-        groups: List[str] = []
-
-        for movement_file in sorted(data_dir.glob("*.ly")):
-            movement_id = movement_file.stem
-            movement_meta = metadata.get(movement_id)
-            if not movement_meta:
-                continue
-
-            sample_ids.append(movement_id)
-            labels.append(self._stratify_label(movement_meta))
-            groups.append(movement_meta.get("base_work", movement_id))
-
-        if not sample_ids:
-            raise ValueError("No movement samples found for CV")
-
-        return sample_ids, labels, groups
-
-    def _build_dataset(
-        self,
-        movement_ids: Sequence[str],
-        metadata: Dict[str, Dict[str, Any]],
-    ) -> BaroqueMusicClassificationDataset:
-        tokenizer = self._ensure_tokenizer()
-        data_dir = Path(self.config.data_dir)
-        movement_files = [
-            str(data_dir / f"{movement_id}.ly") for movement_id in movement_ids
-        ]
-
-        return BaroqueMusicClassificationDataset(
-            movement_files=movement_files,
-            metadata=metadata,
-            tokenizer=tokenizer,
-            max_length=self.config.max_length,
-            stride=self.config.stride,
-            task=self.config.task,
-        )
-
-    def _ensure_tokenizer(self):
-        if self.tokenizer is not None:
-            return self.tokenizer
-        self.tokenizer = PreTrainedTokenizerFast.from_pretrained(
-            self.config.tokenizer_path
-        )
-        return self.tokenizer
-
-    def _extract_movement_embeddings(
-        self,
-        dataset: BaroqueMusicClassificationDataset,
-        encoder: LilyBERTEncoder,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        loader = DataLoader(
-            dataset,
-            batch_size=64,
-            shuffle=False,
-            num_workers=self.config.dataloader_num_workers,
-        )
-
-        movement_sums: Dict[str, np.ndarray] = {}
-        movement_counts: Dict[str, int] = defaultdict(int)
-        movement_labels: Dict[str, np.ndarray] = {}
-
-        with torch.no_grad():
-            for batch in loader:
-                input_ids = batch["input_ids"].to(self.device)
-                attention_mask = batch["attention_mask"].to(self.device)
-                pooled = encoder.encode(
-                    input_ids=input_ids, attention_mask=attention_mask
+        if self.config.pretokenized_shards_dir:
+            shards_dir = Path(self.config.pretokenized_shards_dir)
+            train_manifest = shards_dir / "train" / "manifest.json"
+            eval_manifest = shards_dir / "eval" / "manifest.json"
+            if not train_manifest.exists():
+                raise FileNotFoundError(f"Train manifest not found: {train_manifest}")
+            if not eval_manifest.exists():
+                raise FileNotFoundError(f"Eval manifest not found: {eval_manifest}")
+            train_dataset = ShardedMLMDataset(manifest_path=str(train_manifest))
+            eval_dataset = ShardedMLMDataset(manifest_path=str(eval_manifest))
+            if is_main:
+                print(
+                    f"Loaded sharded MLM data: "
+                    f"train={len(train_dataset)}, eval={len(eval_dataset)}"
                 )
-                pooled_np = pooled.detach().cpu().numpy()
-
-                labels = batch["label"]
-                movement_ids = batch["movement_id"]
-
-                for idx, movement_id in enumerate(movement_ids):
-                    emb = pooled_np[idx]
-                    if movement_id in movement_sums:
-                        movement_sums[movement_id] += emb
-                    else:
-                        movement_sums[movement_id] = emb.copy()
-                    movement_counts[movement_id] += 1
-
-                    if movement_id not in movement_labels:
-                        label_tensor = labels[idx]
-                        if torch.is_tensor(label_tensor):
-                            movement_labels[movement_id] = (
-                                label_tensor.detach().cpu().numpy()
-                            )
-                        else:
-                            movement_labels[movement_id] = np.asarray(label_tensor)
-
-        ordered_ids = sorted(movement_sums.keys())
-        x = np.vstack(
-            [
-                movement_sums[movement_id] / max(1, movement_counts[movement_id])
-                for movement_id in ordered_ids
-            ]
-        )
-        y = np.asarray([movement_labels[movement_id] for movement_id in ordered_ids])
-
-        if y.ndim == 2 and y.shape[1] == 1:
-            y = y.reshape(-1)
-        return x, y
-
-    def _train_and_evaluate_fold(
-        self,
-        fold_index: int,
-        encoder: LilyBERTEncoder,
-        train_dataset: BaroqueMusicClassificationDataset,
-        val_dataset: BaroqueMusicClassificationDataset,
-    ) -> Dict[str, Any]:
-        multi_label = self.config.task in self.MULTI_LABEL_TASKS
-
-        x_train, y_train = self._extract_movement_embeddings(train_dataset, encoder)
-        x_val, y_val = self._extract_movement_embeddings(val_dataset, encoder)
-
-        if multi_label:
-            classifier = OneVsRestClassifier(
-                LogisticRegression(
-                    max_iter=self.config.probe_max_iter,
-                    C=self.config.probe_c,
-                    class_weight=self.config.probe_class_weight,
-                )
-            )
-            classifier.fit(x_train, y_train)
-            y_pred = classifier.predict(x_val)
-            metrics = self.classification_metrics.compute_multi_label(
-                y_true=y_val, y_pred=y_pred
-            )
-            fold_result = {
-                **{f"avg_{key}": float(value) for key, value in metrics.items()},
-                "best_selection_metric": "avg_f1_micro",
-                "best_selection_mode": "max",
-                "best_selection_value": float(metrics["f1_micro"]),
-                "best_selection_step": 1,
+            token_stats = {
+                "file_count": len(train_dataset) + len(eval_dataset),
+                "total_tokens": 0,
+                "avg_tokens_per_file": 0,
             }
         else:
-            classifier = LogisticRegression(
-                max_iter=self.config.probe_max_iter,
-                C=self.config.probe_c,
-                class_weight=self.config.probe_class_weight,
+            all_files = self._collect_movement_files(
+                data_dir=self.config.data_dir,
             )
-            classifier.fit(x_train, y_train)
-            y_pred = classifier.predict(x_val)
-            y_probs = classifier.predict_proba(x_val)
-            metrics = self.classification_metrics.compute_single_label(
-                y_true=y_val,
-                y_pred=y_pred,
-                y_probs=y_probs,
+            if not all_files:
+                raise ValueError("No LilyPond files found for Stage-1 pretraining")
+
+            token_stats = self.count_corpus_tokens(all_files, tokenizer)
+            if is_main:
+                print(f"Token stats: {token_stats}")
+
+            # Split into 99% train, 1% eval
+            train_files, eval_files = self._train_eval_split(
+                all_files,
+                eval_ratio=0.01,
+                seed=self.config.seed,
             )
-            fold_result = {
-                **{f"avg_{key}": float(value) for key, value in metrics.items()},
-                "best_selection_metric": "avg_accuracy",
-                "best_selection_mode": "max",
-                "best_selection_value": float(metrics["accuracy"]),
-                "best_selection_step": 1,
-            }
 
-        checkpoint_dir = self._save_probe_checkpoint(
-            fold_index=fold_index,
-            classifier=classifier,
-            label_to_index=train_dataset.label_to_index,
+            train_dataset = LilyPondMLMDataset(
+                files=train_files,
+                tokenizer=tokenizer,
+                max_length=self.config.max_length,
+            )
+
+            eval_dataset = LilyPondMLMDataset(
+                files=eval_files,
+                tokenizer=tokenizer,
+                max_length=self.config.max_length,
+            )
+
+        if self.config.resume_from_checkpoint:
+            ckpt_path = Path(self.config.resume_from_checkpoint)
+            if not ckpt_path.exists():
+                raise FileNotFoundError(
+                    f"Checkpoint not found: {ckpt_path}"
+                )
+            model = BertForMaskedLM.from_pretrained(str(ckpt_path))
+            if is_main:
+                print(f"Loaded pretrained weights from {ckpt_path}")
+        else:
+            model_config = self._build_model_config(
+                vocab_size=self._vocab_size(tokenizer)
+            )
+            model = BertForMaskedLM(model_config)
+
+        ta_kwargs: Dict[str, Any] = dict(
+            output_dir=self.config.output_dir,
+            per_device_train_batch_size=self.config.per_device_train_batch_size,
+            per_device_eval_batch_size=self.config.per_device_eval_batch_size,
+            num_train_epochs=self.config.num_train_epochs,
+            learning_rate=self.config.learning_rate,
+            lr_scheduler_type=self.config.lr_scheduler_type,
+            max_grad_norm=self.config.max_grad_norm,
+            weight_decay=self.config.weight_decay,
+            warmup_ratio=self.config.warmup_ratio,
+            max_steps=self.config.max_steps,
+            logging_steps=self.config.logging_steps,
+            save_steps=self.config.save_steps,
+            save_total_limit=3,
+            seed=self.config.seed,
+            dataloader_num_workers=self.config.dataloader_num_workers,
+            report_to=self._report_to() if is_main else ["none"],
+            disable_tqdm=not is_main,
+            remove_unused_columns=False,
+            eval_strategy="steps",
+            eval_steps=self.config.eval_steps,
+            save_strategy="steps",
+            metric_for_best_model="eval_loss",
         )
-        fold_result["checkpoint_dir"] = str(checkpoint_dir)
+        if self.config.tensorboard_enabled:
+            ta_kwargs["logging_dir"] = self.config.tensorboard_log_dir
+        training_arguments = TrainingArguments(**ta_kwargs)
 
-        self._log_fold_wandb(fold_index=fold_index, metrics=fold_result)
-        return fold_result
-
-    def _save_probe_checkpoint(
-        self,
-        fold_index: int,
-        classifier: Any,
-        label_to_index: Dict[str, int],
-    ) -> Path:
-        checkpoint_dir = (
-            Path(self.config.output_dir) / "checkpoints" / f"fold_{fold_index}" / "best"
+        collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=True,
+            mlm_probability=self.config.mlm_probability,
         )
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        with (checkpoint_dir / "probe.pkl").open("wb") as handle:
-            pickle.dump(classifier, handle)
+        trainer = Trainer(
+            model=model,
+            args=training_arguments,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=collator,
+        )
+        trainer.train()
 
-        (checkpoint_dir / "config.json").write_text(
-            json.dumps(
-                {
-                    "task": self.config.task,
-                    "pretrained_model": self.config.pretrained_model,
-                    "max_length": self.config.max_length,
-                    "stride": self.config.stride,
-                    "probe_max_iter": self.config.probe_max_iter,
-                    "probe_c": self.config.probe_c,
-                    "probe_class_weight": self.config.probe_class_weight,
-                },
-                indent=2,
-            ),
+        model_dir = Path(self.config.output_dir) / "mlm_model"
+        model_dir.mkdir(parents=True, exist_ok=True)
+        trainer.save_model(str(model_dir))
+        tokenizer.save_pretrained(str(model_dir / "tokenizer"))
+        self.config.save(str(model_dir))
+
+        if self.config.wandb_enabled and is_main:
+            wandb.finish()
+
+        summary = {
+            "model_dir": str(model_dir),
+            "num_samples_train": len(train_dataset),
+            "num_samples_eval": len(eval_dataset),
+            "total_tokens": token_stats["total_tokens"],
+            "avg_tokens_per_file": token_stats["avg_tokens_per_file"],
+            "eval_ratio": 0.01,
+            "pretokenized_shards": self.config.pretokenized_shards_dir is not None,
+            "max_length": self.config.max_length,
+            "mlm_probability": self.config.mlm_probability,
+            "architecture": self.config.model_architecture,
+        }
+        (Path(self.config.output_dir) / "pretraining_summary.json").write_text(
+            json.dumps(summary, indent=2),
             encoding="utf-8",
         )
-        (checkpoint_dir / "label_map.json").write_text(
-            json.dumps(
-                {str(index): label for label, index in label_to_index.items()}, indent=2
-            ),
-            encoding="utf-8",
-        )
-        return checkpoint_dir
+        return summary
 
-    def _log_fold_wandb(self, fold_index: int, metrics: Dict[str, Any]) -> None:
-        if not self.config.wandb_enabled or wandb is None:
-            return
-        run = wandb.init(
-            project=self.config.wandb_project,
-            entity=self.config.wandb_entity,
-            mode=self.config.wandb_mode,
-            name=self.config.wandb_run_name or f"linear-probe-fold-{fold_index}",
-            reinit=True,
-            config={"fold": fold_index, **self.config.__dict__},
-        )
-        if run is not None:
-            run.log(metrics)
-            run.finish()
+    @staticmethod
+    def _train_eval_split(
+        files: List[Path],
+        eval_ratio: float = 0.01,
+        seed: int | None = None,
+    ) -> Tuple[List[Path], List[Path]]:
+        """Split files into train and eval sets.
 
-    def _summarize_fold_metrics(
-        self,
-        fold_metrics: List[Dict[str, Any]],
-    ) -> tuple[Dict[str, float], Dict[str, float]]:
-        tracked_keys = [
-            key
-            for key in fold_metrics[0].keys()
-            if key.startswith("avg_") and isinstance(fold_metrics[0][key], (int, float))
-        ]
+        Args:
+            files: List of file paths
+            eval_ratio: Fraction of files to use for evaluation (default: 0.01 for 1%)
+            seed: Random seed for reproducibility
 
-        summary_mean: Dict[str, float] = {}
-        summary_std: Dict[str, float] = {}
-        for key in tracked_keys:
-            values = [float(metrics[key]) for metrics in fold_metrics]
-            summary_mean[key] = float(mean(values))
-            summary_std[key] = float(stdev(values) if len(values) > 1 else 0.0)
+        Returns:
+            Tuple of (train_files, eval_files)
+        """
+        if seed is not None:
+            random.seed(seed)
 
-        return summary_mean, summary_std
+        shuffled = files.copy()
+        random.shuffle(shuffled)
 
-    def _stratify_label(self, movement_meta: Dict[str, Any]) -> str:
-        labels = (
-            movement_meta.get("labels", {}) if isinstance(movement_meta, dict) else {}
-        )
+        split_idx = max(1, int(len(shuffled) * (1 - eval_ratio)))
+        train_files = shuffled[:split_idx]
+        eval_files = shuffled[split_idx:]
 
-        if self.config.task == "composer":
-            return str(labels.get("composer", "unknown")).strip().lower()
+        return train_files, eval_files
 
-        if self.config.task == "style":
-            return str(labels.get("style", "unknown")).strip().lower()
+    def _report_to(self) -> List[str]:
+        backends: List[str] = []
+        if self.config.wandb_enabled:
+            backends.append("wandb")
+        if self.config.tensorboard_enabled:
+            backends.append("tensorboard")
+        return backends or ["none"]
 
-        if self.config.task == "instrument":
-            instruments = (
-                labels.get("midi_instruments", []) if isinstance(labels, dict) else []
+    def _build_model_config(self, vocab_size: int) -> BertConfig:
+        if self.config.model_architecture != "bert-base":
+            raise ValueError(
+                "Unsupported model_architecture. This pipeline currently supports bert-base"
             )
-            if not instruments:
-                return "none"
-            normalized = [str(item).strip().lower() for item in instruments]
-            return "|".join(sorted(normalized))
+        return BertConfig(
+            vocab_size=vocab_size,
+            hidden_size=self.config.hidden_size,
+            num_hidden_layers=self.config.num_hidden_layers,
+            num_attention_heads=self.config.num_attention_heads,
+            intermediate_size=self.config.intermediate_size,
+            max_position_embeddings=self.config.max_position_embeddings,
+            type_vocab_size=2,
+        )
 
-        if self.config.task == "key_root":
-            meta = labels.get("meta", {}) if isinstance(labels, dict) else {}
-            return str(meta.get("key", "unknown")).strip().lower()
+    @staticmethod
+    def _vocab_size(tokenizer: PreTrainedTokenizerFast) -> int:
+        vocab_size = getattr(tokenizer, "vocab_size", None)
+        if vocab_size is not None:
+            return int(vocab_size)
+        return len(tokenizer.get_vocab())
 
-        raise ValueError(f"Unsupported task: {self.config.task}")
+    @staticmethod
+    def count_corpus_tokens(
+        files: List[Path],
+        tokenizer: PreTrainedTokenizerFast,
+        *,
+        add_special_tokens: bool = True,
+    ) -> Dict[str, float | int]:
+        """Count tokens across a corpus of LilyPond files.
+
+        This utility is intended for corpora like Mutopia pretraining data,
+        where files may include augmented variants and do not need metadata.
+
+        Args:
+            files: List of .ly files to include in the count
+            tokenizer: Loaded tokenizer used for counting
+            add_special_tokens: Whether to include tokenizer special tokens
+
+        Returns:
+            Dictionary with total file count, total tokens, and average tokens/file
+        """
+        total_tokens = 0
+
+        for file_path in tqdm(
+            files,
+            desc="Counting corpus tokens",
+            unit="file",
+        ):
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+            token_ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
+            total_tokens += len(token_ids)
+
+        file_count = len(files)
+        avg_tokens_per_file = total_tokens / file_count if file_count > 0 else 0.0
+
+        return {
+            "file_count": file_count,
+            "total_tokens": total_tokens,
+            "avg_tokens_per_file": avg_tokens_per_file,
+        }
+
+    @staticmethod
+    def _collect_movement_files(data_dir: str) -> List[Path]:
+        """Collect .ly files from the data directory."""
+        root = Path(data_dir)
+        if not root.exists():
+            return []
+        return sorted(root.glob("*.ly"))

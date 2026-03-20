@@ -1,8 +1,6 @@
-"""BERT encoder + classifier modules."""
+"""BERT encoder module."""
 
 from __future__ import annotations
-
-from typing import Any, Dict, Optional
 
 import torch
 from torch import nn
@@ -10,7 +8,7 @@ from transformers import BertConfig, BertModel
 
 
 class LilyBERTEncoder(nn.Module):
-    """Standalone LilyBERT encoder for training and probing."""
+    """Standalone LilyBERT encoder for training and embedding extraction."""
 
     def __init__(
         self,
@@ -67,121 +65,3 @@ class LilyBERTEncoder(nn.Module):
         nn.init.normal_(new_embeddings.weight, mean=0.0, std=0.02)
         model.embeddings.word_embeddings = new_embeddings
         model.config.vocab_size = vocab_size
-
-
-class LilyBERTTaskClassifier(nn.Module):
-    """Shared classifier logic over a standalone LilyBERTEncoder."""
-
-    def __init__(
-        self, encoder: LilyBERTEncoder, num_classes: int, multi_label: bool = False
-    ):
-        super().__init__()
-
-        self.encoder = encoder
-        self.bert = self.encoder.bert
-        self.num_classes = int(num_classes)
-        self.multi_label = bool(multi_label)
-
-        hidden_size = self.encoder.bert.config.hidden_size
-        self.classifier = nn.Linear(hidden_size, self.num_classes)
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        labels: Optional[torch.Tensor] = None,
-    ) -> Dict[str, Any]:
-        pooled = self.encoder.encode(input_ids=input_ids, attention_mask=attention_mask)
-        logits = self.classifier(pooled)
-
-        loss = None
-        if labels is not None:
-            if self.multi_label:
-                loss_fn = nn.BCEWithLogitsLoss()
-                loss = loss_fn(logits, labels.float())
-            else:
-                loss_fn = nn.CrossEntropyLoss()
-                loss = loss_fn(logits, labels.long())
-
-        return {"loss": loss, "logits": logits}
-
-
-class LilyBERTClassifier(LilyBERTTaskClassifier):
-    """Generic classifier wrapper retained for compatibility."""
-
-    def __init__(
-        self,
-        num_classes: int,
-        vocab_size: int = 30522,
-        pretrained: str = "bert-base",
-        multi_label: bool = False,
-    ):
-        encoder = LilyBERTEncoder(
-            vocab_size=vocab_size,
-            pretrained=pretrained,
-            random_init=False,
-        )
-        super().__init__(
-            encoder=encoder, num_classes=num_classes, multi_label=multi_label
-        )
-        self.vocab_size = int(vocab_size)
-
-
-class ComposerClassifier(LilyBERTClassifier):
-    def __init__(
-        self,
-        vocab_size: int,
-        pretrained: str = "bert-base",
-        num_classes: int = 70,
-    ):
-        super().__init__(
-            num_classes=num_classes,
-            vocab_size=vocab_size,
-            pretrained=pretrained,
-            multi_label=False,
-        )
-
-
-class StyleClassifier(LilyBERTClassifier):
-    def __init__(
-        self,
-        vocab_size: int,
-        pretrained: str = "bert-base",
-        num_classes: int = 3,
-    ):
-        super().__init__(
-            num_classes=num_classes,
-            vocab_size=vocab_size,
-            pretrained=pretrained,
-            multi_label=False,
-        )
-
-
-class InstrumentClassifier(LilyBERTClassifier):
-    def __init__(
-        self,
-        vocab_size: int,
-        pretrained: str = "bert-base",
-        num_classes: int = 25,
-    ):
-        super().__init__(
-            num_classes=num_classes,
-            vocab_size=vocab_size,
-            pretrained=pretrained,
-            multi_label=True,
-        )
-
-
-class KeyRootClassifier(LilyBERTClassifier):
-    def __init__(
-        self,
-        vocab_size: int,
-        pretrained: str = "bert-base",
-        num_classes: int = 12,
-    ):
-        super().__init__(
-            num_classes=num_classes,
-            vocab_size=vocab_size,
-            pretrained=pretrained,
-            multi_label=False,
-        )

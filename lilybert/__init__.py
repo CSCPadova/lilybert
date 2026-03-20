@@ -1,22 +1,13 @@
-"""lilyBERT package for LilyPond MIR classification workflows."""
+"""lilyBERT package for LilyPond pretraining and tokenization workflows."""
 
-from lilybert.data import (
-    BaroqueMusicClassificationDataset,
-    LilyPondParser,
-    LilyPondPreprocessor,
-)
-from lilybert.evaluation import ClassificationMetrics, WindowAggregator
-from lilybert.models import LilyBERTClassifier, LilyBERTEncoder
-from lilybert.training import StratifiedKFoldTrainer, TrainingConfig
+from lilybert.data import LilyPondParser, LilyPondPreprocessor
+from lilybert.models import LilyBERTEncoder
+from lilybert.training import MLMPretrainer, TrainingConfig
 
 __all__ = [
     "LilyPondParser",
     "LilyPondPreprocessor",
-    "BaroqueMusicClassificationDataset",
     "LilyBERTEncoder",
-    "LilyBERTClassifier",
+    "MLMPretrainer",
     "TrainingConfig",
-    "StratifiedKFoldTrainer",
-    "WindowAggregator",
-    "ClassificationMetrics",
 ]

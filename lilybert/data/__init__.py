@@ -6,19 +6,12 @@ from .parser import LilyPondParser
 
 # Conditional imports for ML-dependent modules
 try:
-    from .dataset import (
-        BaroqueMusicClassificationDataset,
-        BaroqueMusicDataset,
-    )
-    from .label_encoder import LabelEncoder
     from .preprocessor import LilyPondPreprocessor
     from .pretokenized_dataset import PreTokenizedDataset
     from .repository import BaroqueMusicDataAPI, MovementRecord
     from .tokenizer import LilyPondTokenizer
 
     __all__ = [
-        "BaroqueMusicClassificationDataset",
-        "BaroqueMusicDataset",
         "PreTokenizedDataset",
         "LilyPondParser",
         "LilyPondPreprocessor",
@@ -27,7 +20,6 @@ try:
         "LexerConfig",
         "BaroqueMusicDataAPI",
         "MovementRecord",
-        "LabelEncoder",
     ]
 
 except ImportError as e:

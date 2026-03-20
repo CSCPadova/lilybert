@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 class PreTokenizedDataset(Dataset):
     """Dataset backed by pre-tokenized .npz + _meta.json files.
 
-    Produces the same sample dict as BaroqueMusicClassificationDataset:
+    Produces sample dicts with keys:
     ``{input_ids, attention_mask, label, movement_id, base_work}``.
     """
 

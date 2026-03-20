@@ -1,17 +1,13 @@
 """Basic tests for lilyBERT functionality."""
 
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from lilybert.data import LilyPondParser, LilyPondPreprocessor, LilyPondTokenizer
-from lilybert.evaluation import ClassificationMetrics
-from lilybert.training import TrainingConfig
 
 
 class TestLilyPondParser:
@@ -269,77 +265,6 @@ class TestLilyPondPreprocessor:
             assert len(result["text"]) > 0
 
 
-class TestTrainingConfig:
-    """Test training configuration."""
-
-    def test_default_config(self):
-        """Test default training configuration."""
-        config = TrainingConfig()
-        assert config.probe_c > 0
-        assert config.probe_max_iter > 0
-        assert config.pretrained_model == "bert-base"
-
-    def test_quick_test_config(self):
-        """Test quick test configuration."""
-        config = TrainingConfig.for_quick_test()
-        assert config.n_folds == 2
-        assert config.probe_max_iter == 200
-
-    def test_production_config(self):
-        """Test production configuration."""
-        config = TrainingConfig.for_production()
-        assert config.n_folds == 5
-        assert config.probe_max_iter == 2000
-
-    def test_config_validation(self):
-        """Test configuration validation."""
-        # Valid config should not raise
-        config = TrainingConfig(probe_c=1.0)
-        config._validate_config()
-
-        # Invalid config should raise
-        with pytest.raises(ValueError):
-            invalid_config = TrainingConfig(probe_c=-1)
-            invalid_config._validate_config()
-
-    def test_save_load_config(self):
-        """Test saving and loading configuration."""
-        config = TrainingConfig.for_quick_test()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config.save_pretrained(temp_dir)
-
-            # Check that config file was created
-            config_file = Path(temp_dir) / "training_config.json"
-            assert config_file.exists()
-
-            # Load and verify
-            loaded_config = TrainingConfig.from_pretrained(str(config_file))
-            assert loaded_config.probe_max_iter == config.probe_max_iter
-
-
-class TestClassificationMetrics:
-    """Test classification evaluation metrics."""
-
-    def test_single_label_metrics(self):
-        metrics = ClassificationMetrics()
-        y_true = np.array([0, 1, 1, 0])
-        y_pred = np.array([0, 1, 0, 0])
-        scores = metrics.compute_single_label(y_true=y_true, y_pred=y_pred)
-        assert "accuracy" in scores
-        assert "f1_macro" in scores
-        assert 0.0 <= scores["accuracy"] <= 1.0
-
-    def test_multi_label_metrics(self):
-        metrics = ClassificationMetrics()
-        y_true = np.array([[1, 0, 1], [0, 1, 0]])
-        y_pred = np.array([[1, 0, 0], [0, 1, 0]])
-        scores = metrics.compute_multi_label(y_true=y_true, y_pred=y_pred)
-        assert "f1_micro" in scores
-        assert "hamming_loss" in scores
-        assert 0.0 <= scores["subset_accuracy"] <= 1.0
-
-
 class TestIntegration:
     """Integration tests."""
 
@@ -388,23 +313,6 @@ class TestIntegration:
             markers = movement.get("structure_markers", [])
             assert "[SIMUL_BEGIN]" in markers
             assert "[SIMUL_END]" in markers
-
-    def test_config_serialization(self):
-        """Test configuration serialization roundtrip."""
-        original_config = TrainingConfig.for_quick_test()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Save config
-            original_config.save_pretrained(temp_dir)
-
-            # Load config
-            config_file = Path(temp_dir) / "training_config.json"
-            loaded_config = TrainingConfig.from_pretrained(str(config_file))
-
-            # Verify key properties are preserved
-            assert loaded_config.probe_c == original_config.probe_c
-            assert loaded_config.probe_max_iter == original_config.probe_max_iter
-            assert loaded_config.pretrained_model == original_config.pretrained_model
 
     def test_tokenizer_builds_corpus_from_data_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:

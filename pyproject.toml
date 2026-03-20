@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "lilybert"
 version = "0.1.0"
-description = "BERT-based MIR classification on LilyPond notation datasets"
+description = "BERT-based training on LilyPond notation datasets"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Matteo Spanio", email = "spanio@dei.unipd.it"},
     {name = "Ilay Guler", email = "ilay2004@bu.edu"},
 ]
-keywords = ["music", "ai", "bert", "lilypond", "classification", "mir"]
+keywords = ["music", "ai", "bert", "lilypond", "mir"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -60,9 +60,9 @@ dev = [
 "Repository" = "https://github.com/CSCPadova/lilybert"
 
 [project.scripts]
-ly-preprocess = "lilybert.cli.ly_preprocess:main"
-ly-train = "lilybert.cli.ly_train:main"
-ly-embed = "lilybert.cli.embed:run"
+preprocess = "lilybert.cli.ly_preprocess:main"
+train = "lilybert.cli.ly_train:main"
+embed = "lilybert.cli.embed:run"
 
 [tool.hatchling.build.targets.wheel]
 packages = ["lilybert"]
@@ -118,4 +118,7 @@ dev = [
     "black>=23.3.0",
     "flake8>=6.0.0",
     "isort>=5.12.0",
+]
+notebook = [
+    "notebook>=7.5.5",
 ]

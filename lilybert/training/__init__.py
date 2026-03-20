@@ -1,11 +1,6 @@
-"""Training utilities and configurations."""
+"""Training module for lilyBERT."""
 
 from .config import TrainingConfig
-from .cross_validation import build_grouped_stratified_folds
-from .trainer import StratifiedKFoldTrainer
+from .trainer import MLMPretrainer
 
-__all__ = [
-    "StratifiedKFoldTrainer",
-    "TrainingConfig",
-    "build_grouped_stratified_folds",
-]
+__all__ = ["TrainingConfig", "MLMPretrainer"]
