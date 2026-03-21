@@ -10,16 +10,15 @@
 #   conf/preprocess/slurm.yaml
 #
 # Example:
-#   sbatch scripts/slurm_pipeline.sh --preprocess --bpe --tokenize --shard
+#   sbatch scripts/slurm_pipeline.sh --preprocess --tokenizer --tokenize --shard
 #   sbatch scripts/slurm_pipeline.sh --preprocess --profile slurm
 #   sbatch scripts/slurm_pipeline.sh --shard preprocess.sharding.shard_size=16384
 #
 # Stage flags:
 #   --preprocess         run movement preprocessing
-#   --bpe                train tokenizer (BPE)
+#   --tokenizer          build/save the extended tokenizer
 #   --tokenize           pretokenize (non-sharded)
 #   --shard              build pretokenized shards (MLM)
-#   --tokenizer-type     tokenizer backend: "musical" (default) or "bbpe"
 # ---------------------------------------------------------------------------
 
 #SBATCH --job-name=ly-pipeline
@@ -35,11 +34,10 @@
 set -euo pipefail
 
 RUN_PREPROCESS=false
-RUN_BPE=false
+RUN_TOKENIZER=false
 RUN_TOKENIZE=false
 RUN_SHARD=false
 PROFILE="slurm"
-TOKENIZER_TYPE="musical"
 EXTRA_OVERRIDES=()
 
 print_help() {
@@ -48,18 +46,17 @@ Usage: scripts/slurm_pipeline.sh [FLAGS] [HYDRA_OVERRIDES...]
 
 Flags:
   --preprocess            Run preprocessing stage
-  --bpe                   Run tokenizer training stage
+  --tokenizer             Build/save the extended tokenizer
   --tokenize              Run tokenization stage (non-sharded)
   --shard                 Run sharding stage (MLM)
   --profile <name>        Hydra preprocess profile (default: slurm)
-  --tokenizer-type <t>    Tokenizer backend: "musical" (default) or "bbpe"
   --help                  Show this help
 
 Any additional arguments are passed as Hydra overrides.
 
 Examples:
-    sbatch scripts/slurm_pipeline.sh --preprocess --bpe --tokenize --shard
-    sbatch scripts/slurm_pipeline.sh --bpe --shard --tokenizer-type bbpe
+    sbatch scripts/slurm_pipeline.sh --preprocess --tokenizer --tokenize --shard
+    sbatch scripts/slurm_pipeline.sh --tokenizer --shard
     sbatch scripts/slurm_pipeline.sh --preprocess --profile default
     sbatch scripts/slurm_pipeline.sh --shard preprocess.sharding.shard_size=16384
 EOF
@@ -71,8 +68,8 @@ while [[ $# -gt 0 ]]; do
             RUN_PREPROCESS=true
             shift
             ;;
-        --bpe)
-            RUN_BPE=true
+        --tokenizer|--bpe)
+            RUN_TOKENIZER=true
             shift
             ;;
         --tokenize)
@@ -87,10 +84,6 @@ while [[ $# -gt 0 ]]; do
             PROFILE="$2"
             shift 2
             ;;
-        --tokenizer-type)
-            TOKENIZER_TYPE="$2"
-            shift 2
-            ;;
         --help|-h)
             print_help
             exit 0
@@ -102,8 +95,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$RUN_PREPROCESS" = false && "$RUN_BPE" = false && "$RUN_TOKENIZE" = false && "$RUN_SHARD" = false ]]; then
-    echo "No stage selected. Use one or more of: --preprocess --bpe --tokenize --shard" >&2
+if [[ "$RUN_PREPROCESS" = false && "$RUN_TOKENIZER" = false && "$RUN_TOKENIZE" = false && "$RUN_SHARD" = false ]]; then
+    echo "No stage selected. Use one or more of: --preprocess --tokenizer --tokenize --shard" >&2
     exit 1
 fi
 
@@ -121,9 +114,8 @@ fi
 OVERRIDES=(
     "--config-name" "preprocess"
     "preprocess=${PROFILE}"
-    "dataset.tokenizer_type=${TOKENIZER_TYPE}"
     "preprocess.enabled=${RUN_PREPROCESS}"
-    "preprocess.bpe.enabled=${RUN_BPE}"
+    "preprocess.tokenizer.enabled=${RUN_TOKENIZER}"
     "preprocess.tokenize.enabled=${RUN_TOKENIZE}"
     "preprocess.sharding.enabled=${RUN_SHARD}"
 )
@@ -140,10 +132,9 @@ echo "============================================"
 echo "  SLURM_JOB_ID: ${SLURM_JOB_ID:-local}"
 echo "  PROFILE:        ${PROFILE}"
 echo "  PREPROCESS:     ${RUN_PREPROCESS}"
-echo "  BPE:            ${RUN_BPE}"
+echo "  TOKENIZER:      ${RUN_TOKENIZER}"
 echo "  TOKENIZE:       ${RUN_TOKENIZE}"
 echo "  SHARD:          ${RUN_SHARD}"
-echo "  TOKENIZER_TYPE: ${TOKENIZER_TYPE}"
 echo "  OVERRIDES:      ${EXTRA_OVERRIDES[*]:-(none)}"
 echo "============================================"
 echo ""
