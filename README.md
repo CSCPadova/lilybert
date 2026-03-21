@@ -1,13 +1,18 @@
 # lilyBERT
 
-MIR classification on LilyPond music notation.
+CodeBERT-based representation learning for LilyPond, treating music notation as source code.
 
-lilyBERT provides a unified Hydra-based workflow for:
-- preprocessing any LilyPond dataset,
-- optional augmentation/sharding/BPE at preprocess time,
-- unified model training (pretraining or linear-probe classification).
+LilyPond is a text-based music engraving language with formal grammar, block structure, and backslash commands — making it structurally similar to a programming language. lilyBERT leverages this by starting from [CodeBERT](https://huggingface.co/microsoft/codebert-base) (`microsoft/codebert-base`), a RoBERTa model pretrained on six programming languages, and adapting it to LilyPond through:
+
+- preprocessing LilyPond source files into movement-level artifacts,
+- extending CodeBERT's tokenizer with LilyPond-specific backslash commands,
+- MLM pretraining on LilyPond corpora to learn notation syntax and structure,
+- linear probing to evaluate whether the adapted model encodes musically meaningful properties,
+- embedding extraction for downstream tasks and masked-token infilling.
 
 ## Current Status (March 2026)
+
+The default pretrained backbone is `microsoft/codebert-base`. CodeBERT's RoBERTa vocabulary is extended with LilyPond backslash commands (defined in `lilybert/data/tokenizer_builder.py`) so that notation keywords like `\relative`, `\time`, `\key`, and `\fermata` are represented as single tokens rather than subword fragments.
 
 - Tokenization stack has been unified and de-duplicated:
   - `lilybert.data.lexer.MusicalLexer` is the single source of truth for LilyPond → linear token conversion.
@@ -37,8 +42,9 @@ pip install -e ".[dev]"
 ## Command surface
 
 The CLI is intentionally small:
-- `ly-preprocess`
-- `ly-train`
+- `ly-preprocess` — preprocessing, tokenizer building, and sharding
+- `ly-train` — MLM pretraining and linear-probe classification
+- `embed` — export frozen-encoder embeddings for downstream tasks (similarity, clustering, infilling)
 
 ## Documentation
 
@@ -134,11 +140,11 @@ ly-train \
   train.task=composer \
   dataset.processed_dir=data/processed \
   dataset.tokenizer_path=artifacts/tokenizer \
-  model.pretrained_model=bert-base \
+  model.pretrained_model=microsoft/codebert-base \
   runtime.output_dir=outputs/cv
 ```
 
-Supported classification tasks in this refactor:
+Supported classification tasks:
 - `composer`
 - `style`
 - `instrument`
@@ -146,7 +152,9 @@ Supported classification tasks in this refactor:
 
 Classification mode uses grouped stratified 5-fold CV and trains a linear probe
 (`sklearn` LogisticRegression, OvR for multi-label) on movement-level embeddings
-extracted from a frozen pretrained encoder.
+extracted from a frozen CodeBERT encoder. These probing tasks evaluate whether
+the model's representations, after MLM adaptation on LilyPond, encode musically
+meaningful properties from source code alone.
 
 ## Notes
 
@@ -156,6 +164,7 @@ extracted from a frozen pretrained encoder.
 ## Python API
 
 ```python
+# CodeBERT-based pipeline for LilyPond representation learning
 from lilybert.data import LilyPondPreprocessor, LilyPondTokenizer, LabelEncoder
 from lilybert.models import LilyBERTClassifier, LilyBERTEncoder
 from lilybert.training import TrainingConfig, StratifiedKFoldTrainer

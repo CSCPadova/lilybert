@@ -1,5 +1,7 @@
 # Training parameter choices
 
+Training starts from `microsoft/codebert-base`, a RoBERTa model pretrained on six programming languages. Because LilyPond is a text-based programming language with formal grammar, block structure, and backslash commands, CodeBERT provides a strong initialization. MLM pretraining then adapts CodeBERT to LilyPond-specific patterns — pitch sequences, rhythmic structures, and harmonic progressions expressed as code.
+
 ## Two-stage training strategy
 
 The project uses:
@@ -17,6 +19,8 @@ Main controls:
 - `num_train_epochs` or `max_steps`
 - optimizer-related fields (`learning_rate`, `weight_decay`, `warmup_ratio`)
 
+MLM on LilyPond serves the same role as MLM on a new programming language — the model learns to predict masked tokens in context, capturing syntactic and semantic regularities of LilyPond code.
+
 Recommended practice:
 - use small `max_steps` for smoke validation,
 - then scale sequence length and batch size according to memory budget.
@@ -30,8 +34,7 @@ Main controls:
 - `probe_c`
 - `probe_class_weight` (`null` or `balanced`)
 
-The encoder is frozen and embeddings are extracted per movement, then averaged across windows.
-A scikit-learn linear probe is trained on those movement embeddings.
+The frozen encoder is CodeBERT after LilyPond MLM adaptation. Embeddings are extracted per movement, then averaged across windows. A scikit-learn linear probe is trained on those movement embeddings. The probing tasks test whether the adapted representations encode musically meaningful properties (composer identity, stylistic period, instrumentation, key) from LilyPond source code alone.
 
 ## Logging and reproducibility
 

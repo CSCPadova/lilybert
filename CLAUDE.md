@@ -4,14 +4,14 @@ Guidance for coding agents working in this repository.
 
 ## Project Summary
 
-lilyBERT is a Python project for BERT pretraining on LilyPond notation.
+lilyBERT treats LilyPond as a programming language and uses CodeBERT (`microsoft/codebert-base`) as the pretrained backbone for learning LilyPond code representations.
 
-Focus on:
-- preprocessing LilyPond scores into movement-level artifacts,
-- parser-aware tokenizer training,
-- MLM pretraining / finetuning of a BERT model on LilyPond corpora.
-
-Probing and classification tasks are handled externally in notebooks.
+Pipeline:
+- preprocessing LilyPond source into movement-level artifacts,
+- extending CodeBERT's tokenizer with LilyPond-specific backslash commands,
+- MLM pretraining on LilyPond corpora to adapt CodeBERT to notation syntax,
+- linear probing (composer, style, instrument, key_root) to evaluate representation quality,
+- embedding extraction for downstream tasks and masked-token infilling.
 
 ## Environment
 
@@ -29,8 +29,8 @@ Probing and classification tasks are handled externally in notebooks.
 - Training settings are under `train.*` (MLM pretraining hyper-parameters).
 
 Common override examples:
-- `train train.max_steps=10 train.learning_rate=5e-5`
-- `preprocess preprocess.input_dir=data/raw preprocess.output_dir=data/processed`
+- `ly-train train.max_steps=10 train.learning_rate=5e-5`
+- `ly-preprocess preprocess.input_dir=data/raw preprocess.output_dir=data/processed`
 
 ## Common Commands
 
@@ -58,8 +58,8 @@ flake8 lilybert/ tests/
 
 ### Entry points
 ```bash
-preprocess
-train
+ly-preprocess
+ly-train
 embed
 ```
 
@@ -76,7 +76,7 @@ embed
 - `repository.py`
 
 ### Models (`lilybert/models/`)
-- `bert_classifier.py` - LilyBERTEncoder (BERT wrapper for training and embedding extraction)
+- `bert_classifier.py` - LilyBERTEncoder (CodeBERT wrapper for MLM training and embedding extraction)
 
 ### Training (`lilybert/training/`)
 - `config.py` - TrainingConfig dataclass
