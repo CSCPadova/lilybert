@@ -1,9 +1,9 @@
 """Unified dataset preprocessing entrypoint.
 
 Supports:
-- movement preprocessing for any LilyPond dataset
-- optional augmentation
+- copying raw LilyPond files with optional augmentation
 - optional tokenizer building (pretrained + LilyPond tokens)
+- optional tokenization (windowed token arrays)
 - optional pretokenized sharding
 """
 
@@ -70,7 +70,7 @@ class TokenizerBuildSettings:
     """Settings for building the extended pretrained tokenizer."""
 
     enabled: bool = False
-    pretrained_model: str = "roberta-base"
+    pretrained_model: str = "microsoft/codebert-base"
     output_dir: str = "artifacts/tokenizer"
 
 
@@ -80,8 +80,6 @@ class PreprocessConfig:
     num_workers: int = 0
     input_dir: str = "data/raw"
     output_dir: str = "data/processed"
-    labels_path: str = "data/labels/labels_v1.json"
-    strip: Optional[List[str]] = None
     augmentation: AugmentationSettings = field(default_factory=AugmentationSettings)
     tokenize: TokenizeSettings = field(default_factory=TokenizeSettings)
     sharding: ShardingSettings = field(default_factory=ShardingSettings)
@@ -113,7 +111,7 @@ def _tokenize_file_worker(
     """Tokenize a single .ly file into windowed (input_ids, attention_mask) rows.
 
     Runs in a subprocess — loads its own tokenizer instance.
-    Returns (movement_id, list_of_id_rows, list_of_mask_rows).
+    Returns (file_id, list_of_id_rows, list_of_mask_rows).
     """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
@@ -189,7 +187,7 @@ def _tokenize_mlm_unsharded(
     for split_name, files in (("train", train_files), ("eval", eval_files)):
         input_rows: list[np.ndarray] = []
         mask_rows: list[np.ndarray] = []
-        movement_ids: list[str] = []
+        file_ids: list[str] = []
 
         with ProcessPoolExecutor(max_workers=workers) as exe:
             futures = {
@@ -211,7 +209,7 @@ def _tokenize_mlm_unsharded(
                 for ids, mask in zip(ids_list, masks_list):
                     input_rows.append(np.asarray(ids, dtype=np.int64))
                     mask_rows.append(np.asarray(mask, dtype=np.int64))
-                    movement_ids.append(mid)
+                    file_ids.append(mid)
 
         input_ids = (
             np.stack(input_rows, axis=0)
@@ -228,7 +226,7 @@ def _tokenize_mlm_unsharded(
             out_root / f"{split_name}.npz",
             input_ids=input_ids,
             attention_mask=attention_mask,
-            movement_ids=np.asarray(movement_ids, dtype=object),
+            movement_ids=np.asarray(file_ids, dtype=object),
         )
         summary["splits"][split_name] = {
             "samples": int(input_ids.shape[0]),
@@ -258,10 +256,6 @@ def _main(cfg: DictConfig) -> None:
         num_workers=int(preprocess_payload.get("num_workers", 0)),
         input_dir=str(preprocess_payload.get("input_dir", "data/raw")),
         output_dir=str(preprocess_payload.get("output_dir", "data/processed")),
-        labels_path=str(
-            preprocess_payload.get("labels_path", "data/labels/labels_v1.json")
-        ),
-        strip=preprocess_payload.get("strip"),
         augmentation=AugmentationSettings(
             **dict(preprocess_payload.get("augmentation", {}))
         ),
@@ -274,11 +268,10 @@ def _main(cfg: DictConfig) -> None:
 
     preprocess_summary = None
     if config.enabled:
-        preprocessor = LilyPondPreprocessor(strip_sections=config.strip)
+        preprocessor = LilyPondPreprocessor()
         preprocess_summary = preprocessor.preprocess_to_dataset(
             input_dir=config.input_dir,
             output_dir=config.output_dir,
-            labels_path=config.labels_path,
             augmentation_config={
                 "enable_transposition": config.augmentation.enable_transposition,
                 "enable_absolute_relative": config.augmentation.enable_absolute_relative,

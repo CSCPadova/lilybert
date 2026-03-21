@@ -1,7 +1,6 @@
 """Basic tests for lilyBERT functionality."""
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 
@@ -174,95 +173,63 @@ class TestLilyPondParser:
 class TestLilyPondPreprocessor:
     """Test LilyPond preprocessor functionality."""
 
-    def test_preprocess_text(self):
-        """Test text preprocessing."""
-        preprocessor = LilyPondPreprocessor()
-        text = '  \\version   "2.24.0"    { c4  d  e  f }  '
+    def test_preprocess_to_dataset_copies_files(self):
+        """Test that preprocess_to_dataset copies .ly files to output dir."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw_dir = root / "raw"
+            out_dir = root / "processed"
+            raw_dir.mkdir(parents=True, exist_ok=True)
 
-        processed = preprocessor._preprocess_text(text)
-        assert len(processed) > 0
-        assert processed.endswith("\n")
-        assert "\\version" in processed
+            content = r"""\version "2.24.0"
+\relative c' { \time 4/4 \key c \major c4 d e f }"""
+            (raw_dir / "test.ly").write_text(content, encoding="utf-8")
 
-    def test_normalize_notation(self):
-        """Test notation normalization."""
-        preprocessor = LilyPondPreprocessor(normalize_notation=True)
-        text = "\\relative c' { \\time 4/4 \\key c \\major \\clef basso c4 d e f }"
+            preprocessor = LilyPondPreprocessor()
+            result = preprocessor.preprocess_to_dataset(
+                input_dir=str(raw_dir),
+                output_dir=str(out_dir),
+            )
 
-        normalized = preprocessor._normalize_notation(text)
-        print(f"Normalized text after normalization is {normalized}")
-        sys.stdout.write(f"Normalized is {normalized}")
-        assert "\\relative c'" in normalized
+            assert result["files_processed"] == 1
+            assert result["files_written"] >= 1
+            assert (out_dir / "test.ly").exists()
+            assert (out_dir / "metadata.json").exists()
 
-    def test_add_structural_tokens_1(self):
-        """Test preprocessing keeps musical directives unchanged."""
-        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
-        text = ' \\relative do\' { \\time 4/4 \\key do \\major \\tempo 4 = 60 \\tempo "Presto" \\clef basso do4 re mi fa \\repeat unfold 60 {la} re}'
+            # The output file should contain the original content
+            output_text = (out_dir / "test.ly").read_text(encoding="utf-8")
+            assert "\\relative c'" in output_text
+            assert "c4 d e f" in output_text
 
-        with_tokens = preprocessor._preprocess_text(text)
-        print(
-            f"Structural Token Test 1: Structural tokens added to text is: {with_tokens}"
-        )
+    def test_preprocess_to_dataset_with_augmentation(self):
+        """Test that augmentation produces additional variants."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw_dir = root / "raw"
+            out_dir = root / "processed"
+            raw_dir.mkdir(parents=True, exist_ok=True)
 
-        assert "\\time 4/4" in with_tokens
-        assert "\\key do \\major" in with_tokens
-        assert "\\tempo 4 = 60" in with_tokens
-        assert '\\tempo "Presto"' in with_tokens
-        assert "\\clef basso" in with_tokens
-        assert "\\repeat unfold 60" in with_tokens
+            content = r"""\version "2.24.0"
+\relative c' { c4 d e f | g2 a2 | b4 c d e | c1 }"""
+            (raw_dir / "test.ly").write_text(content, encoding="utf-8")
 
-    def test_add_structural_tokens_2(self):
-        """Test preprocessing preserves directives (variant syntax)."""
-        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
-        text = ' \\relative do\' { \\time 2/68 \\key mi\\major \\tempo "Largo" 4= 60 \\clef   baritonevarF do4 re mi fa \\repeat unfold 10 {do re mi}}'
+            preprocessor = LilyPondPreprocessor()
+            result = preprocessor.preprocess_to_dataset(
+                input_dir=str(raw_dir),
+                output_dir=str(out_dir),
+                augmentation_config={
+                    "enable_retrograde": True,
+                    "include_original": True,
+                },
+            )
 
-        with_tokens = preprocessor._preprocess_text(text)
-        print(
-            f"Structural Token Test 2: Structural tokens added to text is: {with_tokens}"
-        )
+            # Should have base + retrograde variant
+            assert result["files_written"] >= 2
+            assert (out_dir / "test.ly").exists()
 
-        assert "\\time 2/68" in with_tokens
-        assert "\\key mi\\major" in with_tokens
-        assert '\\tempo "Largo" 4= 60' in with_tokens
-        assert "\\repeat unfold 10" in with_tokens
-        assert "\\clef   baritonevarF" in with_tokens
-
-    def test_add_structural_tokens_3(self):
-        """Test preprocessing keeps barlines and mixed spacing."""
-        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
-        text = " \\relative do' { \\time2/68 \\key mib'\\major \\tempo \"Presto\" 2 =  \t80 \\clef   baritonevarF do4 re mi fa | \\repeat unfold10 {do re   mi}}"
-
-        with_tokens = preprocessor._preprocess_text(text)
-        print(
-            f"Structural Token Test 3: Structural tokens added to text is: {with_tokens}"
-        )
-
-        assert "\\time2/68" in with_tokens
-        assert "\\key mib'\\major" in with_tokens
-        assert '\\tempo "Presto"' in with_tokens
-        assert "\\clef   baritonevarF" in with_tokens
-        assert "\\repeat unfold10" in with_tokens
-        assert "|" in with_tokens
-
-    def test_preprocess_file(self):
-        """Test LilyPond Preprocessor processes a sample file."""
-        preprocessor = LilyPondPreprocessor(add_special_tokens=True)
-
-        sample = """\\version "2.24.0"
-        \\header {
-            title = \\markup\\smaller\\center-column {"Concerto Sacro V Op. II"}
-            composer = \\markup \\center-column{"A. Scarlatti (1660 - 1725)"}
-        }
-        \\relative c' {
-            \\time 4/4 \\key c \\major \\tempo "Presto" 4.=100
-            c4 d e f | g2 a2 | b4 c d e | c1\\rest r
-        }"""
-        with tempfile.TemporaryDirectory() as tmp:
-            p = Path(tmp) / "test.ly"
-            p.write_text(sample, encoding="utf-8")
-            result = preprocessor.preprocess_file(str(p))
-            assert "text" in result
-            assert len(result["text"]) > 0
+            # Check that at least one augmented variant exists
+            augmented_files = list(out_dir.glob("test__*.ly"))
+            assert len(augmented_files) >= 1
 
 
 class TestIntegration:
@@ -270,49 +237,53 @@ class TestIntegration:
 
     def test_preprocessing_pipeline(self):
         """Test complete preprocessing pipeline."""
-        # Create temporary test data
-        test_content = """\\version "2.24.0"
-        \\relative do' {
-            \\time 4/4 \\key do \\major
-            do re mi | sid4.
-        }"""
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Write test file
-            test_file = Path(temp_dir) / "test.ly"
-            with open(test_file, "w") as f:
-                f.write(test_content)
-
-            # Process the file
-            preprocessor = LilyPondPreprocessor()
-            result = preprocessor.preprocess_file(str(test_file))
-
-            assert "text" in result
-            assert "metadata" in result
-            assert len(result["text"]) > 0
-
-    def test_preprocessor_preserves_simultaneous_structure_markers(self):
         test_content = r"""\version "2.24.0"
-        \score {
-            <<
-                { do4 re mi fa }
-                \\
-                { sol4 la si do }
-            >>
-        }"""
+\relative do' {
+    \time 4/4 \key do \major
+    do re mi | sid4.
+}"""
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = Path(temp_dir) / "simul.ly"
-            test_file.write_text(test_content, encoding="utf-8")
+            root = Path(temp_dir)
+            raw_dir = root / "raw"
+            out_dir = root / "processed"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+
+            (raw_dir / "test.ly").write_text(test_content, encoding="utf-8")
 
             preprocessor = LilyPondPreprocessor()
-            result = preprocessor.preprocess_file(str(test_file))
+            result = preprocessor.preprocess_to_dataset(
+                input_dir=str(raw_dir),
+                output_dir=str(out_dir),
+            )
 
-            assert result["movements"]
-            movement = result["movements"][0]
-            markers = movement.get("structure_markers", [])
-            assert "[SIMUL_BEGIN]" in markers
-            assert "[SIMUL_END]" in markers
+            assert result["files_processed"] == 1
+            assert (out_dir / "test.ly").exists()
+            assert (out_dir / "metadata.json").exists()
+
+    def test_preprocess_to_dataset_writes_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw_dir = root / "raw"
+            out_dir = root / "processed"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+
+            file_name = "sample.ly"
+            content = r"""\version "2.24.0"
+\relative c' { c4 d e f }"""
+            (raw_dir / file_name).write_text(content, encoding="utf-8")
+
+            preprocessor = LilyPondPreprocessor()
+            preprocessor.preprocess_to_dataset(
+                input_dir=str(raw_dir),
+                output_dir=str(out_dir),
+            )
+
+            metadata = json.loads(
+                (out_dir / "metadata.json").read_text(encoding="utf-8")
+            )
+            assert "sample" in metadata
+            assert metadata["sample"]["source_file"] == "sample.ly"
 
     def test_tokenizer_builds_corpus_from_data_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -340,52 +311,6 @@ class TestIntegration:
         token_line = tokenizer._movement_to_parser_tokens(text)
         assert "[PART_BEGIN]" in token_line
         assert "[PART_END]" in token_line
-
-    def test_preprocess_to_dataset_persists_structure_markers(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            raw_dir = root / "raw"
-            out_dir = root / "processed"
-            raw_dir.mkdir(parents=True, exist_ok=True)
-
-            file_name = "sample.ly"
-            content = r"""\version "2.24.0"
-            \score {
-              <<
-                { do4 re mi fa }
-                \\
-                { sol4 la si do }
-              >>
-            }
-            """
-            (raw_dir / file_name).write_text(content, encoding="utf-8")
-
-            labels_path = root / "labels.json"
-            labels = {
-                file_name: {
-                    "composer": "test",
-                    "musical_form": ["concerto"],
-                    "midi_instruments": ["violin"],
-                    "period": "baroque",
-                    "meta": {},
-                }
-            }
-            labels_path.write_text(json.dumps(labels), encoding="utf-8")
-
-            preprocessor = LilyPondPreprocessor()
-            preprocessor.preprocess_to_dataset(
-                input_dir=str(raw_dir),
-                output_dir=str(out_dir),
-                labels_path=str(labels_path),
-            )
-
-            metadata = json.loads(
-                (out_dir / "metadata.json").read_text(encoding="utf-8")
-            )
-            entry = metadata["sample_mvt1"]
-            assert "structure_markers" in entry
-            assert "[SIMUL_BEGIN]" in entry["structure_markers"]
-            assert "[SIMUL_END]" in entry["structure_markers"]
 
 
 if __name__ == "__main__":

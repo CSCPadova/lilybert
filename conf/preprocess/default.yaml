@@ -2,17 +2,6 @@ enabled: true
 num_workers: 0  # 0 = auto (use all available CPUs)
 input_dir: ${dataset.raw_dir}
 output_dir: ${dataset.processed_dir}
-labels_path: ${dataset.labels_path}
-# Sections to strip from LilyPond source before processing.
-# Valid values: comments, header, scheme, layout, midi, version, markup, overrides, pagebreaks
-strip:
-  - comments
-  - header
-  - scheme
-  - overrides
-  - pagebreaks
-  - midi
-  - version
 
 augmentation:
   enable_transposition: false

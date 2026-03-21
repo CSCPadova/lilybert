@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Extract layer-wise BERT embeddings for the Mutopia dataset.
 
-For each entry in dataset_mutopia.json, strips non-musical content from the
-.ly file, tokenizes, and extracts [CLS] embeddings at specified layers.
+For each entry in dataset_mutopia.json, tokenizes the raw .ly file and
+extracts [CLS] embeddings at specified layers.
 Saves per-entry .npy files and updates the JSON with embedding paths.
 """
 
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import signal
 import sys
 import time
 from pathlib import Path
@@ -26,8 +25,7 @@ from typing_extensions import Annotated
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from lilybert.cli.embed import _movement_windows
-from lilybert.data.preprocessor import LilyPondPreprocessor
+from lilybert.cli.embed import _file_windows
 from lilybert.models import LilyBERTEncoder
 
 logging.basicConfig(
@@ -37,47 +35,6 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
-
-DEFAULT_STRIP = [
-    "comments",
-    "header",
-    "scheme",
-    "overrides",
-    "pagebreaks",
-    "midi",
-    "version",
-]
-
-
-class StripTimeout(Exception):
-    pass
-
-
-def _timeout_handler(signum, frame):
-    raise StripTimeout("Strip timed out")
-
-
-def strip_only(
-    preprocessor: LilyPondPreprocessor, raw_text: str, timeout_sec: int = 30
-) -> str:
-    """Lightweight strip: remove non-musical sections without the full pipeline.
-
-    Calls _remove_comments_and_cleanup, _strip_engraving, variable inlining,
-    and _postprocess. Skips movement extraction, translation, and other heavy
-    processing in process_content().
-    """
-    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-    signal.alarm(timeout_sec)
-    try:
-        text = preprocessor._remove_comments_and_cleanup(raw_text)
-        text = preprocessor._strip_engraving(text)
-        assignments = preprocessor._parse_assignments(text)
-        text = preprocessor._inline_variables(text, assignments)
-        text = preprocessor._postprocess(text)
-        return text.strip()
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
 
 
 def extract_layer_embeddings(
@@ -194,8 +151,6 @@ def main(
     for p in encoder.parameters():
         p.requires_grad = False
 
-    preprocessor = LilyPondPreprocessor(strip_sections=DEFAULT_STRIP)
-
     logger.info(f"Model loaded on {device}. Layers: {layers}. Batch size: {batch_size}")
 
     stats = {"total": len(dataset), "success": 0, "empty": 0, "errors": 0, "skipped": 0}
@@ -224,37 +179,23 @@ def main(
                 stats["errors"] += 1
                 continue
 
-            raw_text = file_path.read_text(encoding="utf-8", errors="ignore")
+            raw_text = file_path.read_text(encoding="utf-8", errors="ignore").strip()
             logger.info(f"[{idx+1}/{len(dataset)}] Processing {local_path} ({len(raw_text)//1024}KB)...")
 
-            # Lightweight strip only — no movement extraction or translation
-            try:
-                stripped_text = strip_only(preprocessor, raw_text)
-            except StripTimeout:
-                logger.warning(f"[{idx}] TIMEOUT stripping {local_path}")
-                entry["embeddings"] = None
-                stats["errors"] += 1
-                continue
-            except Exception as e:
-                logger.warning(f"[{idx}] Strip failed for {local_path}: {e}")
-                entry["embeddings"] = None
-                stats["errors"] += 1
-                continue
-
-            if not stripped_text:
-                logger.warning(f"[{idx}] Empty after stripping: {local_path}")
+            if not raw_text:
+                logger.warning(f"[{idx}] Empty file: {local_path}")
                 entry["embeddings"] = None
                 stats["empty"] += 1
                 continue
 
-            token_ids = tokenizer.encode(stripped_text, add_special_tokens=False)
+            token_ids = tokenizer.encode(raw_text, add_special_tokens=False)
             if not token_ids:
                 logger.warning(f"[{idx}] No tokens from {local_path}")
                 entry["embeddings"] = None
                 stats["empty"] += 1
                 continue
 
-            ids_tensor, mask_tensor = _movement_windows(
+            ids_tensor, mask_tensor = _file_windows(
                 token_ids,
                 max_length=max_length,
                 stride=stride,
@@ -278,43 +219,29 @@ def main(
             entry["embeddings"] = embeddings_map
             stats["success"] += 1
 
-            elapsed_file = time.time() - t_file
-            elapsed_total = time.time() - t_start
-            rate = (idx + 1 - stats["skipped"]) / elapsed_total if elapsed_total > 0 else 0
-
+            elapsed = time.time() - t_file
             logger.info(
-                f"[{idx+1}/{len(dataset)}] {local_path} "
-                f"| {len(token_ids)} tok | {ids_tensor.shape[0]} win "
-                f"| {elapsed_file:.1f}s | rate={rate:.1f}/s"
+                f"  -> {len(token_ids)} tokens, {ids_tensor.shape[0]} windows, "
+                f"{elapsed:.1f}s"
             )
 
-            # Periodic JSON checkpoint
+            # Periodic checkpoint
             if (idx + 1) % save_every == 0:
                 with open(dataset_path, "w") as f:
-                    json.dump(dataset, f, indent=4, ensure_ascii=False)
-                logger.info(f"  >> Checkpoint saved at entry {idx+1}")
+                    json.dump(dataset, f, indent=2, ensure_ascii=False)
+                logger.info(f"  Checkpoint saved at entry {idx+1}")
 
     # Final save
     with open(dataset_path, "w") as f:
-        json.dump(dataset, f, indent=4, ensure_ascii=False)
+        json.dump(dataset, f, indent=2, ensure_ascii=False)
 
-    elapsed = time.time() - t_start
-    logger.info("=" * 60)
-    logger.info("EXTRACTION COMPLETE")
-    logger.info(f"  Total entries:  {stats['total']}")
-    logger.info(f"  Success:        {stats['success']}")
-    logger.info(f"  Skipped:        {stats['skipped']}")
-    logger.info(f"  Empty:          {stats['empty']}")
-    logger.info(f"  Errors:         {stats['errors']}")
-    logger.info(f"  Layers:         {layers}")
-    logger.info(f"  Elapsed:        {elapsed/60:.1f} min")
-    logger.info(f"  Output dir:     {output_base.resolve()}")
-    logger.info("=" * 60)
-
-
-def run() -> None:
-    typer.run(main)
+    elapsed_total = time.time() - t_start
+    logger.info(
+        f"Done in {elapsed_total:.0f}s. "
+        f"Success: {stats['success']}, Empty: {stats['empty']}, "
+        f"Errors: {stats['errors']}, Skipped: {stats['skipped']}"
+    )
 
 
 if __name__ == "__main__":
-    run()
+    typer.run(main)

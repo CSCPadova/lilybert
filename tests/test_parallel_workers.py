@@ -23,13 +23,10 @@ def processed_dir(tmp_path: Path) -> Path:
     tests_root = Path(__file__).parent
     input_dir = tests_root / "ly"
     out = tmp_path / "processed"
-    preprocessor = LilyPondPreprocessor(
-        strip_sections=["header", "version", "comments", "midi", "overrides"],
-    )
+    preprocessor = LilyPondPreprocessor()
     preprocessor.preprocess_to_dataset(
         input_dir=str(input_dir),
         output_dir=str(out),
-        labels_path="data/labels/labels_v1.json",
         num_workers=2,
     )
     assert list(out.glob("*.ly")), "Preprocessing produced no .ly files"

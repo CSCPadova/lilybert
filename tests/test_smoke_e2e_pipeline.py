@@ -1,7 +1,7 @@
 """Smoke end-to-end CLI pipeline tests.
 
 This test exercises the same minimal flow validated manually:
-1) preprocess movement-level files
+1) preprocess (copy) LilyPond files
 2) build extended pretrained tokenizer with LilyPond tokens
 3) build MLM shards
 4) run tiny MLM pretraining (from scratch)
@@ -25,7 +25,6 @@ def test_smoke_e2e_cli_pipeline(
 ) -> None:
     tests_root = Path(__file__).parent
     input_dir = tests_root / "ly"
-    labels_path = Path("data/labels/labels_v1.json")
 
     assert input_dir.exists()
 
@@ -34,15 +33,13 @@ def test_smoke_e2e_cli_pipeline(
     pretokenized_dir = tmp_path / "pretokenized"
     train_output_dir = tmp_path / "train"
 
-    # Step 1: Preprocess movement files
+    # Step 1: Preprocess (copy) LilyPond files
     ly_preprocess_main(
         OmegaConf.create(
             {
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
-                    "strip": ["header", "version", "comments", "midi", "overrides"],
                     "sharding": {"enabled": False},
                     "tokenizer": {"enabled": False},
                 }
@@ -52,7 +49,7 @@ def test_smoke_e2e_cli_pipeline(
     capsys.readouterr()
 
     processed_files = list(processed_dir.glob("*.ly"))
-    assert processed_files, "Preprocess step did not produce movement .ly files"
+    assert processed_files, "Preprocess step did not produce .ly files"
     assert (processed_dir / "metadata.json").exists()
 
     # Step 2: Build extended pretrained tokenizer with LilyPond tokens
@@ -62,7 +59,6 @@ def test_smoke_e2e_cli_pipeline(
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
                     "sharding": {"enabled": False},
                     "tokenizer": {
                         "enabled": True,
@@ -84,7 +80,6 @@ def test_smoke_e2e_cli_pipeline(
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
                     "tokenizer": {"enabled": False},
                     "sharding": {
                         "enabled": True,
