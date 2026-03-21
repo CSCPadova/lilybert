@@ -120,6 +120,7 @@ def _tokenize_file_worker(
         return (fp.stem, [], [])
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    tokenizer.model_max_length = int(1e30)
     token_ids = tokenizer.encode(text, add_special_tokens=False)
     if not token_ids:
         return (fp.stem, [], [])

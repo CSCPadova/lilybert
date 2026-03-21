@@ -95,6 +95,11 @@ def build_lilypond_tokenizer(
     """
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
     tokenizer.add_tokens(lilypond_tokens())
+    # Override model_max_length so HuggingFace does not emit spurious
+    # "Token indices sequence length is longer than ..." warnings when
+    # we encode full files.  Our windowing code handles the actual
+    # splitting into model-sized chunks.
+    tokenizer.model_max_length = int(1e30)
     return tokenizer
 
 
