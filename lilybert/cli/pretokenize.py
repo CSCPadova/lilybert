@@ -18,10 +18,13 @@ from lilybert.data.sharding import ShardWriter
 
 
 def _collect_ly_files(data_dir: Path) -> List[Path]:
-    """Collect .ly files from the data directory."""
+    """Collect .ly/.ily/.tely files from the data directory."""
     if not data_dir.exists():
         return []
-    return sorted(data_dir.glob("*.ly"))
+    files: List[Path] = []
+    for ext in ("*.ly", "*.ily", "*.tely"):
+        files.extend(data_dir.glob(ext))
+    return sorted(files)
 
 
 def _shard_file_worker(

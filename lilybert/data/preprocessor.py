@@ -420,7 +420,10 @@ class LilyPondPreprocessor:
 
         from tqdm import tqdm
 
-        raw_files = sorted([str(p) for p in raw_dir.glob("*.ly")])
+        raw_files_unsorted: List[Path] = []
+        for ext in ("*.ly", "*.ily", "*.tely"):
+            raw_files_unsorted.extend(raw_dir.glob(ext))
+        raw_files = sorted([str(p) for p in raw_files_unsorted])
         max_workers = num_workers if num_workers > 0 else (os.cpu_count() or 2)
 
         aug_cfg = {

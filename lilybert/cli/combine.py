@@ -217,8 +217,10 @@ def find_main_ly_files(directory: Path) -> list[tuple[Path, str]]:
             if not subdir.is_dir() or subdir.name.startswith("."):
                 continue
 
-            # Find .ly files in this subdirectory
-            ly_candidates = list(subdir.glob("*.ly"))
+            # Find .ly/.ily/.tely files in this subdirectory
+            ly_candidates = []
+            for ext in ("*.ly", "*.ily", "*.tely"):
+                ly_candidates.extend(subdir.glob(ext))
 
             if not ly_candidates:
                 continue
@@ -255,8 +257,11 @@ def find_all_ly_files(directory: Path) -> list[tuple[Path, str]]:
     Returns:
         List of (file_path, output_name) tuples
     """
+    ly_files_all: list[Path] = []
+    for ext in ("**/*.ly", "**/*.ily", "**/*.tely"):
+        ly_files_all.extend(directory.glob(ext))
     ly_files = []
-    for ly_path in sorted(directory.rglob("*.ly")):
+    for ly_path in sorted(ly_files_all):
         if ly_path.name.startswith("."):
             continue
         ly_files.append((ly_path, ly_path.stem))

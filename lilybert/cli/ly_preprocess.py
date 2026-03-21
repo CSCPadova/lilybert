@@ -98,7 +98,10 @@ def _resolve_num_workers(num_workers: int) -> int:
 def _collect_ly_files(data_dir: Path) -> List[Path]:
     if not data_dir.exists():
         return []
-    return sorted(data_dir.glob("*.ly"))
+    files: List[Path] = []
+    for ext in ("*.ly", "*.ily", "*.tely"):
+        files.extend(data_dir.glob(ext))
+    return sorted(files)
 
 
 def _tokenize_file_worker(

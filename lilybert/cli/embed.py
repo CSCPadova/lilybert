@@ -83,10 +83,15 @@ def main(
     if not input_path.exists():
         raise FileNotFoundError(f"Input directory not found: {input_path}")
 
-    glob_pattern = "**/*.ly" if recursive else "*.ly"
-    files = sorted(input_path.glob(glob_pattern))
+    exts = ("*.ly", "*.ily", "*.tely")
+    if recursive:
+        exts = ("**/*.ly", "**/*.ily", "**/*.tely")
+    files_set: List[Path] = []
+    for pat in exts:
+        files_set.extend(input_path.glob(pat))
+    files = sorted(files_set)
     if not files:
-        raise FileNotFoundError(f"No .ly files found in {input_path}")
+        raise FileNotFoundError(f"No .ly/.ily/.tely files found in {input_path}")
 
     tokenizer_ref = tokenizer_path or model_name
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_ref)

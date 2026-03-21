@@ -350,8 +350,11 @@ class MLMPretrainer:
 
     @staticmethod
     def _collect_movement_files(data_dir: str) -> List[Path]:
-        """Collect .ly files from the data directory."""
+        """Collect .ly/.ily/.tely files from the data directory."""
         root = Path(data_dir)
         if not root.exists():
             return []
-        return sorted(root.glob("*.ly"))
+        files: List[Path] = []
+        for ext in ("*.ly", "*.ily", "*.tely"):
+            files.extend(root.glob(ext))
+        return sorted(files)
