@@ -1,8 +1,8 @@
 """Build an extended pretrained tokenizer with LilyPond-specific tokens.
 
-Loads a pretrained RoBERTa/CodeBERT tokenizer and adds domain-specific
-musical tokens from the lilybert lexer, so that LilyPond notation symbols
-are represented as single tokens rather than subword fragments.
+Loads a pretrained CodeBERT/RoBERTa tokenizer and adds common LilyPond
+backslash commands so that notation-specific keywords are represented as
+single tokens rather than subword fragments.
 """
 
 from __future__ import annotations
@@ -12,44 +12,94 @@ from typing import List
 
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
-from lilybert.data.musical_tokens import base_vocabulary
+# fmt: off
+LILYPOND_COMMANDS: List[str] = [
+    # --- Articulations / ornaments ---
+    "\\trill", "\\fermata", "\\mordent", "\\turn", "\\prall",
+    "\\staccato", "\\accent", "\\tenuto", "\\marcato",
+    "\\staccatissimo", "\\portato", "\\breathe", "\\caesura",
+    "\\arpeggio", "\\glissando",
 
-# Structural tokens emitted by the lexer for multi-voice passages.
-LILYPOND_SPECIAL_TOKENS = ["[PART_BEGIN]", "[PART_END]"]
+    # --- Dynamics ---
+    "\\p", "\\pp", "\\ppp", "\\pppp",
+    "\\f", "\\ff", "\\fff", "\\ffff",
+    "\\mp", "\\mf", "\\fp",
+    "\\sfz", "\\sf", "\\sff", "\\sp", "\\spp", "\\rfz",
+    "\\cresc", "\\decresc",
+
+    # --- Musical commands ---
+    "\\time", "\\key", "\\clef", "\\tempo", "\\partial",
+    "\\bar", "\\repeat", "\\alternative", "\\tuplet",
+    "\\grace", "\\appoggiatura", "\\acciaccatura",
+    "\\unfoldRepeats", "\\volta", "\\fine", "\\segno", "\\coda",
+    "\\cadenzaOn", "\\cadenzaOff",
+    "\\compressMMRests", "\\ottava",
+
+    # --- Key modes ---
+    "\\major", "\\minor",
+    "\\dorian", "\\phrygian", "\\lydian", "\\mixolydian",
+    "\\aeolian", "\\locrian", "\\ionian",
+
+    # --- Structural / blocks ---
+    "\\score", "\\new", "\\context", "\\change",
+    "\\relative", "\\absolute", "\\transpose", "\\fixed",
+    "\\with", "\\consists", "\\remove",
+    "\\header", "\\paper", "\\layout", "\\midi",
+    "\\version", "\\language", "\\include",
+    "\\markup", "\\markuplist",
+
+    # --- Property overrides ---
+    "\\override", "\\revert", "\\set", "\\unset",
+    "\\once", "\\omit", "\\undo",
+
+    # --- Pedal / sustain ---
+    "\\sustainOn", "\\sustainOff",
+    "\\sostenutoOn", "\\sostenutoOff",
+
+    # --- Voice ---
+    "\\voiceOne", "\\voiceTwo", "\\voiceThree", "\\voiceFour",
+    "\\oneVoice",
+
+    # --- Stem / beam ---
+    "\\stemUp", "\\stemDown", "\\stemNeutral",
+    "\\autoBeamOn", "\\autoBeamOff",
+
+    # --- Slur direction ---
+    "\\slurUp", "\\slurDown", "\\slurNeutral",
+
+    # --- Dynamic placement ---
+    "\\dynamicUp", "\\dynamicDown", "\\dynamicNeutral",
+
+    # --- Layout breaks ---
+    "\\break", "\\noBreak", "\\pageBreak", "\\noPageBreak",
+]
+# fmt: on
 
 
 def lilypond_tokens() -> List[str]:
-    """Return the full set of LilyPond tokens to add to a pretrained tokenizer."""
-    return base_vocabulary() + LILYPOND_SPECIAL_TOKENS
+    """Return the LilyPond backslash commands to add to a pretrained tokenizer."""
+    return list(LILYPOND_COMMANDS)
 
 
 def build_lilypond_tokenizer(
-    pretrained_model: str = "roberta-base",
+    pretrained_model: str = "microsoft/codebert-base",
 ) -> PreTrainedTokenizerFast:
-    """Load a pretrained tokenizer and extend it with LilyPond tokens.
+    """Load a pretrained tokenizer and extend it with LilyPond commands.
 
     Args:
-        pretrained_model: HuggingFace model identifier (e.g. ``roberta-base``
-            or ``microsoft/codebert-base``).
+        pretrained_model: HuggingFace model identifier
+            (e.g. ``microsoft/codebert-base`` or ``roberta-base``).
 
     Returns:
-        Extended tokenizer with LilyPond musical tokens added.
+        Extended tokenizer with LilyPond commands added.
     """
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
-
-    tokens = lilypond_tokens()
-    num_added = tokenizer.add_tokens(tokens)
-
-    # Add structural tokens as special tokens so they are never split.
-    tokenizer.add_special_tokens(
-        {"additional_special_tokens": LILYPOND_SPECIAL_TOKENS}
-    )
-
+    tokenizer.add_tokens(lilypond_tokens())
     return tokenizer
 
 
 def build_and_save(
-    pretrained_model: str = "roberta-base",
+    pretrained_model: str = "microsoft/codebert-base",
     output_dir: str = "artifacts/tokenizer",
 ) -> Path:
     """Build the extended tokenizer and persist it to disk.

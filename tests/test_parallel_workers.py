@@ -40,7 +40,7 @@ def processed_dir(tmp_path: Path) -> Path:
 def tokenizer_dir(tmp_path: Path) -> Path:
     """Build an extended pretrained tokenizer with LilyPond tokens."""
     out = tmp_path / "tokenizer"
-    build_and_save(pretrained_model="roberta-base", output_dir=str(out))
+    build_and_save(pretrained_model="microsoft/codebert-base", output_dir=str(out))
     assert (out / "tokenizer.json").exists()
     return out
 

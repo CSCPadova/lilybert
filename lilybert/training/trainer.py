@@ -23,23 +23,16 @@ from transformers import (
 )
 
 from lilybert.data.sharded_dataset import ShardedMLMDataset
-from lilybert.data.tokenizer import LilyPondTokenizer
 
 from .config import TrainingConfig
 
 
-def _ly_to_parser_tokens(text: str) -> str:
-    """Convert raw LilyPond text to parser token representation."""
-    converter = LilyPondTokenizer()
-    return converter._movement_to_parser_tokens(text)
-
-
 class LilyPondMLMDataset(Dataset):
-    """Text dataset for masked language modeling.
+    """Simple text dataset for masked language modeling.
 
-    Converts raw LilyPond notation to parser-token representation before
-    feeding to the tokenizer, so that domain-specific tokens (NOTE_C, DUR_4,
-    etc.) are matched as single tokens.
+    Feeds raw LilyPond notation directly to the tokenizer.  The extended
+    pretrained tokenizer already contains common LilyPond backslash
+    commands as single tokens.
     """
 
     def __init__(
@@ -51,19 +44,12 @@ class LilyPondMLMDataset(Dataset):
         self.files = files
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self._lily_tokenizer: LilyPondTokenizer | None = None
-
-    def _get_lily_tokenizer(self) -> LilyPondTokenizer:
-        if self._lily_tokenizer is None:
-            self._lily_tokenizer = LilyPondTokenizer()
-        return self._lily_tokenizer
 
     def __len__(self) -> int:
         return len(self.files)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         text = self.files[idx].read_text(encoding="utf-8", errors="ignore")
-        text = self._get_lily_tokenizer()._movement_to_parser_tokens(text)
         encoded = self.tokenizer(
             text,
             truncation=True,
@@ -350,7 +336,6 @@ class MLMPretrainer:
             unit="file",
         ):
             text = file_path.read_text(encoding="utf-8", errors="ignore")
-            text = _ly_to_parser_tokens(text)
             token_ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
             total_tokens += len(token_ids)
 

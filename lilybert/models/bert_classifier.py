@@ -19,7 +19,7 @@ class LilyBERTEncoder(nn.Module):
     def __init__(
         self,
         vocab_size: int = 30522,
-        pretrained: str = "roberta-base",
+        pretrained: str = "microsoft/codebert-base",
         random_init: bool = False,
     ):
         super().__init__()

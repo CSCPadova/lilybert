@@ -15,7 +15,6 @@ from transformers import PreTrainedTokenizerFast
 from typing_extensions import Annotated
 
 from lilybert.data.sharding import ShardWriter
-from lilybert.data.tokenizer import LilyPondTokenizer
 
 
 def _collect_ly_files(data_dir: Path) -> List[Path]:
@@ -33,20 +32,16 @@ def _shard_file_worker(
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
     """Tokenize a single .ly file for MLM sharding (runs in subprocess).
 
-    Always converts raw LilyPond to parser-token representation before
-    tokenizing, so domain-specific tokens are matched as single units.
+    Feeds raw LilyPond text directly to the pretrained tokenizer.
     """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    lily_tokenizer = LilyPondTokenizer()
-    text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
-
-    if not text_to_encode.strip():
+    if not text.strip():
         return (fp.stem, [], [])
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
-    token_ids = tokenizer.encode(text_to_encode, add_special_tokens=False)
+    token_ids = tokenizer.encode(text, add_special_tokens=False)
     if not token_ids:
         return (fp.stem, [], [])
 

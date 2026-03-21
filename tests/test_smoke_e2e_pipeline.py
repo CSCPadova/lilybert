@@ -66,7 +66,7 @@ def test_smoke_e2e_cli_pipeline(
                     "sharding": {"enabled": False},
                     "tokenizer": {
                         "enabled": True,
-                        "pretrained_model": "roberta-base",
+                        "pretrained_model": "microsoft/codebert-base",
                         "output_dir": str(tokenizer_dir),
                     },
                 }
@@ -118,7 +118,7 @@ def test_smoke_e2e_cli_pipeline(
                 },
                 "model": {
                     "architecture": {
-                        "name": "roberta-base",
+                        "name": "microsoft/codebert-base",
                         "hidden_size": 64,
                         "num_hidden_layers": 2,
                         "num_attention_heads": 4,

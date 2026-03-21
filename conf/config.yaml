@@ -22,6 +22,6 @@ train:
   log_steps: 20
   logging_steps: 50
   save_steps: 500
-  model_architecture: roberta-base
+  model_architecture: microsoft/codebert-base
   random_init: false
   resume_from_checkpoint: null

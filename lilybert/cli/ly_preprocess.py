@@ -27,7 +27,6 @@ from lilybert.cli.pretokenize import (
     _pretokenize_mlm,
 )
 from lilybert.data.preprocessor import LilyPondPreprocessor
-from lilybert.data.tokenizer import LilyPondTokenizer
 
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
@@ -110,22 +109,17 @@ def _tokenize_file_worker(
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
     """Tokenize a single .ly file into windowed (input_ids, attention_mask) rows.
 
-    Runs in a subprocess — loads its own tokenizer and parser instances.
-    Converts raw LilyPond to parser-token representation before tokenizing.
+    Runs in a subprocess — loads its own tokenizer instance.
     Returns (movement_id, list_of_id_rows, list_of_mask_rows).
     """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    # Always convert to parser tokens for the extended pretrained tokenizer.
-    lily_tokenizer = LilyPondTokenizer()
-    text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
-
-    if not text_to_encode.strip():
+    if not text.strip():
         return (fp.stem, [], [])
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
-    token_ids = tokenizer.encode(text_to_encode, add_special_tokens=False)
+    token_ids = tokenizer.encode(text, add_special_tokens=False)
     if not token_ids:
         return (fp.stem, [], [])
 
