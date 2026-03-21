@@ -23,4 +23,5 @@ train:
   logging_steps: 50
   save_steps: 500
   model_architecture: roberta-base
+  random_init: false
   resume_from_checkpoint: null

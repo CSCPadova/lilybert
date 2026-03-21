@@ -23,16 +23,10 @@ augmentation:
   enable_inversion: false
   include_original: true
 
-bpe:
+tokenizer:
   enabled: false
-  tokenizer_type: ${dataset.tokenizer_type}
+  pretrained_model: ${model.pretrained_model}
   output_dir: ${dataset.tokenizer_path}
-  vocab_size: 10000
-  min_frequency: 40
-  number_placeholders: false
-  lexer:
-    include_articulations: true
-    include_slurs: true
 
 tokenize:
   enabled: false

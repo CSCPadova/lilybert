@@ -12,13 +12,10 @@ augmentation:
   enable_inversion: false
   include_original: true
 
-bpe:
+tokenizer:
   enabled: true
-  tokenizer_type: ${dataset.tokenizer_type}
+  pretrained_model: ${model.pretrained_model}
   output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
-  vocab_size: 10000
-  min_frequency: 40
-  number_placeholders: false
 
 tokenize:
   enabled: false

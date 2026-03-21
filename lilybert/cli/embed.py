@@ -13,6 +13,7 @@ from transformers import PreTrainedTokenizerFast
 from typing_extensions import Annotated
 
 from lilybert.data.preprocessor import LilyPondPreprocessor
+from lilybert.data.tokenizer import LilyPondTokenizer
 from lilybert.models import LilyBERTEncoder
 
 
@@ -99,6 +100,7 @@ def main(
         parameter.requires_grad = False
 
     preprocessor = LilyPondPreprocessor(strip_sections=strip)
+    lily_tokenizer = LilyPondTokenizer()
 
     cls_id = tokenizer.cls_token_id
     sep_id = tokenizer.sep_token_id
@@ -123,7 +125,15 @@ def main(
                 if not movement_text:
                     continue
 
-                token_ids = tokenizer.encode(movement_text, add_special_tokens=False)
+                # Convert to parser-token representation so that
+                # domain-specific tokens are matched as single units.
+                parser_text = lily_tokenizer._movement_to_parser_tokens(
+                    movement_text
+                )
+                if not parser_text.strip():
+                    continue
+
+                token_ids = tokenizer.encode(parser_text, add_special_tokens=False)
                 if not token_ids:
                     continue
 

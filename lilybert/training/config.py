@@ -30,6 +30,7 @@ class TrainingConfig:
 
     # --- model architecture (from BaseModelConfig + pretraining-specific) ---
     model_architecture: str = BaseModelConfig.pretrained_model
+    random_init: bool = False
     hidden_size: int = 768
     num_hidden_layers: int = 12
     num_attention_heads: int = 12

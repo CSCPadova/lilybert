@@ -11,7 +11,9 @@ class LilyBERTEncoder(nn.Module):
     """LilyBERT encoder for training and embedding extraction.
 
     Wraps a RoBERTa-based model (roberta-base, microsoft/codebert-base)
-    via HuggingFace Auto classes.
+    via HuggingFace Auto classes.  When *random_init* is ``False`` the
+    pretrained weights are loaded and the embedding matrix is resized to
+    *vocab_size* (to accommodate added LilyPond tokens).
     """
 
     def __init__(
@@ -35,7 +37,7 @@ class LilyBERTEncoder(nn.Module):
         else:
             self.model = AutoModel.from_pretrained(pretrained)
             if int(self.model.config.vocab_size) != self.vocab_size:
-                self._replace_embeddings(self.model, self.vocab_size)
+                self.model.resize_token_embeddings(self.vocab_size)
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
         return self.model(
@@ -65,11 +67,3 @@ class LilyBERTEncoder(nn.Module):
         instance.model = AutoModel.from_pretrained(pretrained_model_name_or_path)
         instance.vocab_size = instance.model.config.vocab_size
         return instance
-
-    @staticmethod
-    def _replace_embeddings(model: nn.Module, vocab_size: int) -> None:
-        hidden_size = model.config.hidden_size
-        new_embeddings = nn.Embedding(vocab_size, hidden_size)
-        nn.init.normal_(new_embeddings.weight, mean=0.0, std=0.02)
-        model.embeddings.word_embeddings = new_embeddings
-        model.config.vocab_size = vocab_size

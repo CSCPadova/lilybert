@@ -14,7 +14,7 @@ from lilybert.cli.ly_preprocess import (
 )
 from lilybert.cli.pretokenize import _shard_file_worker
 from lilybert.data.preprocessor import LilyPondPreprocessor
-from lilybert.data.tokenizer import LilyPondTokenizer
+from lilybert.data.tokenizer_builder import build_and_save
 
 
 @pytest.fixture()
@@ -37,14 +37,10 @@ def processed_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def tokenizer_dir(tmp_path: Path, processed_dir: Path) -> Path:
-    """Train a small BPE tokenizer on processed files."""
+def tokenizer_dir(tmp_path: Path) -> Path:
+    """Build an extended pretrained tokenizer with LilyPond tokens."""
     out = tmp_path / "tokenizer"
-    tok = LilyPondTokenizer()
-    corpus = tok.build_corpus(str(processed_dir), num_workers=2)
-    assert corpus, "build_corpus returned empty corpus"
-    tok.train(corpus=corpus, vocab_size=512, min_frequency=0)
-    tok.save(str(out))
+    build_and_save(pretrained_model="roberta-base", output_dir=str(out))
     assert (out / "tokenizer.json").exists()
     return out
 

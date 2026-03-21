@@ -3,8 +3,8 @@
 Supports:
 - movement preprocessing for any LilyPond dataset
 - optional augmentation
+- optional tokenizer building (pretrained + LilyPond tokens)
 - optional pretokenized sharding
-- optional BPE tokenizer training
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from lilybert.cli.pretokenize import (
 )
 from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.data.tokenizer import LilyPondTokenizer
-from lilybert.data.tokenizer_factory import create_tokenizer, get_tokenizer_type
 
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
@@ -68,14 +67,12 @@ class TokenizeSettings:
 
 
 @dataclass
-class BPESettings:
+class TokenizerBuildSettings:
+    """Settings for building the extended pretrained tokenizer."""
+
     enabled: bool = False
-    tokenizer_type: str = "musical"
+    pretrained_model: str = "roberta-base"
     output_dir: str = "artifacts/tokenizer"
-    vocab_size: int = 8000
-    min_frequency: int = 0
-    number_placeholders: bool = False
-    lexer: dict | None = None
 
 
 @dataclass
@@ -89,7 +86,7 @@ class PreprocessConfig:
     augmentation: AugmentationSettings = field(default_factory=AugmentationSettings)
     tokenize: TokenizeSettings = field(default_factory=TokenizeSettings)
     sharding: ShardingSettings = field(default_factory=ShardingSettings)
-    bpe: BPESettings = field(default_factory=BPESettings)
+    tokenizer: TokenizerBuildSettings = field(default_factory=TokenizerBuildSettings)
 
 
 def _resolve_num_workers(num_workers: int) -> int:
@@ -110,21 +107,19 @@ def _tokenize_file_worker(
     tokenizer_path: str,
     max_length: int,
     stride: int,
-    tokenizer_type: str = "musical",
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
     """Tokenize a single .ly file into windowed (input_ids, attention_mask) rows.
 
     Runs in a subprocess — loads its own tokenizer and parser instances.
+    Converts raw LilyPond to parser-token representation before tokenizing.
     Returns (movement_id, list_of_id_rows, list_of_mask_rows).
     """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    if tokenizer_type == "musical":
-        lily_tokenizer = LilyPondTokenizer()
-        text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
-    else:
-        text_to_encode = text
+    # Always convert to parser tokens for the extended pretrained tokenizer.
+    lily_tokenizer = LilyPondTokenizer()
+    text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
 
     if not text_to_encode.strip():
         return (fp.stem, [], [])
@@ -181,8 +176,6 @@ def _tokenize_mlm_unsharded(
     if not all_files:
         raise FileNotFoundError(f"No .ly files found in {data_path}")
 
-    tok_type = get_tokenizer_type(tokenizer_path)
-
     rng = random.Random(seed)
     shuffled = list(all_files)
     rng.shuffle(shuffled)
@@ -209,7 +202,6 @@ def _tokenize_mlm_unsharded(
                     tokenizer_path,
                     max_length,
                     stride,
-                    tok_type,
                 ): fp
                 for fp in files
             }
@@ -262,6 +254,8 @@ def _main(cfg: DictConfig) -> None:
     for legacy_key in ("stage", "task", "include_structure_markers"):
         sharding_payload.pop(legacy_key, None)
 
+    tokenizer_payload = dict(preprocess_payload.get("tokenizer", {}))
+
     config = PreprocessConfig(
         enabled=bool(preprocess_payload.get("enabled", True)),
         num_workers=int(preprocess_payload.get("num_workers", 0)),
@@ -276,7 +270,7 @@ def _main(cfg: DictConfig) -> None:
         ),
         tokenize=TokenizeSettings(**dict(preprocess_payload.get("tokenize", {}))),
         sharding=ShardingSettings(**sharding_payload),
-        bpe=BPESettings(**dict(preprocess_payload.get("bpe", {}))),
+        tokenizer=TokenizerBuildSettings(**tokenizer_payload),
     )
 
     workers = _resolve_num_workers(config.num_workers)
@@ -300,28 +294,18 @@ def _main(cfg: DictConfig) -> None:
             num_workers=workers,
         )
 
-    bpe_summary = None
-    if config.bpe.enabled:
-        tokenizer = create_tokenizer(config.bpe.tokenizer_type)
-        corpus = tokenizer.build_corpus(
-            config.output_dir,
-            num_workers=workers,
+    tokenizer_summary = None
+    if config.tokenizer.enabled:
+        from lilybert.data.tokenizer_builder import build_and_save
+
+        out_path = build_and_save(
+            pretrained_model=config.tokenizer.pretrained_model,
+            output_dir=config.tokenizer.output_dir,
         )
-        train_kwargs: dict = dict(
-            corpus=corpus,
-            vocab_size=config.bpe.vocab_size,
-            min_frequency=config.bpe.min_frequency,
-        )
-        if config.bpe.tokenizer_type == "musical":
-            train_kwargs["number_placeholders"] = config.bpe.number_placeholders
-        fast_tokenizer = tokenizer.train(**train_kwargs)
-        saved_dir = tokenizer.save(config.bpe.output_dir)
-        bpe_summary = {
+        tokenizer_summary = {
             "enabled": True,
-            "tokenizer_type": config.bpe.tokenizer_type,
-            "num_corpus_samples": len(corpus),
-            "vocab_size": int(fast_tokenizer.vocab_size),
-            "output_dir": str(saved_dir),
+            "pretrained_model": config.tokenizer.pretrained_model,
+            "output_dir": str(out_path),
         }
 
     tokenize_summary = None
@@ -360,9 +344,9 @@ def _main(cfg: DictConfig) -> None:
         json.dumps(
             {
                 "preprocess": preprocess_summary,
+                "tokenizer": tokenizer_summary,
                 "tokenize": tokenize_summary,
                 "sharding": sharding_summary,
-                "bpe": bpe_summary,
             },
             indent=2,
             ensure_ascii=False,

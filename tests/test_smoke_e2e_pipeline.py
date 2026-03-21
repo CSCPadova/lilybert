@@ -2,9 +2,9 @@
 
 This test exercises the same minimal flow validated manually:
 1) preprocess movement-level files
-2) train BPE tokenizer
+2) build extended pretrained tokenizer with LilyPond tokens
 3) build MLM shards
-4) run tiny MLM pretraining
+4) run tiny MLM pretraining (from scratch)
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ def test_smoke_e2e_cli_pipeline(
     pretokenized_dir = tmp_path / "pretokenized"
     train_output_dir = tmp_path / "train"
 
+    # Step 1: Preprocess movement files
     ly_preprocess_main(
         OmegaConf.create(
             {
@@ -43,7 +44,7 @@ def test_smoke_e2e_cli_pipeline(
                     "labels_path": str(labels_path),
                     "strip": ["header", "version", "comments", "midi", "overrides"],
                     "sharding": {"enabled": False},
-                    "bpe": {"enabled": False},
+                    "tokenizer": {"enabled": False},
                 }
             }
         )
@@ -54,6 +55,7 @@ def test_smoke_e2e_cli_pipeline(
     assert processed_files, "Preprocess step did not produce movement .ly files"
     assert (processed_dir / "metadata.json").exists()
 
+    # Step 2: Build extended pretrained tokenizer with LilyPond tokens
     ly_preprocess_main(
         OmegaConf.create(
             {
@@ -62,11 +64,10 @@ def test_smoke_e2e_cli_pipeline(
                     "output_dir": str(processed_dir),
                     "labels_path": str(labels_path),
                     "sharding": {"enabled": False},
-                    "bpe": {
+                    "tokenizer": {
                         "enabled": True,
+                        "pretrained_model": "roberta-base",
                         "output_dir": str(tokenizer_dir),
-                        "vocab_size": 512,
-                        "min_frequency": 0,
                     },
                 }
             }
@@ -76,6 +77,7 @@ def test_smoke_e2e_cli_pipeline(
 
     assert (tokenizer_dir / "tokenizer.json").exists()
 
+    # Step 3: Build MLM shards
     ly_preprocess_main(
         OmegaConf.create(
             {
@@ -83,7 +85,7 @@ def test_smoke_e2e_cli_pipeline(
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
                     "labels_path": str(labels_path),
-                    "bpe": {"enabled": False},
+                    "tokenizer": {"enabled": False},
                     "sharding": {
                         "enabled": True,
                         "stage": "mlm",
@@ -105,6 +107,7 @@ def test_smoke_e2e_cli_pipeline(
     assert (mlm_root / "train" / "manifest.json").exists()
     assert (mlm_root / "eval" / "manifest.json").exists()
 
+    # Step 4: Tiny MLM pretraining (from scratch)
     ly_train_main(
         OmegaConf.create(
             {
@@ -132,6 +135,7 @@ def test_smoke_e2e_cli_pipeline(
                 },
                 "train": {
                     "mode": "pretrain",
+                    "random_init": True,
                     "pretrain": {
                         "max_length": 128,
                         "mlm_probability": 0.15,

@@ -15,6 +15,7 @@ from tqdm.auto import tqdm
 from transformers import (
     AutoConfig,
     AutoModelForMaskedLM,
+    AutoTokenizer,
     DataCollatorForLanguageModeling,
     PreTrainedTokenizerFast,
     Trainer,
@@ -22,12 +23,24 @@ from transformers import (
 )
 
 from lilybert.data.sharded_dataset import ShardedMLMDataset
+from lilybert.data.tokenizer import LilyPondTokenizer
 
 from .config import TrainingConfig
 
 
+def _ly_to_parser_tokens(text: str) -> str:
+    """Convert raw LilyPond text to parser token representation."""
+    converter = LilyPondTokenizer()
+    return converter._movement_to_parser_tokens(text)
+
+
 class LilyPondMLMDataset(Dataset):
-    """Simple text dataset for masked language modeling."""
+    """Text dataset for masked language modeling.
+
+    Converts raw LilyPond notation to parser-token representation before
+    feeding to the tokenizer, so that domain-specific tokens (NOTE_C, DUR_4,
+    etc.) are matched as single tokens.
+    """
 
     def __init__(
         self,
@@ -38,12 +51,19 @@ class LilyPondMLMDataset(Dataset):
         self.files = files
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self._lily_tokenizer: LilyPondTokenizer | None = None
+
+    def _get_lily_tokenizer(self) -> LilyPondTokenizer:
+        if self._lily_tokenizer is None:
+            self._lily_tokenizer = LilyPondTokenizer()
+        return self._lily_tokenizer
 
     def __len__(self) -> int:
         return len(self.files)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         text = self.files[idx].read_text(encoding="utf-8", errors="ignore")
+        text = self._get_lily_tokenizer()._movement_to_parser_tokens(text)
         encoded = self.tokenizer(
             text,
             truncation=True,
@@ -58,7 +78,14 @@ class LilyPondMLMDataset(Dataset):
 
 
 class MLMPretrainer:
-    """Trainer wrapper for RoBERTa-based MLM pretraining from scratch."""
+    """Trainer wrapper for RoBERTa-based MLM training.
+
+    Supports two modes controlled by ``config.random_init``:
+    - ``False`` (default): load pretrained weights and resize embeddings
+      for the extended LilyPond tokenizer (finetune).
+    - ``True``: initialise the architecture from scratch with a custom
+      config (train from scratch).
+    """
 
     def __init__(self, config: TrainingConfig):
         self.config = config
@@ -77,7 +104,7 @@ class MLMPretrainer:
                 config=self.config.to_dict(),
             )
 
-        tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
+        tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_path)
 
         if self.config.pretokenized_shards_dir:
             shards_dir = Path(self.config.pretokenized_shards_dir)
@@ -129,18 +156,7 @@ class MLMPretrainer:
                 max_length=self.config.max_length,
             )
 
-        if self.config.resume_from_checkpoint:
-            ckpt_path = Path(self.config.resume_from_checkpoint)
-            if not ckpt_path.exists():
-                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-            model = AutoModelForMaskedLM.from_pretrained(str(ckpt_path))
-            if is_main:
-                print(f"Loaded pretrained weights from {ckpt_path}")
-        else:
-            model_config = self._build_model_config(
-                vocab_size=self._vocab_size(tokenizer)
-            )
-            model = AutoModelForMaskedLM.from_config(model_config)
+        model = self._build_model(tokenizer, is_main)
 
         ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,
@@ -205,12 +221,51 @@ class MLMPretrainer:
             "max_length": self.config.max_length,
             "mlm_probability": self.config.mlm_probability,
             "architecture": self.config.model_architecture,
+            "random_init": self.config.random_init,
         }
         (Path(self.config.output_dir) / "pretraining_summary.json").write_text(
             json.dumps(summary, indent=2),
             encoding="utf-8",
         )
         return summary
+
+    def _build_model(self, tokenizer: PreTrainedTokenizerFast, is_main: bool):
+        """Instantiate or load the MLM model.
+
+        Priority:
+        1. resume_from_checkpoint → load saved model
+        2. random_init=False → load pretrained + resize embeddings
+        3. random_init=True → fresh random init from config
+        """
+        vocab_size = self._vocab_size(tokenizer)
+
+        if self.config.resume_from_checkpoint:
+            ckpt_path = Path(self.config.resume_from_checkpoint)
+            if not ckpt_path.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+            model = AutoModelForMaskedLM.from_pretrained(str(ckpt_path))
+            if is_main:
+                print(f"Loaded pretrained weights from {ckpt_path}")
+        elif not self.config.random_init:
+            # Finetune: load pretrained weights, resize embeddings for
+            # the extended tokenizer (base vocab + LilyPond tokens).
+            model = AutoModelForMaskedLM.from_pretrained(
+                self.config.model_architecture
+            )
+            model.resize_token_embeddings(vocab_size)
+            if is_main:
+                print(
+                    f"Loaded pretrained {self.config.model_architecture}, "
+                    f"resized embeddings to {vocab_size}"
+                )
+        else:
+            # Train from scratch with custom architecture config.
+            model_config = self._build_model_config(vocab_size=vocab_size)
+            model = AutoModelForMaskedLM.from_config(model_config)
+            if is_main:
+                print(f"Initialized {self.config.model_architecture} from scratch")
+
+        return model
 
     @staticmethod
     def _train_eval_split(
@@ -268,10 +323,7 @@ class MLMPretrainer:
 
     @staticmethod
     def _vocab_size(tokenizer: PreTrainedTokenizerFast) -> int:
-        vocab_size = getattr(tokenizer, "vocab_size", None)
-        if vocab_size is not None:
-            return int(vocab_size)
-        return len(tokenizer.get_vocab())
+        return len(tokenizer)
 
     @staticmethod
     def count_corpus_tokens(
@@ -281,9 +333,6 @@ class MLMPretrainer:
         add_special_tokens: bool = True,
     ) -> Dict[str, float | int]:
         """Count tokens across a corpus of LilyPond files.
-
-        This utility is intended for corpora like Mutopia pretraining data,
-        where files may include augmented variants and do not need metadata.
 
         Args:
             files: List of .ly files to include in the count
@@ -301,6 +350,7 @@ class MLMPretrainer:
             unit="file",
         ):
             text = file_path.read_text(encoding="utf-8", errors="ignore")
+            text = _ly_to_parser_tokens(text)
             token_ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
             total_tokens += len(token_ids)
 

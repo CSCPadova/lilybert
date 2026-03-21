@@ -16,7 +16,6 @@ from typing_extensions import Annotated
 
 from lilybert.data.sharding import ShardWriter
 from lilybert.data.tokenizer import LilyPondTokenizer
-from lilybert.data.tokenizer_factory import get_tokenizer_type
 
 
 def _collect_ly_files(data_dir: Path) -> List[Path]:
@@ -31,17 +30,17 @@ def _shard_file_worker(
     tokenizer_path: str,
     max_length: int,
     stride: int,
-    tokenizer_type: str = "musical",
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
-    """Tokenize a single .ly file for MLM sharding (runs in subprocess)."""
+    """Tokenize a single .ly file for MLM sharding (runs in subprocess).
+
+    Always converts raw LilyPond to parser-token representation before
+    tokenizing, so domain-specific tokens are matched as single units.
+    """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    if tokenizer_type == "musical":
-        lily_tokenizer = LilyPondTokenizer()
-        text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
-    else:
-        text_to_encode = text
+    lily_tokenizer = LilyPondTokenizer()
+    text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
 
     if not text_to_encode.strip():
         return (fp.stem, [], [])
@@ -99,8 +98,7 @@ def _pretokenize_mlm(
     if not all_files:
         raise FileNotFoundError(f"No .ly files found in {data_path}")
 
-    tok_type = get_tokenizer_type(tokenizer_path)
-    print(f"Loading tokenizer from {tokenizer_path} (type={tok_type})")
+    print(f"Loading tokenizer from {tokenizer_path}")
 
     rng = random.Random(seed)
     shuffled = list(all_files)
@@ -134,7 +132,6 @@ def _pretokenize_mlm(
                     tokenizer_path,
                     max_length,
                     stride,
-                    tok_type,
                 ): fp
                 for fp in files
             }
