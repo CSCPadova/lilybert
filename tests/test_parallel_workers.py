@@ -101,7 +101,7 @@ class TestShardFileWorker:
 
 
 class TestTokenizeMlmUnsharded:
-    def test_produces_npz_splits(
+    def test_produces_sharded_splits(
         self, processed_dir: Path, tokenizer_dir: Path, tmp_path: Path
     ):
         output_dir = tmp_path / "tokenized"
@@ -122,12 +122,16 @@ class TestTokenizeMlmUnsharded:
         for split in ("train", "eval"):
             info = summary["splits"][split]
             assert info["samples"] >= 0
-            npz_path = Path(info["path"])
-            assert npz_path.exists()
-            data = np.load(npz_path, allow_pickle=True)
-            assert "input_ids" in data
-            assert "attention_mask" in data
-            assert data["input_ids"].shape[1] == 128
+            split_dir = Path(info["path"])
+            assert split_dir.is_dir()
+            assert (split_dir / "manifest.json").exists()
+            shard_files = list(split_dir.glob("shard_*.npz"))
+            assert len(shard_files) == info["shards"]
+            if shard_files:
+                data = np.load(shard_files[0])
+                assert "input_ids" in data
+                assert "attention_mask" in data
+                assert data["input_ids"].shape[1] == 128
 
     def test_no_files_raises(self, tmp_path: Path, tokenizer_dir: Path):
         empty_dir = tmp_path / "empty"

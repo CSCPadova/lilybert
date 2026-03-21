@@ -27,6 +27,7 @@ from lilybert.cli.pretokenize import (
     _pretokenize_mlm,
 )
 from lilybert.data.preprocessor import LilyPondPreprocessor
+from lilybert.data.sharding import ShardWriter
 
 CONF_PATH = str(Path(__file__).resolve().parents[2] / "conf")
 
@@ -166,7 +167,13 @@ def _tokenize_mlm_unsharded(
     eval_ratio: float,
     seed: int,
     num_workers: int = 0,
+    shard_size: int = 8192,
 ) -> dict:
+    """Tokenize LilyPond files into sharded .npz caches.
+
+    Streams samples through ShardWriter so that only one shard's worth
+    of data is held in memory at a time.
+    """
     data_path = Path(data_dir)
     all_files = _collect_ly_files(data_path)
     if not all_files:
@@ -180,15 +187,17 @@ def _tokenize_mlm_unsharded(
     eval_files = shuffled[split_idx:]
 
     out_root = Path(output_dir)
-    out_root.mkdir(parents=True, exist_ok=True)
-
     summary = {"output_dir": str(out_root), "splits": {}}
     workers = _resolve_num_workers(num_workers)
 
     for split_name, files in (("train", train_files), ("eval", eval_files)):
-        input_rows: list[np.ndarray] = []
-        mask_rows: list[np.ndarray] = []
-        file_ids: list[str] = []
+        split_dir = out_root / split_name
+        writer = ShardWriter(
+            output_dir=split_dir,
+            shard_size=shard_size,
+            max_length=max_length,
+            has_labels=False,
+        )
 
         with ProcessPoolExecutor(max_workers=workers) as exe:
             futures = {
@@ -208,31 +217,29 @@ def _tokenize_mlm_unsharded(
             ):
                 mid, ids_list, masks_list = fut.result()
                 for ids, mask in zip(ids_list, masks_list):
-                    input_rows.append(np.asarray(ids, dtype=np.int64))
-                    mask_rows.append(np.asarray(mask, dtype=np.int64))
-                    file_ids.append(mid)
+                    writer.add_sample(
+                        input_ids=np.asarray(ids, dtype=np.int64),
+                        attention_mask=np.asarray(mask, dtype=np.int64),
+                        movement_id=mid,
+                        base_work="",
+                    )
 
-        input_ids = (
-            np.stack(input_rows, axis=0)
-            if input_rows
-            else np.empty((0, max_length), dtype=np.int64)
-        )
-        attention_mask = (
-            np.stack(mask_rows, axis=0)
-            if mask_rows
-            else np.empty((0, max_length), dtype=np.int64)
-        )
-
-        np.savez(
-            out_root / f"{split_name}.npz",
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            movement_ids=np.asarray(file_ids, dtype=object),
+        manifest = writer.finalize(
+            config={
+                "max_length": max_length,
+                "stride": stride,
+                "tokenizer_path": tokenizer_path,
+                "split": split_name,
+                "shard_size": shard_size,
+                "seed": seed,
+                "eval_ratio": eval_ratio,
+            },
         )
         summary["splits"][split_name] = {
-            "samples": int(input_ids.shape[0]),
+            "samples": manifest.total_samples,
             "files": len(files),
-            "path": str(out_root / f"{split_name}.npz"),
+            "path": str(split_dir),
+            "shards": len(manifest.shards),
         }
 
     return summary
