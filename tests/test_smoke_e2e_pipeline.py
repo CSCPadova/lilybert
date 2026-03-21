@@ -115,7 +115,7 @@ def test_smoke_e2e_cli_pipeline(
                 },
                 "model": {
                     "architecture": {
-                        "name": "bert-base",
+                        "name": "roberta-base",
                         "hidden_size": 64,
                         "num_hidden_layers": 2,
                         "num_attention_heads": 4,

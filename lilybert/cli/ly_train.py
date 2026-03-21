@@ -49,7 +49,7 @@ def _main(cfg: DictConfig) -> None:
         tokenizer_path=tokenizer_path,
         output_dir=output_dir,
         model_architecture=str(
-            train.get("model_architecture", model_arch.get("name", "bert-base"))
+            train.get("model_architecture", model_arch.get("name", "roberta-base"))
         ),
         hidden_size=int(model_arch.get("hidden_size", 768)),
         num_hidden_layers=int(model_arch.get("num_hidden_layers", 12)),

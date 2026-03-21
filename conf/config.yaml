@@ -22,5 +22,5 @@ train:
   log_steps: 20
   logging_steps: 50
   save_steps: 500
-  model_architecture: bert-base
+  model_architecture: roberta-base
   resume_from_checkpoint: null

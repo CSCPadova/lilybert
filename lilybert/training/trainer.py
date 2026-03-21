@@ -13,8 +13,8 @@ import wandb
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 from transformers import (
-    BertConfig,
-    BertForMaskedLM,
+    AutoConfig,
+    AutoModelForMaskedLM,
     DataCollatorForLanguageModeling,
     PreTrainedTokenizerFast,
     Trainer,
@@ -58,7 +58,7 @@ class LilyPondMLMDataset(Dataset):
 
 
 class MLMPretrainer:
-    """Trainer wrapper for BERT-base MLM pretraining from scratch."""
+    """Trainer wrapper for RoBERTa-based MLM pretraining from scratch."""
 
     def __init__(self, config: TrainingConfig):
         self.config = config
@@ -73,7 +73,7 @@ class MLMPretrainer:
                 entity=self.config.wandb_entity,
                 mode=self.config.wandb_mode,
                 name=self.config.wandb_run_name
-                or f"bert-mlm-{self.config.model_architecture}",
+                or f"mlm-{self.config.model_architecture}",
                 config=self.config.to_dict(),
             )
 
@@ -133,14 +133,14 @@ class MLMPretrainer:
             ckpt_path = Path(self.config.resume_from_checkpoint)
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-            model = BertForMaskedLM.from_pretrained(str(ckpt_path))
+            model = AutoModelForMaskedLM.from_pretrained(str(ckpt_path))
             if is_main:
                 print(f"Loaded pretrained weights from {ckpt_path}")
         else:
             model_config = self._build_model_config(
                 vocab_size=self._vocab_size(tokenizer)
             )
-            model = BertForMaskedLM(model_config)
+            model = AutoModelForMaskedLM.from_config(model_config)
 
         ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,
@@ -248,19 +248,22 @@ class MLMPretrainer:
             backends.append("tensorboard")
         return backends or ["none"]
 
-    def _build_model_config(self, vocab_size: int) -> BertConfig:
-        if self.config.model_architecture != "bert-base":
+    def _build_model_config(self, vocab_size: int) -> AutoConfig:
+        supported = {"roberta-base", "microsoft/codebert-base"}
+        if self.config.model_architecture not in supported:
             raise ValueError(
-                "Unsupported model_architecture. This pipeline currently supports bert-base"
+                f"Unsupported model_architecture '{self.config.model_architecture}'. "
+                f"Supported: {sorted(supported)}"
             )
-        return BertConfig(
+        return AutoConfig.for_model(
+            "roberta",
             vocab_size=vocab_size,
             hidden_size=self.config.hidden_size,
             num_hidden_layers=self.config.num_hidden_layers,
             num_attention_heads=self.config.num_attention_heads,
             intermediate_size=self.config.intermediate_size,
             max_position_embeddings=self.config.max_position_embeddings,
-            type_vocab_size=2,
+            type_vocab_size=1,
         )
 
     @staticmethod
