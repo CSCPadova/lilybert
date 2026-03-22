@@ -216,6 +216,7 @@ def _tokenize_mlm_unsharded(
                 desc=f"tokenize/{split_name}",
             ):
                 mid, ids_list, masks_list = fut.result()
+                del futures[fut]
                 for ids, mask in zip(ids_list, masks_list):
                     writer.add_sample(
                         input_ids=np.asarray(ids, dtype=np.int64),

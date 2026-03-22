@@ -140,6 +140,7 @@ def _pretokenize_mlm(
                 desc=f"shard/{split_name}",
             ):
                 mid, ids_list, masks_list = fut.result()
+                del futures[fut]
                 if not ids_list:
                     skipped += 1
                     continue

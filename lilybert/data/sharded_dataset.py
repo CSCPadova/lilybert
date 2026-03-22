@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -26,11 +27,36 @@ class _ShardCache:
             self._cache.move_to_end(shard_idx)
             return self._cache[shard_idx]
 
-        data = dict(np.load(self._manifest_dir / shard_path))
+        data = dict(np.load(self._manifest_dir / shard_path, allow_pickle=True))
         self._cache[shard_idx] = data
         if len(self._cache) > self._max_cached:
             self._cache.popitem(last=False)
         return data
+
+
+def _load_per_shard_metadata(
+    manifest: ShardManifest,
+    manifest_dir: Path,
+) -> tuple[List[str], List[str], Optional[List[List[str]]]]:
+    """Load movement_ids, base_works, and structure_markers from individual shard files."""
+    movement_ids: List[str] = []
+    base_works: List[str] = []
+    has_markers = False
+    structure_markers: List[List[str]] = []
+
+    for shard_info in manifest.shards:
+        data = np.load(manifest_dir / shard_info.path, allow_pickle=True)
+        mids = data["movement_ids"].tolist() if "movement_ids" in data else [""] * shard_info.num_samples
+        bws = data["base_works"].tolist() if "base_works" in data else [""] * shard_info.num_samples
+        movement_ids.extend(mids)
+        base_works.extend(bws)
+        if "structure_markers" in data:
+            has_markers = True
+            structure_markers.extend(
+                json.loads(s) for s in data["structure_markers"].tolist()
+            )
+
+    return movement_ids, base_works, structure_markers if has_markers else None
 
 
 class ShardedDataset(Dataset):
@@ -60,6 +86,16 @@ class ShardedDataset(Dataset):
         self._manifest = ShardManifest.load(manifest_path)
         self._cache = _ShardCache(manifest_path.parent, max_cached=max_cached_shards)
 
+        # Load metadata: from per-shard .npz files or from manifest (backward compat)
+        if getattr(self._manifest, "per_shard_metadata", False):
+            all_mids, all_bws, all_markers = _load_per_shard_metadata(
+                self._manifest, manifest_path.parent
+            )
+        else:
+            all_mids = self._manifest.movement_ids
+            all_bws = self._manifest.base_works
+            all_markers = self._manifest.structure_markers
+
         # Build global index → (shard_idx, local_idx) mapping
         if movement_ids is not None:
             keep = set(movement_ids)
@@ -67,35 +103,31 @@ class ShardedDataset(Dataset):
             self._movement_ids: List[str] = []
             self._base_works: List[str] = []
             self._structure_markers: Optional[List[List[str]]] = (
-                [] if self._manifest.structure_markers is not None else None
+                [] if all_markers is not None else None
             )
 
             global_idx = 0
             for shard_idx, shard_info in enumerate(self._manifest.shards):
                 for local_idx in range(shard_info.num_samples):
-                    mid = self._manifest.movement_ids[global_idx]
+                    mid = all_mids[global_idx]
                     if mid in keep:
                         self._indices.append((shard_idx, local_idx))
                         self._movement_ids.append(mid)
-                        self._base_works.append(self._manifest.base_works[global_idx])
+                        self._base_works.append(all_bws[global_idx])
                         if self._structure_markers is not None:
                             self._structure_markers.append(
-                                self._manifest.structure_markers[global_idx]  # type: ignore[index]
+                                all_markers[global_idx]  # type: ignore[index]
                             )
                     global_idx += 1
         else:
             self._indices = []
-            global_idx = 0
             for shard_idx, shard_info in enumerate(self._manifest.shards):
                 for local_idx in range(shard_info.num_samples):
                     self._indices.append((shard_idx, local_idx))
-                    global_idx += 1
-            self._movement_ids = list(self._manifest.movement_ids)
-            self._base_works = list(self._manifest.base_works)
+            self._movement_ids = list(all_mids)
+            self._base_works = list(all_bws)
             self._structure_markers = (
-                list(self._manifest.structure_markers)
-                if self._manifest.structure_markers is not None
-                else None
+                list(all_markers) if all_markers is not None else None
             )
 
     @property
