@@ -236,7 +236,8 @@ class MLMPretrainer:
             # Finetune: load pretrained weights, resize embeddings for
             # the extended tokenizer (base vocab + LilyPond tokens).
             model = AutoModelForMaskedLM.from_pretrained(
-                self.config.model_architecture
+                self.config.model_architecture,
+                ignore_mismatched_sizes=True,
             )
             model.resize_token_embeddings(vocab_size)
             if is_main:
