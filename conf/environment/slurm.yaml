@@ -2,7 +2,7 @@
 
 dataset:
   processed_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
-  tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
+  tokenizer_path: /nfsd/voce/machine_learning/experiments/codebert/tokenizer
   pretokenized_shards_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized/mlm
 
 runtime:
