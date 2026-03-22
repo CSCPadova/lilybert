@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 from transformers import (
     AutoConfig,
     AutoModelForMaskedLM,
-    AutoTokenizer,
+    PreTrainedTokenizerFast,
     DataCollatorForLanguageModeling,
     PreTrainedTokenizerFast,
     Trainer,
@@ -90,7 +90,7 @@ class MLMPretrainer:
                 config=self.config.to_dict(),
             )
 
-        tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_path)
+        tokenizer = PreTrainedTokenizerFast.from_pretrained(self.config.tokenizer_path)
 
         if self.config.pretokenized_shards_dir:
             shards_dir = Path(self.config.pretokenized_shards_dir)
