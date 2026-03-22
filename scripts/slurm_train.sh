@@ -2,16 +2,18 @@
 # ---------------------------------------------------------------------------
 # lilyBERT training — SLURM batch script with torchrun.
 #
+# MLM pretraining of CodeBERT (microsoft/codebert-base) on LilyPond corpora.
+# Reads pretokenized shards produced by the preprocessing pipeline.
 # Supports single-GPU and multi-GPU (DDP/FSDP) training.
 # Training configuration is composed from conf/train.yaml with environment=slurm.
-# This script only handles SLURM plumbing: venv, GPU detection, launch.
 #
 # Submit:
 #   sbatch scripts/slurm_train.sh
 #   sbatch --gres=gpu:4 scripts/slurm_train.sh
 #
 # To override specific Hydra keys from the command line:
-#   sbatch --gres=gpu:2 scripts/slurm_train.sh train.pretrain.learning_rate=1e-4 train.mode=classify
+#   sbatch --gres=gpu:2 scripts/slurm_train.sh train.pretrain.learning_rate=1e-4
+#   sbatch scripts/slurm_train.sh train.mode=classify train.task=composer
 # ---------------------------------------------------------------------------
 
 #SBATCH --job-name=ly-train

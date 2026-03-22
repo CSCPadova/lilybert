@@ -34,7 +34,7 @@ HYDRA_CONFIG="train"
 
 echo ""
 echo "============================================"
-echo " lilyBERT extract embeddings"
+echo " lilyBERT extract CodeBERT embeddings"
 echo "============================================"
 echo "  SLURM_JOB_ID:    ${SLURM_JOB_ID:-local}"
 echo "  NGPUS:            ${NGPUS}"

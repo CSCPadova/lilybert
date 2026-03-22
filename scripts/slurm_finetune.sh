@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # lilyBERT fine-tuning — SLURM batch script.
 #
-# Continues MLM pretraining from an existing checkpoint on a new dataset.
+# Continues CodeBERT MLM pretraining from an existing checkpoint on a new
+# LilyPond dataset. Reads pretokenized shards with per-shard metadata.
 #
 # Required environment variables:
 #   CHECKPOINT_PATH  — path to the pretrained model (e.g. .../mlm_model or .../checkpoint-N)
