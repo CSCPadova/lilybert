@@ -21,7 +21,7 @@ tokenize:
   enabled: false
   tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
   output_dir: /nfsd/voce/machine_learning/experiments/artifacts/tokenized
-  max_length: 2048
+  max_length: 512
   stride: 256
   eval_ratio: 0.01
   seed: ${runtime.seed}
@@ -30,7 +30,7 @@ sharding:
   enabled: true
   tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
   output_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized
-  max_length: 2048
+  max_length: 512
   stride: 256
   shard_size: 8192
   eval_ratio: 0.01

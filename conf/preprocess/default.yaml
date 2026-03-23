@@ -30,7 +30,7 @@ sharding:
   enabled: false
   tokenizer_path: ${dataset.tokenizer_path}
   output_dir: ${dataset.pretokenized_shards_dir}
-  max_length: 2048
+  max_length: 512
   stride: 256
   shard_size: 4096
   eval_ratio: 0.01
