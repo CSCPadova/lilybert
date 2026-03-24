@@ -17,6 +17,7 @@ from transformers import (
     AutoModelForMaskedLM,
     PreTrainedTokenizerFast,
     DataCollatorForLanguageModeling,
+    EarlyStoppingCallback,
     PreTrainedTokenizerFast,
     Trainer,
     TrainingArguments,
@@ -28,11 +29,11 @@ from .config import TrainingConfig
 
 
 class LilyPondMLMDataset(Dataset):
-    """Simple text dataset for masked language modeling.
+    """Text dataset for masked language modeling with chunk splitting.
 
-    Feeds raw LilyPond notation directly to the tokenizer.  The extended
-    pretrained tokenizer already contains common LilyPond backslash
-    commands as single tokens.
+    Each file is tokenized in full, then split into non-overlapping chunks
+    of ``max_length`` tokens (including special tokens).  Short tail chunks
+    are kept and padded.
     """
 
     def __init__(
@@ -41,26 +42,51 @@ class LilyPondMLMDataset(Dataset):
         tokenizer: PreTrainedTokenizerFast,
         max_length: int,
     ):
-        self.files = files
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.chunks: List[Dict[str, torch.Tensor]] = []
+        self._build_chunks(files)
+
+    def _build_chunks(self, files: List[Path]) -> None:
+        # Reserve space for [CLS] and [SEP] (or equivalent special tokens)
+        content_length = self.max_length - 2
+
+        for path in tqdm(files, desc="Chunking files", unit="file"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            token_ids = self.tokenizer.encode(text, add_special_tokens=False)
+
+            if len(token_ids) == 0:
+                continue
+
+            for start in range(0, len(token_ids), content_length):
+                chunk_ids = token_ids[start : start + content_length]
+
+                # Wrap with special tokens
+                input_ids = self.tokenizer.build_inputs_with_ids(
+                    chunk_ids
+                ) if hasattr(self.tokenizer, "build_inputs_with_ids") else (
+                    [self.tokenizer.cls_token_id or self.tokenizer.bos_token_id]
+                    + chunk_ids
+                    + [self.tokenizer.sep_token_id or self.tokenizer.eos_token_id]
+                )
+
+                # Pad to max_length
+                attention_mask = [1] * len(input_ids)
+                pad_len = self.max_length - len(input_ids)
+                if pad_len > 0:
+                    input_ids = input_ids + [self.tokenizer.pad_token_id or 0] * pad_len
+                    attention_mask = attention_mask + [0] * pad_len
+
+                self.chunks.append({
+                    "input_ids": torch.tensor(input_ids, dtype=torch.long),
+                    "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+                })
 
     def __len__(self) -> int:
-        return len(self.files)
+        return len(self.chunks)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        text = self.files[idx].read_text(encoding="utf-8", errors="ignore")
-        encoded = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        return {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-        }
+        return self.chunks[idx]
 
 
 class MLMPretrainer:
@@ -148,18 +174,23 @@ class MLMPretrainer:
             output_dir=self.config.output_dir,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
             per_device_eval_batch_size=self.config.per_device_eval_batch_size,
+            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
             lr_scheduler_type=self.config.lr_scheduler_type,
+            optim=self.config.optim,
             max_grad_norm=self.config.max_grad_norm,
             weight_decay=self.config.weight_decay,
             warmup_ratio=self.config.warmup_ratio,
             max_steps=self.config.max_steps,
+            bf16=self.config.bf16,
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
-            save_total_limit=3,
+            save_total_limit=self.config.save_total_limit,
             seed=self.config.seed,
             dataloader_num_workers=self.config.dataloader_num_workers,
+            dataloader_pin_memory=self.config.dataloader_pin_memory,
+            torch_compile=self.config.torch_compile,
             report_to=self._report_to() if is_main else ["none"],
             disable_tqdm=not is_main,
             remove_unused_columns=False,
@@ -167,6 +198,7 @@ class MLMPretrainer:
             eval_steps=self.config.eval_steps,
             save_strategy="steps",
             metric_for_best_model="eval_loss",
+            load_best_model_at_end=self.config.early_stopping,
         )
         if self.config.tensorboard_enabled:
             ta_kwargs["logging_dir"] = self.config.tensorboard_log_dir
@@ -178,12 +210,22 @@ class MLMPretrainer:
             mlm_probability=self.config.mlm_probability,
         )
 
+        callbacks = []
+        if self.config.early_stopping:
+            callbacks.append(
+                EarlyStoppingCallback(
+                    early_stopping_patience=self.config.early_stopping_patience,
+                    early_stopping_threshold=self.config.early_stopping_threshold,
+                )
+            )
+
         trainer = Trainer(
             model=model,
             args=training_arguments,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             data_collator=collator,
+            callbacks=callbacks,
         )
         trainer.train()
 
