@@ -23,7 +23,6 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:a40:4
-#SBATCH --cpu-bind=none
 #SBATCH --time=60:00:00
 #SBATCH --output=logs/train_%j.out
 #SBATCH --error=logs/train_%j.err
@@ -63,26 +62,22 @@ echo "  Started:        $(date)"
 echo "============================================"
 echo ""
 
-# ── Launch ───────────────────────────────────────────────────────────────
+# ── Build launcher command ────────────────────────────────────────────────
+export PYTHONUNBUFFERED=1
+
 if [[ "${NGPUS}" -gt 1 ]]; then
     echo "Launching with torchrun (${NGPUS} GPUs)..."
-    # add python buffered output for better logging
-    export PYTHONUNBUFFERED=1
-    uv run torchrun \
-        --standalone \
-        --nproc_per_node="${NGPUS}" \
-        "$(which train)" \
-        --config-name "${HYDRA_CONFIG}" \
-        environment=slurm \
-        "$@"
+    LAUNCHER="srun --cpu-bind=none uv run torchrun --standalone --nproc_per_node=${NGPUS} $(which train)"
 else
     echo "Launching single-GPU training..."
-    export PYTHONUNBUFFERED=1
-    uv run train \
-        --config-name "${HYDRA_CONFIG}" \
-        environment=slurm \
-        "$@"
+    LAUNCHER="srun --cpu-bind=none uv run train"
 fi
+
+# ── Launch ───────────────────────────────────────────────────────────────
+${LAUNCHER} \
+    --config-name "${HYDRA_CONFIG}" \
+    environment=slurm \
+    "$@"
 
 echo ""
 echo "============================================"
