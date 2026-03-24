@@ -33,7 +33,7 @@ def _main(cfg: DictConfig) -> None:
     output_dir = str(runtime.get("output_dir", "outputs/experiments"))
     seed = int(runtime.get("seed", 42))
 
-    dataloader_num_workers = int(runtime_system.get("dataloader_num_workers", 0))
+    dataloader_num_workers = int(runtime_system.get("dataloader_num_workers", 4))
 
     wandb_enabled = bool(runtime_wandb.get("enabled", False))
     wandb_project = str(runtime_wandb.get("project", "lilybert"))
@@ -81,6 +81,7 @@ def _main(cfg: DictConfig) -> None:
         gradient_accumulation_steps=int(train.get("gradient_accumulation_steps", 1)),
         optim=str(train.get("optim", "adamw_torch")),
         dataloader_pin_memory=bool(train.get("dataloader_pin_memory", True)),
+        dataloader_prefetch_factor=int(runtime_system.get("dataloader_prefetch_factor", 2)),
         save_total_limit=int(train.get("save_total_limit", 3)),
         torch_compile=bool(train.get("torch_compile", False)),
         ddp_find_unused_parameters=bool(train.get("ddp_find_unused_parameters", False)),

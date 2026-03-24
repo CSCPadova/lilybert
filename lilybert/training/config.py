@@ -63,6 +63,7 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 1
     optim: str = "adamw_torch"
     dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
     save_total_limit: int = 3
     torch_compile: bool = False
     ddp_find_unused_parameters: bool = False

@@ -190,6 +190,7 @@ class MLMPretrainer:
             seed=self.config.seed,
             dataloader_num_workers=self.config.dataloader_num_workers,
             dataloader_pin_memory=self.config.dataloader_pin_memory,
+            dataloader_prefetch_factor=self.config.dataloader_prefetch_factor,
             torch_compile=self.config.torch_compile,
             ddp_find_unused_parameters=self.config.ddp_find_unused_parameters,
             report_to=self._report_to() if is_main else ["none"],
