@@ -90,11 +90,11 @@ if [[ "${NGPUS}" -gt 1 ]]; then
     uv run torchrun \
         --standalone \
         --nproc_per_node="${NGPUS}" \
-        "$(which ly-train)" \
+        "$(which train)" \
         "${HYDRA_OVERRIDES[@]}"
 else
     echo "Launching single-GPU training..."
-    uv run ly-train \
+    uv run train \
         "${HYDRA_OVERRIDES[@]}"
 fi
 

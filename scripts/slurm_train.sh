@@ -22,7 +22,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a40:4
 #SBATCH --time=48:00:00
 #SBATCH --output=logs/train_%j.out
 #SBATCH --error=logs/train_%j.err
@@ -65,17 +65,20 @@ echo ""
 # ── Launch ───────────────────────────────────────────────────────────────
 if [[ "${NGPUS}" -gt 1 ]]; then
     echo "Launching with torchrun (${NGPUS} GPUs)..."
+    # add python buffered output for better logging
+    export PYTHONUNBUFFERED=1
     uv run torchrun \
         --standalone \
         --nproc_per_node="${NGPUS}" \
-        "$(which ly-train)" \
+        "$(which train)" \
         --config-name "${HYDRA_CONFIG}" \
         environment=slurm \
         train.mode=pretrain \
         "$@"
 else
     echo "Launching single-GPU training..."
-    uv run ly-train \
+    export PYTHONUNBUFFERED=1
+    uv run train \
         --config-name "${HYDRA_CONFIG}" \
         environment=slurm \
         train.mode=pretrain \
