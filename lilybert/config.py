@@ -25,7 +25,7 @@ class PathConfig:
 class BaseModelConfig:
     """Model-architecture defaults shared by pretraining and fine-tuning."""
 
-    pretrained_model: str = "microsoft/codebert-base"
+    pretrained_model: str = "roberta-base"
     max_length: int = 512
     seed: int = 42
 

@@ -191,6 +191,7 @@ class MLMPretrainer:
             dataloader_num_workers=self.config.dataloader_num_workers,
             dataloader_pin_memory=self.config.dataloader_pin_memory,
             torch_compile=self.config.torch_compile,
+            ddp_find_unused_parameters=self.config.ddp_find_unused_parameters,
             report_to=self._report_to() if is_main else ["none"],
             disable_tqdm=not is_main,
             remove_unused_columns=False,
@@ -279,7 +280,6 @@ class MLMPretrainer:
             # the extended tokenizer (base vocab + LilyPond tokens).
             model = AutoModelForMaskedLM.from_pretrained(
                 self.config.model_architecture,
-                ignore_mismatched_sizes=True,
             )
             model.resize_token_embeddings(vocab_size)
             if is_main:

@@ -65,6 +65,7 @@ class TrainingConfig:
     dataloader_pin_memory: bool = True
     save_total_limit: int = 3
     torch_compile: bool = False
+    ddp_find_unused_parameters: bool = True
 
     # --- logging (from LoggingConfig) ---
     wandb_enabled: bool = LoggingConfig.wandb_enabled
