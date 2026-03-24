@@ -73,7 +73,6 @@ if [[ "${NGPUS}" -gt 1 ]]; then
         "$(which train)" \
         --config-name "${HYDRA_CONFIG}" \
         environment=slurm \
-        train.mode=pretrain \
         "$@"
 else
     echo "Launching single-GPU training..."
@@ -81,7 +80,6 @@ else
     uv run train \
         --config-name "${HYDRA_CONFIG}" \
         environment=slurm \
-        train.mode=pretrain \
         "$@"
 fi
 
