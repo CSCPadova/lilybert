@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
+from tqdm.auto import tqdm
 from torch.utils.data import Dataset
 
 from .sharding import ShardManifest
@@ -198,7 +199,7 @@ class ShardedMLMDataset(Dataset):
         input_ids_parts: List[np.ndarray] = []
         attention_mask_parts: List[np.ndarray] = []
 
-        for shard_info in manifest.shards:
+        for shard_info in tqdm(manifest.shards, desc="Loading shards into RAM", unit="shard"):
             data = np.load(manifest_dir / shard_info.path)
             input_ids_parts.append(data["input_ids"])
             attention_mask_parts.append(data["attention_mask"])
