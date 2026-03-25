@@ -49,7 +49,7 @@ def _main(cfg: DictConfig) -> None:
         tokenizer_path=tokenizer_path,
         output_dir=output_dir,
         model_architecture=str(
-            train.get("model_architecture", model_arch.get("name", "roberta-base"))
+            train.get("model_architecture", model_arch.get("name", "microsoft/codebert-base"))
         ),
         random_init=bool(train.get("random_init", False)),
         hidden_size=int(model_arch.get("hidden_size", 768)),

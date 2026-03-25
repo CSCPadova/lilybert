@@ -5,7 +5,7 @@ labels_path: data/labels/labels_v1.json
 
 augmentation:
   enable_transposition: false
-  enable_absolute_relative: true
+  enable_absolute_relative: false
   enable_articulation_variants: false
   enable_barline_variants: false
   enable_retrograde: false

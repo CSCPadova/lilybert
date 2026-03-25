@@ -2,16 +2,17 @@
 
 dataset:
   processed_dir: /nfsd/voce/machine_learning/experiments/artifacts/processed
-  tokenizer_path: /nfsd/voce/machine_learning/experiments/codebert/tokenizer
+  tokenizer_path: /nfsd/voce/machine_learning/experiments/artifacts/tokenizer
   pretokenized_shards_dir: /nfsd/voce/machine_learning/experiments/artifacts/pretokenized/mlm
 
 runtime:
-  output_dir: /nfsd/voce/machine_learning/experiments/pdmx
+  output_dir: /nfsd/voce/machine_learning/experiments/pdmx_codebert
   system:
     dataloader_num_workers: 8
-    use_fsdp: true
+    dataloader_prefetch_factor: 4
+    use_fsdp: false
   wandb:
     enabled: true
   tensorboard:
     enabled: true
-    log_dir: /nfsd/voce/machine_learning/experiments/pdmx/tensorboard
+    log_dir: /nfsd/voce/machine_learning/experiments/pdmx_codebert/tensorboard
