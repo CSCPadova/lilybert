@@ -12,6 +12,8 @@ import torch
 import wandb
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
+import logging
+
 from transformers import (
     AutoConfig,
     AutoModelForMaskedLM,
@@ -20,12 +22,31 @@ from transformers import (
     EarlyStoppingCallback,
     PreTrainedTokenizerFast,
     Trainer,
+    TrainerCallback,
     TrainingArguments,
 )
+
+logger = logging.getLogger(__name__)
 
 from lilybert.data.sharded_dataset import ShardedMLMDataset
 
 from .config import TrainingConfig
+
+
+class EarlyStoppingLogCallback(TrainerCallback):
+    """Logs a warning when early stopping is triggered."""
+
+    def on_train_end(self, args, state, control, **kwargs):
+        if control.should_training_stop and state.global_step < args.max_steps:
+            logger.warning(
+                "Early stopping triggered at step %d (best eval_loss=%.4f at step %d). "
+                "Training did not reach max_steps=%d. Consider lowering "
+                "early_stopping_threshold or increasing early_stopping_patience.",
+                state.global_step,
+                state.best_metric,
+                state.best_global_step,
+                args.max_steps,
+            )
 
 
 class LilyPondMLMDataset(Dataset):
@@ -220,6 +241,7 @@ class MLMPretrainer:
                     early_stopping_threshold=self.config.early_stopping_threshold,
                 )
             )
+            callbacks.append(EarlyStoppingLogCallback())
 
         trainer = Trainer(
             model=model,
