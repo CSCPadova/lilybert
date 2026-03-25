@@ -27,7 +27,7 @@ train:
   resume_from_checkpoint: null
   early_stopping: true
   early_stopping_patience: 5
-  early_stopping_threshold: 0.01
+  early_stopping_threshold: 0.0
   bf16: true
   gradient_accumulation_steps: 1
   optim: adamw_torch_fused
