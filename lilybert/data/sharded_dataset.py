@@ -176,39 +176,43 @@ class ShardedMLMDataset(Dataset):
     Returns ``{input_ids, attention_mask}`` for use with
     ``DataCollatorForLanguageModeling``.
 
+    All shards are concatenated into contiguous numpy arrays at init time
+    so that ``__getitem__`` is a pure index operation with zero I/O.
+    When used with a ``fork``-based DataLoader, worker processes share
+    the parent's memory pages via copy-on-write (no duplication).
+
     Parameters
     ----------
     manifest_path:
         Path to the ``manifest.json``.
-    max_cached_shards:
-        Number of shards to keep in the LRU cache.
     """
 
     def __init__(
         self,
         manifest_path: str | Path,
-        max_cached_shards: int = 4,
     ) -> None:
         manifest_path = Path(manifest_path)
-        self._manifest = ShardManifest.load(manifest_path)
-        self._cache = _ShardCache(manifest_path.parent, max_cached=max_cached_shards)
+        manifest = ShardManifest.load(manifest_path)
+        manifest_dir = manifest_path.parent
 
-        self._indices: List[tuple[int, int]] = []
-        for shard_idx, shard_info in enumerate(self._manifest.shards):
-            for local_idx in range(shard_info.num_samples):
-                self._indices.append((shard_idx, local_idx))
+        input_ids_parts: List[np.ndarray] = []
+        attention_mask_parts: List[np.ndarray] = []
+
+        for shard_info in manifest.shards:
+            data = np.load(manifest_dir / shard_info.path)
+            input_ids_parts.append(data["input_ids"])
+            attention_mask_parts.append(data["attention_mask"])
+
+        # Store as numpy so forked workers share pages (COW).
+        # torch.from_numpy in __getitem__ is zero-copy.
+        self._input_ids = np.concatenate(input_ids_parts, axis=0)
+        self._attention_mask = np.concatenate(attention_mask_parts, axis=0)
 
     def __len__(self) -> int:
-        return len(self._indices)
+        return self._input_ids.shape[0]
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        shard_idx, local_idx = self._indices[idx]
-        shard_info = self._manifest.shards[shard_idx]
-        data = self._cache.get(shard_idx, shard_info.path)
-
         return {
-            "input_ids": torch.from_numpy(data["input_ids"][local_idx].copy()).long(),
-            "attention_mask": torch.from_numpy(
-                data["attention_mask"][local_idx].copy()
-            ).long(),
+            "input_ids": torch.from_numpy(self._input_ids[idx]).long(),
+            "attention_mask": torch.from_numpy(self._attention_mask[idx]).long(),
         }
