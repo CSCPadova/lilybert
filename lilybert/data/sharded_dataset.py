@@ -7,6 +7,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+import os
+
 import numpy as np
 import torch
 from tqdm.auto import tqdm
@@ -171,6 +173,18 @@ class ShardedDataset(Dataset):
         return result
 
 
+def _rss_gb() -> float:
+    """Return current process RSS in GB (reads /proc, no dependencies)."""
+    try:
+        with open(f"/proc/{os.getpid()}/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1_048_576  # kB → GB
+    except OSError:
+        pass
+    return 0.0
+
+
 class ShardedMLMDataset(Dataset):
     """Sharded dataset for MLM pretraining (no labels).
 
@@ -196,18 +210,26 @@ class ShardedMLMDataset(Dataset):
         manifest = ShardManifest.load(manifest_path)
         manifest_dir = manifest_path.parent
 
-        input_ids_parts: List[np.ndarray] = []
-        attention_mask_parts: List[np.ndarray] = []
+        # Compute total samples and seq_len from manifest
+        total_samples = sum(s.num_samples for s in manifest.shards)
+        first_shard = np.load(manifest_dir / manifest.shards[0].path)
+        seq_len = first_shard["input_ids"].shape[1]
 
-        for shard_info in tqdm(manifest.shards, desc="Loading shards into RAM", unit="shard"):
+        # Pre-allocate with compact dtypes (no 2x peak from concatenate).
+        # int32 fits vocab sizes up to 2B; int8 fits attention_mask (0/1).
+        self._input_ids = np.empty((total_samples, seq_len), dtype=np.int32)
+        self._attention_mask = np.empty((total_samples, seq_len), dtype=np.int8)
+
+        # Copy shard-by-shard into pre-allocated arrays
+        offset = 0
+        pbar = tqdm(manifest.shards, desc="Loading shards into RAM", unit="shard")
+        for shard_info in pbar:
             data = np.load(manifest_dir / shard_info.path)
-            input_ids_parts.append(data["input_ids"])
-            attention_mask_parts.append(data["attention_mask"])
-
-        # Store as numpy so forked workers share pages (COW).
-        # torch.from_numpy in __getitem__ is zero-copy.
-        self._input_ids = np.concatenate(input_ids_parts, axis=0)
-        self._attention_mask = np.concatenate(attention_mask_parts, axis=0)
+            n = shard_info.num_samples
+            self._input_ids[offset : offset + n] = data["input_ids"]
+            self._attention_mask[offset : offset + n] = data["attention_mask"]
+            offset += n
+            pbar.set_postfix(RAM=f"{_rss_gb():.1f}GB")
 
     def __len__(self) -> int:
         return self._input_ids.shape[0]
