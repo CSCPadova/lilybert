@@ -90,7 +90,7 @@ def extract_layer_embeddings(
         batch_ids = ids_tensor[start : start + batch_size].to(device)
         batch_mask = mask_tensor[start : start + batch_size].to(device)
 
-        outputs = encoder.bert(
+        outputs = encoder.model(
             input_ids=batch_ids,
             attention_mask=batch_mask,
             return_dict=True,
