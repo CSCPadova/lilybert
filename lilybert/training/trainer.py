@@ -251,7 +251,10 @@ class MLMPretrainer:
             data_collator=collator,
             callbacks=callbacks,
         )
-        trainer.train()
+        resume_ckpt = self.config.resume_from_checkpoint
+        trainer.train(
+            resume_from_checkpoint=resume_ckpt if resume_ckpt else None,
+        )
 
         model_dir = Path(self.config.output_dir) / "mlm_model"
         model_dir.mkdir(parents=True, exist_ok=True)
