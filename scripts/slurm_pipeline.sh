@@ -153,7 +153,7 @@ mkdir -p logs
 echo "Started: $(date)"
 echo ""
 
-uv run ly-preprocess "${OVERRIDES[@]}"
+uv run preprocess "${OVERRIDES[@]}"
 
 echo ""
 echo "============================================"
