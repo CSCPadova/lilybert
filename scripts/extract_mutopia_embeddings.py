@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Extract layer-wise BERT embeddings for the Mutopia dataset.
 
-For each entry in dataset_mutopia.json, tokenizes the raw .ly file and
-extracts [CLS] embeddings at specified layers.
-Saves per-entry .npy files and updates the JSON with embedding paths.
+For each entry in dataset_mutopia.json, tokenizes the raw .ly file,
+splits into non-overlapping 512-token chunks, extracts [CLS] embeddings
+at specified layers per chunk, and averages them into a single
+file-level embedding. Saves per-entry .npy files and updates the JSON
+with embedding paths.
 """
 
 from __future__ import annotations
@@ -25,7 +27,6 @@ from typing_extensions import Annotated
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from lilybert.cli.embed import _file_windows
 from lilybert.models import LilyBERTEncoder
 
 logging.basicConfig(
@@ -37,6 +38,42 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def make_chunks(
+    token_ids: List[int],
+    body_size: int,
+    cls_id: int,
+    sep_id: int,
+    pad_id: int,
+    max_length: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Split token_ids into non-overlapping chunks of body_size tokens.
+
+    Each chunk is wrapped with [CLS] ... [SEP] and padded to max_length.
+    Returns (input_ids, attention_mask) tensors of shape (n_chunks, max_length).
+    """
+    chunks = [
+        token_ids[i : i + body_size]
+        for i in range(0, len(token_ids), body_size)
+    ]
+
+    ids_rows: list[list[int]] = []
+    mask_rows: list[list[int]] = []
+    for chunk in chunks:
+        ids = [cls_id] + chunk + [sep_id]
+        attn = [1] * len(ids)
+        pad_len = max_length - len(ids)
+        if pad_len > 0:
+            ids = ids + [pad_id] * pad_len
+            attn = attn + [0] * pad_len
+        ids_rows.append(ids)
+        mask_rows.append(attn)
+
+    return (
+        torch.tensor(ids_rows, dtype=torch.long),
+        torch.tensor(mask_rows, dtype=torch.long),
+    )
+
+
 def extract_layer_embeddings(
     encoder: LilyBERTEncoder,
     ids_tensor: torch.Tensor,
@@ -45,14 +82,13 @@ def extract_layer_embeddings(
     batch_size: int,
     device: torch.device,
 ) -> Dict[int, np.ndarray]:
-    """Extract [CLS] embeddings at specified layers, averaged across windows."""
+    """Mean-pool token embeddings at specified layers, averaged across chunks."""
     layer_sums: Dict[int, torch.Tensor] = {}
-    total_windows = 0
+    total_tokens = 0
 
     for start in range(0, ids_tensor.shape[0], batch_size):
-        end = start + batch_size
-        batch_ids = ids_tensor[start:end].to(device)
-        batch_mask = mask_tensor[start:end].to(device)
+        batch_ids = ids_tensor[start : start + batch_size].to(device)
+        batch_mask = mask_tensor[start : start + batch_size].to(device)
 
         outputs = encoder.bert(
             input_ids=batch_ids,
@@ -61,22 +97,26 @@ def extract_layer_embeddings(
             output_hidden_states=True,
         )
 
-        n_windows = batch_ids.shape[0]
-        total_windows += n_windows
+        # mask: (batch, seq_len) -> (batch, seq_len, 1) for broadcasting
+        mask_expanded = batch_mask.unsqueeze(-1).float()
+        n_tokens = batch_mask.sum().item()
+        total_tokens += n_tokens
 
         for layer in layers:
-            cls_vec = outputs.hidden_states[layer][:, 0, :].detach().cpu()
+            hidden = outputs.hidden_states[layer].detach().cpu()
+            # sum over all real tokens across batch and sequence dims
+            masked = (hidden * mask_expanded.cpu()).sum(dim=(0, 1))
             if layer not in layer_sums:
-                layer_sums[layer] = cls_vec.sum(dim=0)
+                layer_sums[layer] = masked
             else:
-                layer_sums[layer] += cls_vec.sum(dim=0)
+                layer_sums[layer] += masked
 
         del outputs, batch_ids, batch_mask
         torch.cuda.empty_cache()
 
     result = {}
     for layer in layers:
-        result[layer] = (layer_sums[layer] / total_windows).numpy()
+        result[layer] = (layer_sums[layer] / total_tokens).numpy()
     return result
 
 
@@ -96,9 +136,8 @@ def main(
         Optional[List[int]],
         typer.Option(help="Layers to extract (repeatable: --layers 3 --layers 6)"),
     ] = None,
-    max_length: Annotated[int, typer.Option(help="Window max length")] = 2048,
-    stride: Annotated[int, typer.Option(help="Window stride")] = 256,
-    batch_size: Annotated[int, typer.Option(help="Batch size")] = 4,
+    max_length: Annotated[int, typer.Option(help="Max sequence length (including special tokens)")] = 512,
+    batch_size: Annotated[int, typer.Option(help="Chunks per forward pass")] = 8,
     device: Annotated[str, typer.Option(help="Device: cpu, cuda, ...")] = "cpu",
     max_entries: Annotated[
         Optional[int],
@@ -140,9 +179,11 @@ def main(
     # Load model and tokenizer
     tokenizer_ref = tokenizer_path or model
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_ref)
+    tokenizer.model_max_length = int(1e30)  # we chunk manually
     cls_id = tokenizer.cls_token_id
     sep_id = tokenizer.sep_token_id
     pad_id = tokenizer.pad_token_id or 0
+    body_size = max_length - 2  # room for [CLS] and [SEP]
 
     encoder = LilyBERTEncoder.from_pretrained(model)
     device_obj = torch.device(device)
@@ -151,7 +192,7 @@ def main(
     for p in encoder.parameters():
         p.requires_grad = False
 
-    logger.info(f"Model loaded on {device}. Layers: {layers}. Batch size: {batch_size}")
+    logger.info(f"Model loaded on {device}. Layers: {layers}. Max length: {max_length}")
 
     stats = {"total": len(dataset), "success": 0, "empty": 0, "errors": 0, "skipped": 0}
     t_start = time.time()
@@ -180,7 +221,6 @@ def main(
                 continue
 
             raw_text = file_path.read_text(encoding="utf-8", errors="ignore").strip()
-            logger.info(f"[{idx+1}/{len(dataset)}] Processing {local_path} ({len(raw_text)//1024}KB)...")
 
             if not raw_text:
                 logger.warning(f"[{idx}] Empty file: {local_path}")
@@ -188,42 +228,45 @@ def main(
                 stats["empty"] += 1
                 continue
 
-            token_ids = tokenizer.encode(raw_text, add_special_tokens=False)
-            if not token_ids:
-                logger.warning(f"[{idx}] No tokens from {local_path}")
+            try:
+                token_ids = tokenizer.encode(raw_text, add_special_tokens=False)
+                if not token_ids:
+                    logger.warning(f"[{idx}] No tokens from {local_path}")
+                    entry["embeddings"] = None
+                    stats["empty"] += 1
+                    continue
+
+                ids_tensor, mask_tensor = make_chunks(
+                    token_ids, body_size, cls_id, sep_id, pad_id, max_length
+                )
+                n_chunks = ids_tensor.shape[0]
+
+                layer_embeddings = extract_layer_embeddings(
+                    encoder, ids_tensor, mask_tensor, layers, batch_size, device_obj
+                )
+
+                embeddings_map: Dict[str, str] = {}
+                for layer, emb in layer_embeddings.items():
+                    filename = f"{idx}.npy"
+                    save_path = output_base / f"layer_{layer}" / filename
+                    np.save(save_path, emb)
+                    rel_path = str(save_path.relative_to(mutopia_root))
+                    embeddings_map[f"layer_{layer}"] = rel_path
+
+                entry["embeddings"] = embeddings_map
+                stats["success"] += 1
+
+                elapsed = time.time() - t_file
+                rate = (stats["success"] + stats["errors"] + stats["empty"]) / (time.time() - t_start)
+                logger.info(
+                    f"[{idx+1}/{len(dataset)}] {local_path} | "
+                    f"{len(token_ids)} tok | {n_chunks} chunks | "
+                    f"{elapsed:.1f}s | rate={rate:.1f}/s"
+                )
+            except Exception:
+                logger.exception(f"[{idx}] Failed on {local_path}")
                 entry["embeddings"] = None
-                stats["empty"] += 1
-                continue
-
-            ids_tensor, mask_tensor = _file_windows(
-                token_ids,
-                max_length=max_length,
-                stride=stride,
-                cls_id=cls_id,
-                sep_id=sep_id,
-                pad_id=pad_id,
-            )
-
-            layer_embeddings = extract_layer_embeddings(
-                encoder, ids_tensor, mask_tensor, layers, batch_size, device_obj
-            )
-
-            embeddings_map: Dict[str, str] = {}
-            for layer, emb in layer_embeddings.items():
-                filename = f"{idx}.npy"
-                save_path = output_base / f"layer_{layer}" / filename
-                np.save(save_path, emb)
-                rel_path = str(save_path.relative_to(mutopia_root))
-                embeddings_map[f"layer_{layer}"] = rel_path
-
-            entry["embeddings"] = embeddings_map
-            stats["success"] += 1
-
-            elapsed = time.time() - t_file
-            logger.info(
-                f"  -> {len(token_ids)} tokens, {ids_tensor.shape[0]} windows, "
-                f"{elapsed:.1f}s"
-            )
+                stats["errors"] += 1
 
             # Periodic checkpoint
             if (idx + 1) % save_every == 0:
