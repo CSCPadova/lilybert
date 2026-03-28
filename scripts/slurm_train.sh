@@ -16,7 +16,7 @@
 #   sbatch scripts/slurm_train.sh train.mode=classify train.task=composer
 # ---------------------------------------------------------------------------
 
-#SBATCH --job-name=ly-train
+#SBATCH --job-name=train
 #SBATCH --partition=allgroups
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
