@@ -12,22 +12,50 @@ import torch
 import wandb
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
+import logging
+
 from transformers import (
-    BertConfig,
-    BertForMaskedLM,
+    AutoConfig,
+    AutoModelForMaskedLM,
+    PreTrainedTokenizerFast,
     DataCollatorForLanguageModeling,
+    EarlyStoppingCallback,
     PreTrainedTokenizerFast,
     Trainer,
+    TrainerCallback,
     TrainingArguments,
 )
+
+logger = logging.getLogger(__name__)
 
 from lilybert.data.sharded_dataset import ShardedMLMDataset
 
 from .config import TrainingConfig
 
 
+class EarlyStoppingLogCallback(TrainerCallback):
+    """Logs a warning when early stopping is triggered."""
+
+    def on_train_end(self, args, state, control, **kwargs):
+        if control.should_training_stop and state.global_step < args.max_steps:
+            logger.warning(
+                "Early stopping triggered at step %d (best eval_loss=%.4f at step %d). "
+                "Training did not reach max_steps=%d. Consider lowering "
+                "early_stopping_threshold or increasing early_stopping_patience.",
+                state.global_step,
+                state.best_metric,
+                state.best_global_step,
+                args.max_steps,
+            )
+
+
 class LilyPondMLMDataset(Dataset):
-    """Simple text dataset for masked language modeling."""
+    """Text dataset for masked language modeling with chunk splitting.
+
+    Each file is tokenized in full, then split into non-overlapping chunks
+    of ``max_length`` tokens (including special tokens).  Short tail chunks
+    are kept and padded.
+    """
 
     def __init__(
         self,
@@ -35,30 +63,62 @@ class LilyPondMLMDataset(Dataset):
         tokenizer: PreTrainedTokenizerFast,
         max_length: int,
     ):
-        self.files = files
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.chunks: List[Dict[str, torch.Tensor]] = []
+        self._build_chunks(files)
+
+    def _build_chunks(self, files: List[Path]) -> None:
+        # Reserve space for [CLS] and [SEP] (or equivalent special tokens)
+        content_length = self.max_length - 2
+
+        for path in tqdm(files, desc="Chunking files", unit="file"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            token_ids = self.tokenizer.encode(text, add_special_tokens=False)
+
+            if len(token_ids) == 0:
+                continue
+
+            for start in range(0, len(token_ids), content_length):
+                chunk_ids = token_ids[start : start + content_length]
+
+                # Wrap with special tokens
+                input_ids = self.tokenizer.build_inputs_with_ids(
+                    chunk_ids
+                ) if hasattr(self.tokenizer, "build_inputs_with_ids") else (
+                    [self.tokenizer.cls_token_id or self.tokenizer.bos_token_id]
+                    + chunk_ids
+                    + [self.tokenizer.sep_token_id or self.tokenizer.eos_token_id]
+                )
+
+                # Pad to max_length
+                attention_mask = [1] * len(input_ids)
+                pad_len = self.max_length - len(input_ids)
+                if pad_len > 0:
+                    input_ids = input_ids + [self.tokenizer.pad_token_id or 0] * pad_len
+                    attention_mask = attention_mask + [0] * pad_len
+
+                self.chunks.append({
+                    "input_ids": torch.tensor(input_ids, dtype=torch.long),
+                    "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+                })
 
     def __len__(self) -> int:
-        return len(self.files)
+        return len(self.chunks)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        text = self.files[idx].read_text(encoding="utf-8", errors="ignore")
-        encoded = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        return {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-        }
+        return self.chunks[idx]
 
 
 class MLMPretrainer:
-    """Trainer wrapper for BERT-base MLM pretraining from scratch."""
+    """Trainer wrapper for RoBERTa-based MLM training.
+
+    Supports two modes controlled by ``config.random_init``:
+    - ``False`` (default): load pretrained weights and resize embeddings
+      for the extended LilyPond tokenizer (finetune).
+    - ``True``: initialise the architecture from scratch with a custom
+      config (train from scratch).
+    """
 
     def __init__(self, config: TrainingConfig):
         self.config = config
@@ -73,7 +133,7 @@ class MLMPretrainer:
                 entity=self.config.wandb_entity,
                 mode=self.config.wandb_mode,
                 name=self.config.wandb_run_name
-                or f"bert-mlm-{self.config.model_architecture}",
+                or f"mlm-{self.config.model_architecture}",
                 config=self.config.to_dict(),
             )
 
@@ -129,35 +189,31 @@ class MLMPretrainer:
                 max_length=self.config.max_length,
             )
 
-        if self.config.resume_from_checkpoint:
-            ckpt_path = Path(self.config.resume_from_checkpoint)
-            if not ckpt_path.exists():
-                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-            model = BertForMaskedLM.from_pretrained(str(ckpt_path))
-            if is_main:
-                print(f"Loaded pretrained weights from {ckpt_path}")
-        else:
-            model_config = self._build_model_config(
-                vocab_size=self._vocab_size(tokenizer)
-            )
-            model = BertForMaskedLM(model_config)
+        model = self._build_model(tokenizer, is_main)
 
         ta_kwargs: Dict[str, Any] = dict(
             output_dir=self.config.output_dir,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
             per_device_eval_batch_size=self.config.per_device_eval_batch_size,
+            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
             lr_scheduler_type=self.config.lr_scheduler_type,
+            optim=self.config.optim,
             max_grad_norm=self.config.max_grad_norm,
             weight_decay=self.config.weight_decay,
             warmup_ratio=self.config.warmup_ratio,
             max_steps=self.config.max_steps,
+            bf16=self.config.bf16,
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
-            save_total_limit=3,
+            save_total_limit=self.config.save_total_limit,
             seed=self.config.seed,
             dataloader_num_workers=self.config.dataloader_num_workers,
+            dataloader_pin_memory=self.config.dataloader_pin_memory,
+            dataloader_prefetch_factor=self.config.dataloader_prefetch_factor if self.config.dataloader_num_workers > 0 else None,
+            torch_compile=self.config.torch_compile,
+            ddp_find_unused_parameters=self.config.ddp_find_unused_parameters,
             report_to=self._report_to() if is_main else ["none"],
             disable_tqdm=not is_main,
             remove_unused_columns=False,
@@ -165,6 +221,7 @@ class MLMPretrainer:
             eval_steps=self.config.eval_steps,
             save_strategy="steps",
             metric_for_best_model="eval_loss",
+            load_best_model_at_end=self.config.early_stopping,
         )
         if self.config.tensorboard_enabled:
             ta_kwargs["logging_dir"] = self.config.tensorboard_log_dir
@@ -176,14 +233,28 @@ class MLMPretrainer:
             mlm_probability=self.config.mlm_probability,
         )
 
+        callbacks = []
+        if self.config.early_stopping:
+            callbacks.append(
+                EarlyStoppingCallback(
+                    early_stopping_patience=self.config.early_stopping_patience,
+                    early_stopping_threshold=self.config.early_stopping_threshold,
+                )
+            )
+            callbacks.append(EarlyStoppingLogCallback())
+
         trainer = Trainer(
             model=model,
             args=training_arguments,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             data_collator=collator,
+            callbacks=callbacks,
         )
-        trainer.train()
+        resume_ckpt = self.config.resume_from_checkpoint
+        trainer.train(
+            resume_from_checkpoint=resume_ckpt if resume_ckpt else None,
+        )
 
         model_dir = Path(self.config.output_dir) / "mlm_model"
         model_dir.mkdir(parents=True, exist_ok=True)
@@ -205,12 +276,51 @@ class MLMPretrainer:
             "max_length": self.config.max_length,
             "mlm_probability": self.config.mlm_probability,
             "architecture": self.config.model_architecture,
+            "random_init": self.config.random_init,
         }
         (Path(self.config.output_dir) / "pretraining_summary.json").write_text(
             json.dumps(summary, indent=2),
             encoding="utf-8",
         )
         return summary
+
+    def _build_model(self, tokenizer: PreTrainedTokenizerFast, is_main: bool):
+        """Instantiate or load the MLM model.
+
+        Priority:
+        1. resume_from_checkpoint → load saved model
+        2. random_init=False → load pretrained + resize embeddings
+        3. random_init=True → fresh random init from config
+        """
+        vocab_size = self._vocab_size(tokenizer)
+
+        if self.config.resume_from_checkpoint:
+            ckpt_path = Path(self.config.resume_from_checkpoint)
+            if not ckpt_path.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+            model = AutoModelForMaskedLM.from_pretrained(str(ckpt_path))
+            if is_main:
+                print(f"Loaded pretrained weights from {ckpt_path}")
+        elif not self.config.random_init:
+            # Finetune: load pretrained weights, resize embeddings for
+            # the extended tokenizer (base vocab + LilyPond tokens).
+            model = AutoModelForMaskedLM.from_pretrained(
+                self.config.model_architecture,
+            )
+            model.resize_token_embeddings(vocab_size)
+            if is_main:
+                print(
+                    f"Loaded pretrained {self.config.model_architecture}, "
+                    f"resized embeddings to {vocab_size}"
+                )
+        else:
+            # Train from scratch with custom architecture config.
+            model_config = self._build_model_config(vocab_size=vocab_size)
+            model = AutoModelForMaskedLM.from_config(model_config)
+            if is_main:
+                print(f"Initialized {self.config.model_architecture} from scratch")
+
+        return model
 
     @staticmethod
     def _train_eval_split(
@@ -248,27 +358,27 @@ class MLMPretrainer:
             backends.append("tensorboard")
         return backends or ["none"]
 
-    def _build_model_config(self, vocab_size: int) -> BertConfig:
-        if self.config.model_architecture != "bert-base":
+    def _build_model_config(self, vocab_size: int) -> AutoConfig:
+        supported = {"roberta-base", "microsoft/codebert-base"}
+        if self.config.model_architecture not in supported:
             raise ValueError(
-                "Unsupported model_architecture. This pipeline currently supports bert-base"
+                f"Unsupported model_architecture '{self.config.model_architecture}'. "
+                f"Supported: {sorted(supported)}"
             )
-        return BertConfig(
+        return AutoConfig.for_model(
+            "roberta",
             vocab_size=vocab_size,
             hidden_size=self.config.hidden_size,
             num_hidden_layers=self.config.num_hidden_layers,
             num_attention_heads=self.config.num_attention_heads,
             intermediate_size=self.config.intermediate_size,
             max_position_embeddings=self.config.max_position_embeddings,
-            type_vocab_size=2,
+            type_vocab_size=1,
         )
 
     @staticmethod
     def _vocab_size(tokenizer: PreTrainedTokenizerFast) -> int:
-        vocab_size = getattr(tokenizer, "vocab_size", None)
-        if vocab_size is not None:
-            return int(vocab_size)
-        return len(tokenizer.get_vocab())
+        return len(tokenizer)
 
     @staticmethod
     def count_corpus_tokens(
@@ -278,9 +388,6 @@ class MLMPretrainer:
         add_special_tokens: bool = True,
     ) -> Dict[str, float | int]:
         """Count tokens across a corpus of LilyPond files.
-
-        This utility is intended for corpora like Mutopia pretraining data,
-        where files may include augmented variants and do not need metadata.
 
         Args:
             files: List of .ly files to include in the count
@@ -312,8 +419,11 @@ class MLMPretrainer:
 
     @staticmethod
     def _collect_movement_files(data_dir: str) -> List[Path]:
-        """Collect .ly files from the data directory."""
+        """Collect .ly/.ily/.tely files from the data directory."""
         root = Path(data_dir)
         if not root.exists():
             return []
-        return sorted(root.glob("*.ly"))
+        files: List[Path] = []
+        for ext in ("*.ly", "*.ily", "*.tely"):
+            files.extend(root.glob(ext))
+        return sorted(files)

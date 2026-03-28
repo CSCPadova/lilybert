@@ -44,7 +44,10 @@ class BaroqueMusicDataAPI:
         """Return sorted list of raw LilyPond files."""
         if not self.raw_dir.exists():
             return []
-        return sorted(self.raw_dir.glob("*.ly"))
+        files: List[Path] = []
+        for ext in ("*.ly", "*.ily", "*.tely"):
+            files.extend(self.raw_dir.glob(ext))
+        return sorted(files)
 
     def load_raw_file(self, file_name: str) -> str:
         """Load one raw LilyPond file by filename."""
@@ -65,7 +68,10 @@ class BaroqueMusicDataAPI:
         """List preprocessed movement files."""
         if not self.processed_dir.exists():
             return []
-        return sorted(self.processed_dir.glob("*.ly"))
+        files: List[Path] = []
+        for ext in ("*.ly", "*.ily", "*.tely"):
+            files.extend(self.processed_dir.glob(ext))
+        return sorted(files)
 
     def load_movement(
         self,

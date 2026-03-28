@@ -12,11 +12,10 @@ import typer
 from transformers import PreTrainedTokenizerFast
 from typing_extensions import Annotated
 
-from lilybert.data.preprocessor import LilyPondPreprocessor
 from lilybert.models import LilyBERTEncoder
 
 
-def _movement_windows(
+def _file_windows(
     token_ids: List[int],
     *,
     max_length: int,
@@ -68,12 +67,6 @@ def main(
     max_length: Annotated[int, typer.Option(help="Window max length")] = 2048,
     stride: Annotated[int, typer.Option(help="Window stride")] = 256,
     batch_size: Annotated[int, typer.Option(help="Embedding batch size")] = 32,
-    strip: Annotated[
-        Optional[List[str]],
-        typer.Option(
-            help="Sections to strip, repeatable: --strip header --strip comments"
-        ),
-    ] = None,
     recursive: Annotated[
         bool, typer.Option(help="Recursively search for .ly files")
     ] = False,
@@ -83,10 +76,15 @@ def main(
     if not input_path.exists():
         raise FileNotFoundError(f"Input directory not found: {input_path}")
 
-    glob_pattern = "**/*.ly" if recursive else "*.ly"
-    files = sorted(input_path.glob(glob_pattern))
+    exts = ("*.ly", "*.ily", "*.tely")
+    if recursive:
+        exts = ("**/*.ly", "**/*.ily", "**/*.tely")
+    files_set: List[Path] = []
+    for pat in exts:
+        files_set.extend(input_path.glob(pat))
+    files = sorted(files_set)
     if not files:
-        raise FileNotFoundError(f"No .ly files found in {input_path}")
+        raise FileNotFoundError(f"No .ly/.ily/.tely files found in {input_path}")
 
     tokenizer_ref = tokenizer_path or model_name
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_ref)
@@ -98,58 +96,46 @@ def main(
     for parameter in encoder.parameters():
         parameter.requires_grad = False
 
-    preprocessor = LilyPondPreprocessor(strip_sections=strip)
-
     cls_id = tokenizer.cls_token_id
     sep_id = tokenizer.sep_token_id
     pad_id = tokenizer.pad_token_id or 0
 
     embeddings: list[np.ndarray] = []
-    movement_ids: list[str] = []
+    file_ids: list[str] = []
     source_files: list[str] = []
-    languages: list[str] = []
 
     with torch.no_grad():
         for file_path in files:
-            raw_text = file_path.read_text(encoding="utf-8", errors="ignore")
-            movements = preprocessor.process_content(raw_text, file_path.name, {})
-            if not movements:
+            raw_text = file_path.read_text(encoding="utf-8", errors="ignore").strip()
+            if not raw_text:
                 continue
 
-            for movement in movements:
-                movement_text = str(
-                    movement.get("italiano_text") or movement.get("text") or ""
-                ).strip()
-                if not movement_text:
-                    continue
+            token_ids = tokenizer.encode(raw_text, add_special_tokens=False)
+            if not token_ids:
+                continue
 
-                token_ids = tokenizer.encode(movement_text, add_special_tokens=False)
-                if not token_ids:
-                    continue
+            ids_tensor, mask_tensor = _file_windows(
+                token_ids,
+                max_length=max_length,
+                stride=stride,
+                cls_id=cls_id,
+                sep_id=sep_id,
+                pad_id=pad_id,
+            )
 
-                ids_tensor, mask_tensor = _movement_windows(
-                    token_ids,
-                    max_length=max_length,
-                    stride=stride,
-                    cls_id=cls_id,
-                    sep_id=sep_id,
-                    pad_id=pad_id,
+            chunks: list[torch.Tensor] = []
+            for start in range(0, ids_tensor.shape[0], batch_size):
+                end = start + batch_size
+                pooled = encoder.encode(
+                    input_ids=ids_tensor[start:end].to(device_obj),
+                    attention_mask=mask_tensor[start:end].to(device_obj),
                 )
+                chunks.append(pooled.detach().cpu())
 
-                chunks: list[torch.Tensor] = []
-                for start in range(0, ids_tensor.shape[0], batch_size):
-                    end = start + batch_size
-                    pooled = encoder.encode(
-                        input_ids=ids_tensor[start:end].to(device_obj),
-                        attention_mask=mask_tensor[start:end].to(device_obj),
-                    )
-                    chunks.append(pooled.detach().cpu())
-
-                movement_embedding = torch.cat(chunks, dim=0).mean(dim=0).numpy()
-                embeddings.append(movement_embedding)
-                movement_ids.append(str(movement.get("movement_id", file_path.stem)))
-                source_files.append(file_path.name)
-                languages.append(str(movement.get("language", "unknown")))
+            file_embedding = torch.cat(chunks, dim=0).mean(dim=0).numpy()
+            embeddings.append(file_embedding)
+            file_ids.append(file_path.stem)
+            source_files.append(file_path.name)
 
     if not embeddings:
         raise RuntimeError("No embeddings produced from input files")
@@ -159,9 +145,8 @@ def main(
     np.savez(
         output,
         embeddings=np.stack(embeddings, axis=0),
-        movement_ids=np.asarray(movement_ids, dtype=object),
+        movement_ids=np.asarray(file_ids, dtype=object),
         source_files=np.asarray(source_files, dtype=object),
-        languages=np.asarray(languages, dtype=object),
     )
 
     metadata_path = output.with_suffix(".json")
@@ -175,7 +160,6 @@ def main(
                 "max_length": max_length,
                 "stride": stride,
                 "batch_size": batch_size,
-                "strip": strip or [],
                 "num_embeddings": len(embeddings),
                 "embedding_dim": int(embeddings[0].shape[0]),
                 "output": str(output),

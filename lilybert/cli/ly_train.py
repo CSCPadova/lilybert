@@ -33,7 +33,7 @@ def _main(cfg: DictConfig) -> None:
     output_dir = str(runtime.get("output_dir", "outputs/experiments"))
     seed = int(runtime.get("seed", 42))
 
-    dataloader_num_workers = int(runtime_system.get("dataloader_num_workers", 0))
+    dataloader_num_workers = int(runtime_system.get("dataloader_num_workers", 4))
 
     wandb_enabled = bool(runtime_wandb.get("enabled", False))
     wandb_project = str(runtime_wandb.get("project", "lilybert"))
@@ -49,8 +49,9 @@ def _main(cfg: DictConfig) -> None:
         tokenizer_path=tokenizer_path,
         output_dir=output_dir,
         model_architecture=str(
-            train.get("model_architecture", model_arch.get("name", "bert-base"))
+            train.get("model_architecture", model_arch.get("name", "microsoft/codebert-base"))
         ),
+        random_init=bool(train.get("random_init", False)),
         hidden_size=int(model_arch.get("hidden_size", 768)),
         num_hidden_layers=int(model_arch.get("num_hidden_layers", 12)),
         num_attention_heads=int(model_arch.get("num_attention_heads", 12)),
@@ -73,6 +74,17 @@ def _main(cfg: DictConfig) -> None:
         pretokenized_shards_dir=dataset.get("pretokenized_shards_dir"),
         resume_from_checkpoint=train.get("resume_from_checkpoint"),
         dataloader_num_workers=dataloader_num_workers,
+        early_stopping=bool(train.get("early_stopping", False)),
+        early_stopping_patience=int(train.get("early_stopping_patience", 3)),
+        early_stopping_threshold=float(train.get("early_stopping_threshold", 0.0)),
+        bf16=bool(train.get("bf16", False)),
+        gradient_accumulation_steps=int(train.get("gradient_accumulation_steps", 1)),
+        optim=str(train.get("optim", "adamw_torch")),
+        dataloader_pin_memory=bool(train.get("dataloader_pin_memory", True)),
+        dataloader_prefetch_factor=int(runtime_system.get("dataloader_prefetch_factor", 2)),
+        save_total_limit=int(train.get("save_total_limit", 3)),
+        torch_compile=bool(train.get("torch_compile", False)),
+        ddp_find_unused_parameters=bool(train.get("ddp_find_unused_parameters", False)),
         wandb_enabled=wandb_enabled,
         wandb_project=wandb_project,
         wandb_entity=wandb_entity,

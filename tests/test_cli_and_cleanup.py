@@ -1,14 +1,16 @@
-"""Tests for simplified ly-* CLI module surface."""
+"""Tests for `python -m lilybert` CLI entry point."""
 
 from __future__ import annotations
 
 
-def test_legacy_main_points_to_ly_entrypoints():
+def test_main_prints_available_commands(capsys):
     from lilybert import __main__ as main_mod
 
     try:
         main_mod.main()
-    except SystemExit as exc:
-        message = str(exc)
-        assert "ly-preprocess" in message
-        assert "ly-train" in message
+    except SystemExit:
+        pass
+    captured = capsys.readouterr()
+    assert "preprocess" in captured.out
+    assert "train" in captured.out
+    assert "embed" in captured.out

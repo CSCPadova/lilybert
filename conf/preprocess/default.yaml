@@ -2,17 +2,6 @@ enabled: true
 num_workers: 0  # 0 = auto (use all available CPUs)
 input_dir: ${dataset.raw_dir}
 output_dir: ${dataset.processed_dir}
-labels_path: ${dataset.labels_path}
-# Sections to strip from LilyPond source before processing.
-# Valid values: comments, header, scheme, layout, midi, version, markup, overrides, pagebreaks
-strip:
-  - comments
-  - header
-  - scheme
-  - overrides
-  - pagebreaks
-  - midi
-  - version
 
 augmentation:
   enable_transposition: false
@@ -23,16 +12,10 @@ augmentation:
   enable_inversion: false
   include_original: true
 
-bpe:
+tokenizer:
   enabled: false
-  tokenizer_type: ${dataset.tokenizer_type}
+  pretrained_model: ${model.pretrained_model}
   output_dir: ${dataset.tokenizer_path}
-  vocab_size: 10000
-  min_frequency: 40
-  number_placeholders: false
-  lexer:
-    include_articulations: true
-    include_slurs: true
 
 tokenize:
   enabled: false
@@ -47,7 +30,7 @@ sharding:
   enabled: false
   tokenizer_path: ${dataset.tokenizer_path}
   output_dir: ${dataset.pretokenized_shards_dir}
-  max_length: 2048
+  max_length: 512
   stride: 256
   shard_size: 4096
   eval_ratio: 0.01

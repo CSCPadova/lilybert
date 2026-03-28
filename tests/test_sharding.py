@@ -73,7 +73,7 @@ class TestShardWriter:
         manifest = writer.finalize()
         assert manifest.total_samples == 5
 
-        data = np.load(tmp_path / "shard_0000.npz")
+        data = np.load(tmp_path / "shard_0000.npz", allow_pickle=True)
         assert "input_ids" in data
         assert "attention_mask" in data
         assert "labels" not in data

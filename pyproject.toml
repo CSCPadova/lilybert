@@ -5,12 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "lilybert"
 version = "0.1.0"
-description = "BERT-based training on LilyPond notation datasets"
+description = "Code companion for 'BMdataset: A Musicologically Curated LilyPond Dataset' — CodeBERT-based representation learning for LilyPond music notation"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Matteo Spanio", email = "spanio@dei.unipd.it"},
     {name = "Ilay Guler", email = "ilay2004@bu.edu"},
+    {name = "Antonio Roda", email = "roda@dei.unipd.it"},
 ]
 keywords = ["music", "ai", "bert", "lilypond", "mir"]
 classifiers = [
@@ -22,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio",
 ]

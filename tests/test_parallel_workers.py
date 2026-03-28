@@ -14,7 +14,7 @@ from lilybert.cli.ly_preprocess import (
 )
 from lilybert.cli.pretokenize import _shard_file_worker
 from lilybert.data.preprocessor import LilyPondPreprocessor
-from lilybert.data.tokenizer import LilyPondTokenizer
+from lilybert.data.tokenizer_builder import build_and_save
 
 
 @pytest.fixture()
@@ -23,13 +23,10 @@ def processed_dir(tmp_path: Path) -> Path:
     tests_root = Path(__file__).parent
     input_dir = tests_root / "ly"
     out = tmp_path / "processed"
-    preprocessor = LilyPondPreprocessor(
-        strip_sections=["header", "version", "comments", "midi", "overrides"],
-    )
+    preprocessor = LilyPondPreprocessor()
     preprocessor.preprocess_to_dataset(
         input_dir=str(input_dir),
         output_dir=str(out),
-        labels_path="data/labels/labels_v1.json",
         num_workers=2,
     )
     assert list(out.glob("*.ly")), "Preprocessing produced no .ly files"
@@ -37,14 +34,10 @@ def processed_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def tokenizer_dir(tmp_path: Path, processed_dir: Path) -> Path:
-    """Train a small BPE tokenizer on processed files."""
+def tokenizer_dir(tmp_path: Path) -> Path:
+    """Build an extended pretrained tokenizer with LilyPond tokens."""
     out = tmp_path / "tokenizer"
-    tok = LilyPondTokenizer()
-    corpus = tok.build_corpus(str(processed_dir), num_workers=2)
-    assert corpus, "build_corpus returned empty corpus"
-    tok.train(corpus=corpus, vocab_size=512, min_frequency=0)
-    tok.save(str(out))
+    build_and_save(pretrained_model="microsoft/codebert-base", output_dir=str(out))
     assert (out / "tokenizer.json").exists()
     return out
 
@@ -108,7 +101,7 @@ class TestShardFileWorker:
 
 
 class TestTokenizeMlmUnsharded:
-    def test_produces_npz_splits(
+    def test_produces_sharded_splits(
         self, processed_dir: Path, tokenizer_dir: Path, tmp_path: Path
     ):
         output_dir = tmp_path / "tokenized"
@@ -129,12 +122,16 @@ class TestTokenizeMlmUnsharded:
         for split in ("train", "eval"):
             info = summary["splits"][split]
             assert info["samples"] >= 0
-            npz_path = Path(info["path"])
-            assert npz_path.exists()
-            data = np.load(npz_path, allow_pickle=True)
-            assert "input_ids" in data
-            assert "attention_mask" in data
-            assert data["input_ids"].shape[1] == 128
+            split_dir = Path(info["path"])
+            assert split_dir.is_dir()
+            assert (split_dir / "manifest.json").exists()
+            shard_files = list(split_dir.glob("shard_*.npz"))
+            assert len(shard_files) == info["shards"]
+            if shard_files:
+                data = np.load(shard_files[0])
+                assert "input_ids" in data
+                assert "attention_mask" in data
+                assert data["input_ids"].shape[1] == 128
 
     def test_no_files_raises(self, tmp_path: Path, tokenizer_dir: Path):
         empty_dir = tmp_path / "empty"

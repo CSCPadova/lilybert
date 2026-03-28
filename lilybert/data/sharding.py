@@ -30,6 +30,7 @@ class ShardManifest:
     base_works: List[str]
     config: Dict[str, Any] = field(default_factory=dict)
     structure_markers: Optional[List[List[str]]] = None
+    per_shard_metadata: bool = False
 
     # ------------------------------------------------------------------
     # Serialisation helpers
@@ -92,18 +93,18 @@ class ShardWriter:
         self.num_classes = num_classes
         self.has_labels = has_labels
 
-        # Accumulation state
+        # Per-shard accumulation buffers (cleared on flush)
         self._shard_index = 0
         self._buf_input_ids: List[np.ndarray] = []
         self._buf_attention_mask: List[np.ndarray] = []
         self._buf_labels: List[np.ndarray] = []
+        self._buf_movement_ids: List[str] = []
+        self._buf_base_works: List[str] = []
+        self._buf_structure_markers: Optional[List[List[str]]] = None
         self._buf_count = 0
 
-        # Global bookkeeping
+        # Global bookkeeping (lightweight — only shard info and counts)
         self._shard_infos: List[ShardInfo] = []
-        self._movement_ids: List[str] = []
-        self._base_works: List[str] = []
-        self._structure_markers: Optional[List[List[str]]] = None
         self._total_samples = 0
 
     # ------------------------------------------------------------------
@@ -124,12 +125,12 @@ class ShardWriter:
         self._buf_attention_mask.append(attention_mask)
         if self.has_labels and label is not None:
             self._buf_labels.append(label)
-        self._movement_ids.append(movement_id)
-        self._base_works.append(base_work)
+        self._buf_movement_ids.append(movement_id)
+        self._buf_base_works.append(base_work)
         if structure_markers is not None:
-            if self._structure_markers is None:
-                self._structure_markers = []
-            self._structure_markers.append(list(structure_markers))
+            if self._buf_structure_markers is None:
+                self._buf_structure_markers = []
+            self._buf_structure_markers.append(list(structure_markers))
         self._buf_count += 1
 
         if self._buf_count >= self.shard_size:
@@ -143,12 +144,18 @@ class ShardWriter:
         shard_name = f"{self.prefix}_{self._shard_index:04d}.npz"
         shard_path = self.output_dir / shard_name
 
-        arrays: Dict[str, np.ndarray] = {
+        arrays: Dict[str, Any] = {
             "input_ids": np.stack(self._buf_input_ids),
             "attention_mask": np.stack(self._buf_attention_mask),
+            "movement_ids": np.array(self._buf_movement_ids, dtype=object),
+            "base_works": np.array(self._buf_base_works, dtype=object),
         }
         if self.has_labels and self._buf_labels:
             arrays["labels"] = np.stack(self._buf_labels)
+        if self._buf_structure_markers is not None:
+            arrays["structure_markers"] = np.array(
+                [json.dumps(m) for m in self._buf_structure_markers], dtype=object
+            )
 
         np.savez(shard_path, **arrays)
 
@@ -164,6 +171,9 @@ class ShardWriter:
         self._buf_input_ids.clear()
         self._buf_attention_mask.clear()
         self._buf_labels.clear()
+        self._buf_movement_ids.clear()
+        self._buf_base_works.clear()
+        self._buf_structure_markers = None
         self._buf_count = 0
         self._shard_index += 1
 
@@ -182,10 +192,11 @@ class ShardWriter:
             shards=self._shard_infos,
             total_samples=self._total_samples,
             label_to_index=label_to_index or {},
-            movement_ids=self._movement_ids,
-            base_works=self._base_works,
+            movement_ids=[],
+            base_works=[],
             config=config or {},
-            structure_markers=self._structure_markers,
+            structure_markers=None,
+            per_shard_metadata=True,
         )
         manifest.save(self.output_dir / "manifest.json")
         return manifest

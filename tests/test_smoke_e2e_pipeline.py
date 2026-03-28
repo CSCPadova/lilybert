@@ -1,10 +1,10 @@
 """Smoke end-to-end CLI pipeline tests.
 
 This test exercises the same minimal flow validated manually:
-1) preprocess movement-level files
-2) train BPE tokenizer
+1) preprocess (copy) LilyPond files
+2) build extended pretrained tokenizer with LilyPond tokens
 3) build MLM shards
-4) run tiny MLM pretraining
+4) run tiny MLM pretraining (from scratch)
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ def test_smoke_e2e_cli_pipeline(
 ) -> None:
     tests_root = Path(__file__).parent
     input_dir = tests_root / "ly"
-    labels_path = Path("data/labels/labels_v1.json")
 
     assert input_dir.exists()
 
@@ -34,16 +33,15 @@ def test_smoke_e2e_cli_pipeline(
     pretokenized_dir = tmp_path / "pretokenized"
     train_output_dir = tmp_path / "train"
 
+    # Step 1: Preprocess (copy) LilyPond files
     ly_preprocess_main(
         OmegaConf.create(
             {
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
-                    "strip": ["header", "version", "comments", "midi", "overrides"],
                     "sharding": {"enabled": False},
-                    "bpe": {"enabled": False},
+                    "tokenizer": {"enabled": False},
                 }
             }
         )
@@ -51,22 +49,21 @@ def test_smoke_e2e_cli_pipeline(
     capsys.readouterr()
 
     processed_files = list(processed_dir.glob("*.ly"))
-    assert processed_files, "Preprocess step did not produce movement .ly files"
+    assert processed_files, "Preprocess step did not produce .ly files"
     assert (processed_dir / "metadata.json").exists()
 
+    # Step 2: Build extended pretrained tokenizer with LilyPond tokens
     ly_preprocess_main(
         OmegaConf.create(
             {
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
                     "sharding": {"enabled": False},
-                    "bpe": {
+                    "tokenizer": {
                         "enabled": True,
+                        "pretrained_model": "microsoft/codebert-base",
                         "output_dir": str(tokenizer_dir),
-                        "vocab_size": 512,
-                        "min_frequency": 0,
                     },
                 }
             }
@@ -76,14 +73,14 @@ def test_smoke_e2e_cli_pipeline(
 
     assert (tokenizer_dir / "tokenizer.json").exists()
 
+    # Step 3: Build MLM shards
     ly_preprocess_main(
         OmegaConf.create(
             {
                 "preprocess": {
                     "input_dir": str(input_dir),
                     "output_dir": str(processed_dir),
-                    "labels_path": str(labels_path),
-                    "bpe": {"enabled": False},
+                    "tokenizer": {"enabled": False},
                     "sharding": {
                         "enabled": True,
                         "stage": "mlm",
@@ -105,6 +102,7 @@ def test_smoke_e2e_cli_pipeline(
     assert (mlm_root / "train" / "manifest.json").exists()
     assert (mlm_root / "eval" / "manifest.json").exists()
 
+    # Step 4: Tiny MLM pretraining (from scratch)
     ly_train_main(
         OmegaConf.create(
             {
@@ -115,7 +113,7 @@ def test_smoke_e2e_cli_pipeline(
                 },
                 "model": {
                     "architecture": {
-                        "name": "bert-base",
+                        "name": "microsoft/codebert-base",
                         "hidden_size": 64,
                         "num_hidden_layers": 2,
                         "num_attention_heads": 4,
@@ -132,6 +130,7 @@ def test_smoke_e2e_cli_pipeline(
                 },
                 "train": {
                     "mode": "pretrain",
+                    "random_init": True,
                     "pretrain": {
                         "max_length": 128,
                         "mlm_probability": 0.15,

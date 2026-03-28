@@ -30,6 +30,7 @@ class TrainingConfig:
 
     # --- model architecture (from BaseModelConfig + pretraining-specific) ---
     model_architecture: str = BaseModelConfig.pretrained_model
+    random_init: bool = False
     hidden_size: int = 768
     num_hidden_layers: int = 12
     num_attention_heads: int = 12
@@ -55,6 +56,17 @@ class TrainingConfig:
     pretokenized_shards_dir: Optional[str] = None
     resume_from_checkpoint: Optional[str] = None
     dataloader_num_workers: int = 0
+    early_stopping: bool = False
+    early_stopping_patience: int = 3
+    early_stopping_threshold: float = 0.0
+    bf16: bool = False
+    gradient_accumulation_steps: int = 1
+    optim: str = "adamw_torch"
+    dataloader_pin_memory: bool = True
+    dataloader_prefetch_factor: int = 2
+    save_total_limit: int = 3
+    torch_compile: bool = False
+    ddp_find_unused_parameters: bool = False
 
     # --- logging (from LoggingConfig) ---
     wandb_enabled: bool = LoggingConfig.wandb_enabled

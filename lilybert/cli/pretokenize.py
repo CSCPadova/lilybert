@@ -15,15 +15,16 @@ from transformers import PreTrainedTokenizerFast
 from typing_extensions import Annotated
 
 from lilybert.data.sharding import ShardWriter
-from lilybert.data.tokenizer import LilyPondTokenizer
-from lilybert.data.tokenizer_factory import get_tokenizer_type
 
 
 def _collect_ly_files(data_dir: Path) -> List[Path]:
-    """Collect .ly files from the data directory."""
+    """Collect .ly/.ily/.tely files from the data directory."""
     if not data_dir.exists():
         return []
-    return sorted(data_dir.glob("*.ly"))
+    files: List[Path] = []
+    for ext in ("*.ly", "*.ily", "*.tely"):
+        files.extend(data_dir.glob(ext))
+    return sorted(files)
 
 
 def _shard_file_worker(
@@ -31,23 +32,20 @@ def _shard_file_worker(
     tokenizer_path: str,
     max_length: int,
     stride: int,
-    tokenizer_type: str = "musical",
 ) -> Tuple[str, List[List[int]], List[List[int]]]:
-    """Tokenize a single .ly file for MLM sharding (runs in subprocess)."""
+    """Tokenize a single .ly file for MLM sharding (runs in subprocess).
+
+    Feeds raw LilyPond text directly to the pretrained tokenizer.
+    """
     fp = Path(file_path)
     text = fp.read_text(encoding="utf-8", errors="ignore")
 
-    if tokenizer_type == "musical":
-        lily_tokenizer = LilyPondTokenizer()
-        text_to_encode = lily_tokenizer._movement_to_parser_tokens(text)
-    else:
-        text_to_encode = text
-
-    if not text_to_encode.strip():
+    if not text.strip():
         return (fp.stem, [], [])
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
-    token_ids = tokenizer.encode(text_to_encode, add_special_tokens=False)
+    tokenizer.model_max_length = int(1e30)
+    token_ids = tokenizer.encode(text, add_special_tokens=False)
     if not token_ids:
         return (fp.stem, [], [])
 
@@ -99,8 +97,7 @@ def _pretokenize_mlm(
     if not all_files:
         raise FileNotFoundError(f"No .ly files found in {data_path}")
 
-    tok_type = get_tokenizer_type(tokenizer_path)
-    print(f"Loading tokenizer from {tokenizer_path} (type={tok_type})")
+    print(f"Loading tokenizer from {tokenizer_path}")
 
     rng = random.Random(seed)
     shuffled = list(all_files)
@@ -134,7 +131,6 @@ def _pretokenize_mlm(
                     tokenizer_path,
                     max_length,
                     stride,
-                    tok_type,
                 ): fp
                 for fp in files
             }
@@ -144,6 +140,7 @@ def _pretokenize_mlm(
                 desc=f"shard/{split_name}",
             ):
                 mid, ids_list, masks_list = fut.result()
+                del futures[fut]
                 if not ids_list:
                     skipped += 1
                     continue

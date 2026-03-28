@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # lilyBERT fine-tuning — SLURM batch script.
 #
-# Continues MLM pretraining from an existing checkpoint on a new dataset.
+# Continues CodeBERT MLM pretraining from an existing checkpoint on a new
+# LilyPond dataset. Reads pretokenized shards with per-shard metadata.
 #
 # Required environment variables:
 #   CHECKPOINT_PATH  — path to the pretrained model (e.g. .../mlm_model or .../checkpoint-N)
@@ -89,11 +90,11 @@ if [[ "${NGPUS}" -gt 1 ]]; then
     uv run torchrun \
         --standalone \
         --nproc_per_node="${NGPUS}" \
-        "$(which ly-train)" \
+        "$(which train)" \
         "${HYDRA_OVERRIDES[@]}"
 else
     echo "Launching single-GPU training..."
-    uv run ly-train \
+    uv run train \
         "${HYDRA_OVERRIDES[@]}"
 fi
 
