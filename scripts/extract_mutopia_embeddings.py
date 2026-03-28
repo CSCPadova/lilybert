@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import torch
 import typer
-from transformers import PreTrainedTokenizerFast
+from transformers import AutoTokenizer
 from typing_extensions import Annotated
 
 # Add project root to path
@@ -178,7 +178,7 @@ def main(
 
     # Load model and tokenizer
     tokenizer_ref = tokenizer_path or model
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_ref)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_ref)
     tokenizer.model_max_length = int(1e30)  # we chunk manually
     cls_id = tokenizer.cls_token_id
     sep_id = tokenizer.sep_token_id
