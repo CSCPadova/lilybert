@@ -12,7 +12,7 @@ LilyPond is a text-based music engraving language with formal grammar, block str
 
 | Resource | Link |
 |----------|------|
-| Paper    | SMC 2026 (to appear) |
+| Paper    | link soon |
 | Dataset  | [Zenodo (doi:10.5281/zenodo.18723290)](https://doi.org/10.5281/zenodo.18723290) |
 | Model    | [HuggingFace (csc-unipd/lilybert)](https://huggingface.co/csc-unipd/lilybert) |
 | Code     | [GitHub (CSCPadova/lilybert)](https://github.com/CSCPadova/lilybert) |
