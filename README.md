@@ -63,7 +63,6 @@ preprocess \
 
 ```bash
 train \
-  train.mode=pretrain \
   dataset.processed_dir=data/processed \
   dataset.tokenizer_path=artifacts/tokenizer \
   runtime.output_dir=outputs/pretraining
@@ -82,10 +81,33 @@ python scripts/generate_confusion_matrix.py
 | Command | Description |
 |---------|-------------|
 | `preprocess` | Preprocessing, tokenizer building, and sharding |
-| `train` | MLM pre-training and linear-probe classification |
+| `train` | MLM pre-training and finetuning |
 | `embed` | Extract frozen-encoder embeddings for downstream tasks |
 
 All commands use [Hydra](https://hydra.cc/) for configuration. Run any command with `--help` for usage details.
+
+## ONNX inference
+
+An ONNX version of the model is available on [HuggingFace](https://huggingface.co/csc-unipd/lilybert) for inference without PyTorch, in any language with an ONNX runtime (Python, C++, C#, Java, JavaScript, Rust, ...).
+
+Install the optional ONNX dependencies:
+
+```bash
+pip install -e ".[onnx]"
+```
+
+### Python
+
+```python
+from lilybert.models import LilyBERTOnnxEncoder
+
+encoder = LilyBERTOnnxEncoder("csc-unipd/lilybert")
+embeddings = encoder.encode(input_ids, attention_mask)  # (batch, 768) numpy array
+```
+
+### Other languages
+
+Download `model.onnx` and `tokenizer.json` from `csc-unipd/lilybert` on HuggingFace. The ONNX model accepts `int64` inputs (`input_ids`, `attention_mask`) and returns `float32` `last_hidden_state` of shape `(batch, seq_len, 768)`. Use index `[:, 0, :]` for CLS embeddings.
 
 ## Python API
 
