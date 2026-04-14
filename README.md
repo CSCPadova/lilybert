@@ -12,7 +12,7 @@ LilyPond is a text-based music engraving language with formal grammar, block str
 
 | Resource | Link |
 |----------|------|
-| Paper    | link soon |
+| Paper    | [Arxiv (2604.10628)](https://arxiv.org/abs/2604.10628) |
 | Dataset  | [Zenodo (doi:10.5281/zenodo.18723290)](https://doi.org/10.5281/zenodo.18723290) |
 | Model    | [HuggingFace (csc-unipd/lilybert)](https://huggingface.co/csc-unipd/lilybert) |
 | Code     | [GitHub (CSCPadova/lilybert)](https://github.com/CSCPadova/lilybert) |
@@ -159,11 +159,14 @@ pytest -m "not model"   # skip tests requiring model downloads
 ## Citation
 
 ```bibtex
-@misc{spanio2026bmdataset,
-  title     = {BMdataset: A Musicologically Curated LilyPond Dataset},
-  author    = {Spanio, Matteo and Guler, Ilay and Roda, Antonio},
-  year      = {2026},
-  publisher = {Under review},
+@misc{spanio2026bmdatasetmusicologicallycuratedlilypond,
+      title={BMdataset: A Musicologically Curated LilyPond Dataset}, 
+      author={Matteo Spanio and Ilay Guler and Antonio Rodà},
+      year={2026},
+      eprint={2604.10628},
+      archivePrefix={arXiv},
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2604.10628}, 
 }
 ```
 
